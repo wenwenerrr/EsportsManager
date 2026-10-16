@@ -18,3 +18,4 @@
 | 005 | 年度循环和转会期 | Integration | Ready | N/A (minimal) |
 | 006 | 选手事件 | Logic | Ready | N/A (minimal) |
 | 007 | 破产判定和年终总结 | UI | Ready | N/A (minimal) |
+| 008 | 选手模型升级（按 numbers.md） | Logic | Ready | N/A (minimal) |
