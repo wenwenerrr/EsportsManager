@@ -79,6 +79,8 @@ export_presets.cfg
 *.csproj
 *.unityproj
 *.sln
+*.slnx
+.vscode/
 *.suo
 *.tmp
 *.user

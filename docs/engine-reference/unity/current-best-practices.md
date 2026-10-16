@@ -373,3 +373,21 @@ Debug.Log($"Player {playerName} scored {score} points");
 - https://docs.unity3d.com/6000.0/Documentation/Manual/BestPracticeGuides.html
 - https://docs.unity3d.com/Packages/com.unity.entities@1.3/manual/index.html
 - https://docs.unity3d.com/Packages/com.unity.inputsystem@1.11/manual/index.html
+
+---
+
+## 6.3 → 6.6
+
+**Last verified:** 2026-10-15 — sources: the 6.4 / 6.5 / 6.6 upgrade guides listed in
+`breaking-changes.md` § "6.3 → 6.6". Only practices those guides state are listed.
+
+- **Object identity**: use `EntityId` (`GetEntityId()`), never `int` instance IDs.
+- **Components**: always `GetComponent<T>()` / `AddComponent<T>()`; the property shortcuts are gone.
+- **Rendering**: URP for new projects (Built-In RP is deprecated as of 6.5).
+- **Build-type conditionals**: `UNITY_ENABLE_CHECKS` / `UNITY_INCLUDE_INSTRUMENTATION`
+  at compile time, `Debug.isDebugBuild` at runtime — not `DEVELOPMENT_BUILD`.
+- **Serialized dictionaries**: `[SerializeField] Dictionary<TKey, TValue>` works natively in 6.6.
+  NOT SOURCEABLE — which key/value types are supported is not stated in the 6.6 upgrade guide.
+- **Custom UI Toolkit controls**: `[UxmlElement]` on the class, `[UxmlAttribute]` on properties.
+- **Logs**: read `Application.consoleLogPath`; in batch mode pass `-logFile`.
+- **Multi-version code**: gate with `UNITY_6000_5_OR_NEWER` / `UNITY_6000_6_OR_NEWER`.

@@ -154,3 +154,28 @@ rootVisualElement.Q<Label>("score-label").text = "Score: 100";
 **Sources:**
 - https://docs.unity3d.com/6000.0/Documentation/Manual/deprecated-features.html
 - https://docs.unity3d.com/Packages/com.unity.inputsystem@1.11/manual/Migration.html
+
+---
+
+## 6.3 → 6.6
+
+**Last verified:** 2026-10-15 — sources: the 6.4 / 6.5 / 6.6 upgrade guides listed in
+`breaking-changes.md` § "6.3 → 6.6".
+
+| Don't use | Use instead | Since |
+|-----------|-------------|-------|
+| `GetInstanceID()` / `InstanceID` | `GetEntityId()` / `EntityId` (8 bytes — never store in `int`) | 6.5 (removed) |
+| `go.rigidbody`, `.collider`, `.renderer`, `.audio`, `.camera`, `.light`, etc. | `GetComponent<T>()` | 6.5 (removed) |
+| `GameObject.AddComponent(string)` | `AddComponent<T>()` | 6.5 (removed) |
+| `Entities.ForEach` / `Job.WithCode` / `IAspect` | `IJobEntity` + `SystemAPI.Query` / `IJob` / component + `EntityQuery` APIs | 6.5 (removed) |
+| `UnityEngine.LowLevelPhysics2D` | `Unity.U2D.Physics` (`PhysicsCore2D`) | 6.5 |
+| Built-In Render Pipeline | URP | 6.5 (deprecated) |
+| Hard-coded Editor.log path | `Application.consoleLogPath` | 6.5 |
+| `#if DEVELOPMENT_BUILD` | `#if UNITY_ENABLE_CHECKS` / `UNITY_INCLUDE_INSTRUMENTATION`; runtime `Debug.isDebugBuild` | 6.6 (warning; error in 6.8) |
+| `#if UNITY_64` | runtime `IntPtr.Size` check | 6.6 (warning; error in 6.8) |
+| UXML `UxmlFactory` / `UxmlTraits` | `[UxmlElement]` + `[UxmlAttribute]` | 6.6 (removed) |
+| `UIToolkitInputConfiguration.SetRuntimeInputBackend` | delete the call (no effect) | 6.6 (removed) |
+| Custom `SerializableDictionary` wrappers | `[SerializeField] Dictionary<TKey, TValue>` (optional migration) | 6.6 |
+| Dynamic batching | other draw-call optimization methods | 6.6 (obsolete) |
+| `BuildOptions.ForceEnableAssertions` | `PlayerSettings.SetManagedCodeVariant(target, ManagedCodeVariant.Checked)` | 6.6 |
+| URP Compatibility Mode / `URP_COMPATIBILITY_MODE` | render graph | 6.4 (removed) |

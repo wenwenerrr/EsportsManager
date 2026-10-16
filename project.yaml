@@ -7,6 +7,13 @@ framework:
   version: 1.1.3
   last_upgraded: 2026-09-25
 
+project:
+  stage: Concept
+
+modes:
+  rigor: minimal
+  automation: guided
+
 # NOTE: this template ships with no `modes:` block, and the six knobs below must
 # never be added to one.
 #
@@ -25,3 +32,37 @@ framework:
 # here. `/settings --local <key>=<value>` writes there; `/settings <key>=<value>`
 # edits this file. See `.claude/docs/config-resolution.md` for the full
 # precedence order.
+
+engine:
+  name: "Unity"
+  version: "6000.6.5f1"
+  language: "C#"
+  rendering: "URP"
+  physics: "PhysX"
+  path: "/Applications/Unity/Hub/Editor/6000.6.5f1/Unity.app/Contents/MacOS/Unity"
+
+specialists:
+  code: "unity-specialist"
+  shader: "unity-shader-specialist"
+  ui: "unity-ui-specialist"
+  additional: ["unity-dots-specialist", "unity-addressables-specialist"]
+
+naming:
+  classes: PascalCase
+  variables: camelCase
+  constants: SCREAMING_SNAKE   # UNVERIFIED — not sourceable from
+                               # docs/engine-reference/unity/; confirm before relying on it
+  signals: PascalCase On<Event>
+  files: PascalCase
+  scenes: PascalCase
+
+commands:
+  # build/run: -buildTarget osxuniversal and -buildOSXUniversalPlayer are from
+  # docs.unity3d.com/6000.6/Documentation/Manual/EditorCommandLineArguments.html;
+  # not yet run (no Unity project existed at setup time).
+  # TODO: run's executable name inside the .app is the Player "Product Name" —
+  # set Product Name to EsportsManager, or update this path via /settings.
+  build: '"/Applications/Unity/Hub/Editor/6000.6.5f1/Unity.app/Contents/MacOS/Unity" -batchmode -quit -projectPath . -buildTarget osxuniversal -buildOSXUniversalPlayer Builds/Mac/EsportsManager.app'
+  test: '"/Applications/Unity/Hub/Editor/6000.6.5f1/Unity.app/Contents/MacOS/Unity" -batchmode -runTests -projectPath . -testPlatform EditMode -testResults test-results/editmode.xml'
+  run: "Builds/Mac/EsportsManager.app/Contents/MacOS/EsportsManager -screen-width 1280 -screen-height 720 -screen-fullscreen 0"
+  smoke: '"/Applications/Unity/Hub/Editor/6000.6.5f1/Unity.app/Contents/MacOS/Unity" -batchmode -quit -projectPath . -logFile -'

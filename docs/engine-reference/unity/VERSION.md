@@ -2,11 +2,17 @@
 
 | Field | Value |
 |-------|-------|
-| **Engine Version** | Unity 6.3 LTS |
-| **Installed at pin time** | NOT DETERMINED — `/setup-engine` §3 probes the installed editor and records the result here. |
-| **Release Date** | December 2025 |
-| **Project Pinned** | 2026-02-13 |
-| **Last Docs Verified** | 2026-02-13 |
+| **Engine Version** | Unity 6.6 (6000.6.5f1) — not an LTS release (see note below) |
+| **Installed at pin time** | 6000.6.5f1 — matches pin (probed `Unity.app/Contents/MacOS/Unity -version`, 2026-10-15) |
+| **Release Date** | NOT SOURCEABLE — 6.6 release date not stated at https://unity.com/releases/unity-6-releases |
+| **Project Pinned** | 2026-10-15 |
+| **Last Docs Verified** | 2026-10-15 (6.4/6.5/6.6 upgrade guides only; 6.3-era content below unchanged) |
+
+> **6.6 is not the LTS.** https://unity.com/releases/unity-6-releases names 6.3 as
+> "Latest LTS release", "supported until December 2027". The 6.5 upgrade guide says
+> the Built-In Render Pipeline is "supported through Unity 6.7 LTS" — so the next
+> LTS is 6.7 (inference from that wording; 6.6's own support end date is not stated).
+> Pinned to 6.6 deliberately: it is the installed editor; plan an upgrade to 6.7 LTS.
 | **LLM Knowledge Cutoff** | May 2025 |
 
 ## Knowledge Gap Warning
@@ -60,6 +66,13 @@ version-qualified claim** — `NOT DETERMINED` means the gap is unknown, not abs
 | 6.1 | Nov 2024 | MEDIUM | Bug fixes, stability improvements |
 | 6.2 | Dec 2024 | MEDIUM | Performance optimizations, new input system improvements |
 | 6.3 LTS | Dec 2025 | HIGH | First LTS since 6.0, production-ready DOTS, enhanced graphics features |
+| 6.4 | NOT SOURCEABLE | HIGH | Asset artifact deps, `Object.Destroy` calls `OnDisable` on descendants, URP Compatibility Mode removed |
+| 6.5 | NOT SOURCEABLE | HIGH | `InstanceID` → `EntityId` (8 bytes), obsolete GameObject/Component shortcuts removed, Built-In RP deprecated, project-local Editor.log |
+| 6.6 | NOT SOURCEABLE | HIGH | Cinemachine 3 core, `Dictionary` serialization, `DEVELOPMENT_BUILD`/`UNITY_64` deprecated, UXML Factory/Traits removed |
+
+6.4–6.6 rows sourced 2026-10-15 from the upgrade guides at
+https://docs.unity.com/en-us/engine/6000.6/manual/upgrade-guides/ (`upgrade-guide-unity64`,
+`-unity65`, `-unity66`). Details: `breaking-changes.md` § "6.3 → 6.6".
 
 ## Major Changes from 2022 LTS to Unity 6.3 LTS
 
