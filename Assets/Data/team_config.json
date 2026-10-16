@@ -1,0 +1,46 @@
+{
+  "strength": {
+    "aggregation": "weighted_average",
+    "lane_weights": [
+      { "lane": "top", "weight": 1.0 },
+      { "lane": "jungle", "weight": 1.2 },
+      { "lane": "mid", "weight": 1.2 },
+      { "lane": "adc", "weight": 1.2 },
+      { "lane": "support", "weight": 0.8 }
+    ]
+  },
+  "popularity": {
+    "starter_share": 0.6
+  },
+  "initial": {
+    "funds": 500000,
+    "own_popularity": 10,
+    "chemistry": 30
+  },
+  "finance": {
+    "segments_per_year": 4,
+    "sponsorship_base": 20000,
+    "sponsorship_per_popularity": 800,
+    "sponsorship_per_win_rate": 40000,
+    "recent_results_window": 10,
+    "no_results_win_rate": 0.5,
+    "livestream_base": 5000,
+    "livestream_per_popularity": 300
+  },
+  "chemistry": {
+    "rise_per_segment": 8,
+    "drop_per_replacement": 15,
+    "compatible_modifier": 0.5,
+    "conflict_modifier": -0.5,
+    "pairings": [
+      { "a": "热血", "b": "热血", "relation": "compatible" },
+      { "a": "热血", "b": "社牛", "relation": "compatible" },
+      { "a": "佛系", "b": "内向", "relation": "compatible" },
+      { "a": "社牛", "b": "内向", "relation": "compatible" },
+      { "a": "热血", "b": "佛系", "relation": "conflict" },
+      { "a": "戏精", "b": "戏精", "relation": "conflict" },
+      { "a": "戏精", "b": "内向", "relation": "conflict" },
+      { "a": "热血", "b": "戏精", "relation": "conflict" }
+    ]
+  }
+}
