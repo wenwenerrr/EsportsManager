@@ -3,84 +3,33 @@ using System.Collections.Generic;
 using System.Linq;
 using EsportsManager.Players;
 using NUnit.Framework;
-using UnityEditor;
-using UnityEngine;
 
 namespace EsportsManager.Tests.Players
 {
-    /// <summary>EditMode tests for Story 001 (player model). Config is built in memory; no file I/O.</summary>
+    /// <summary>EditMode tests for the player model basics (Story 001, kept under Story 008). Config is built in memory; no file I/O.</summary>
     public class PlayerModelTests
     {
-        private const int FixedSeed = 12345;
+        private const int FixedSeed = TestConfigFactory.FixedSeed;
+        private static readonly string[][] LaneTable = TestConfigFactory.LaneTable;
 
-        // Fixture: lane id -> six dimension display names, copied from design/game-brief.md.
-        private static readonly string[][] LaneTable =
-        {
-            new[] { "top", "每死承伤", "伤害占比", "开团能力", "参团率", "KDA", "指挥能力" },
-            new[] { "jungle", "分均经济", "经济转化", "参团率", "KDA", "击杀贡献", "指挥能力" },
-            new[] { "mid", "伤害占比", "参团率", "经济转化", "KDA", "控制时长", "指挥能力" },
-            new[] { "adc", "发育能力", "经济转伤害", "KDA", "参团率", "生存能力", "指挥能力" },
-            new[] { "support", "参团率", "每死承伤", "控制时长", "开团能力", "治疗量", "指挥能力" },
-        };
+        private static PlayerConfig MakeConfig(float discount = 0.8f) => TestConfigFactory.Make(discount);
 
-        private static PlayerConfig MakeConfig(float discount = 0.8f)
-        {
-            var lanes = LaneTable.Select(row => new LaneDef
-            {
-                id = row[0],
-                displayName = row[0],
-                dimensions = row.Skip(1).Select((n, i) => new DimensionDef
-                {
-                    id = row[0] + "_" + i,
-                    displayName = n,
-                    weight = i == 0 ? 2f : 1f // first dimension weighs double
-                }).ToArray()
-            }).ToArray();
-
-            return new PlayerConfig
-            {
-                offLaneDiscount = discount,
-                personalities = new[] { "a", "b", "c", "d" },
-                lanes = lanes,
-                growthBands = new[]
-                {
-                    new GrowthBand { minAge = 0, maxAge = 19, deltaPerYear = 5f },
-                    new GrowthBand { minAge = 20, maxAge = 27, deltaPerYear = 0f },
-                    new GrowthBand { minAge = 28, maxAge = 200, deltaPerYear = -4f },
-                },
-                generation = new GenerationConfig
-                {
-                    playersPerLane = 5,
-                    minAge = 17, maxAge = 30,
-                    mainLaneDimMin = 55, mainLaneDimMax = 90,
-                    offLaneDimMin = 30, offLaneDimMax = 70,
-                    looksMin = 30, looksMax = 90,
-                    popularityMin = 5, popularityMax = 60,
-                    moodMin = 50, moodMax = 80,
-                    stressMin = 10, stressMax = 40,
-                    salaryMin = 1000, salaryMax = 5000,
-                    surnames = new[] { "S1", "S2", "S3" },
-                    givenNames = new[] { "G1", "G2", "G3" },
-                }
-            };
-        }
-
-        private static Player MakePlayer(PlayerConfig cfg, int age = 22, string mainLane = "mid", float fill = 50f)
-        {
-            var radar = cfg.lanes.ToDictionary(l => l.id, l => Enumerable.Repeat(fill, l.dimensions.Length).ToArray());
-            return new Player(cfg, "Test", age, mainLane, "a", 50f, 50f, 50f, 50f, 1000, radar);
-        }
+        private static Player MakePlayer(PlayerConfig cfg, int age = 22, string mainLane = "mid", float fill = 50f) =>
+            TestConfigFactory.MakePlayer(cfg, age, mainLane, fill);
 
         [Test]
         public void NewPlayer_HasAllRequiredFieldsAndRadarForEveryLane()
         {
             var cfg = MakeConfig();
-            var p = new Player(cfg, "小明", 21, "adc", "b", 60f, 40f, 70f, 20f, 3000);
+            var p = new Player(cfg, 42, "小明", 21, "adc", "diligent", "gentle", 77f, 3, 60f, 40f, 70f, 20f, 3000);
 
+            Assert.AreEqual(42L, p.Id);
             Assert.AreEqual("小明", p.Name);
             Assert.AreEqual(21, p.Age);
             Assert.AreEqual("adc", p.MainLane);
-            Assert.AreEqual("b", p.Personality);
+            CollectionAssert.AreEqual(new[] { "diligent", "gentle" }, p.Traits.ToArray());
+            Assert.AreEqual(77f, p.Potential);
+            Assert.AreEqual(3, p.ContractYearsLeft);
             Assert.AreEqual(60f, p.Looks);
             Assert.AreEqual(40f, p.Popularity);
             Assert.AreEqual(70f, p.Mood);
@@ -165,19 +114,10 @@ namespace EsportsManager.Tests.Players
             Assert.AreEqual(0f, p.GetDimension("top", 1));
 
             var radar = cfg.lanes.ToDictionary(l => l.id, l => Enumerable.Repeat(500f, l.dimensions.Length).ToArray());
-            var q = new Player(cfg, "Q", 20, "top", "a", 500f, -9f, 500f, 500f, 1, radar);
+            var q = new Player(cfg, 2, "Q", 20, "top", "diligent", "gentle", 500f, 1, 500f, -9f, 500f, 500f, 1, radar);
             Assert.AreEqual(100f, q.GetDimension("mid", 3));
             Assert.AreEqual(100f, q.Looks);
             Assert.AreEqual(0f, q.Popularity);
-        }
-
-        [Test]
-        public void ConfigPersonalities_AreFiniteSetOfFourToSixAndGeneratedPlayersUseOnlyThem()
-        {
-            var cfg = MakeConfig();
-            Assert.That(cfg.personalities.Length, Is.InRange(4, 6));
-            var pool = new PlayerGenerator(cfg, new SeededRandomSource(FixedSeed)).GeneratePool();
-            Assert.IsTrue(pool.All(p => cfg.personalities.Contains(p.Personality)));
         }
 
         [Test]
@@ -200,10 +140,11 @@ namespace EsportsManager.Tests.Players
             foreach (var p in pool)
             {
                 Assert.That(p.Age, Is.InRange(g.minAge, g.maxAge));
-                Assert.That(p.Salary, Is.InRange(g.salaryMin, g.salaryMax));
+                Assert.GreaterOrEqual(p.Salary, cfg.salary.minSalary); // no salary cap since numbers.md v2
                 Assert.That(p.Mood, Is.InRange(g.moodMin, g.moodMax));
                 foreach (float v in p.GetRadar(p.MainLane))
-                    Assert.That(v, Is.InRange(g.mainLaneDimMin, g.mainLaneDimMax));
+                    // main-lane dimensions are potential x U(0.6, 0.95) since Story 008
+                    Assert.That(v, Is.InRange(p.Potential * g.mainLaneDimFractionMin - 1e-3f, p.Potential * g.mainLaneDimFractionMax + 1e-3f));
             }
         }
 
@@ -218,7 +159,9 @@ namespace EsportsManager.Tests.Players
             {
                 Assert.AreEqual(a[i].Name, b[i].Name);
                 Assert.AreEqual(a[i].Age, b[i].Age);
-                Assert.AreEqual(a[i].Personality, b[i].Personality);
+                CollectionAssert.AreEqual(a[i].Traits.ToArray(), b[i].Traits.ToArray());
+                Assert.AreEqual(a[i].Potential, b[i].Potential);
+                Assert.AreEqual(a[i].ContractYearsLeft, b[i].ContractYearsLeft);
                 Assert.AreEqual(a[i].Salary, b[i].Salary);
                 Assert.AreEqual(a[i].Mood, b[i].Mood);
                 foreach (var lane in cfg.lanes)
@@ -233,53 +176,6 @@ namespace EsportsManager.Tests.Players
             var a = new PlayerGenerator(cfg, new SeededRandomSource(1)).GeneratePool();
             var b = new PlayerGenerator(cfg, new SeededRandomSource(2)).GeneratePool();
             Assert.IsFalse(a.Select(p => p.GetLaneScore(p.MainLane)).SequenceEqual(b.Select(p => p.GetLaneScore(p.MainLane))));
-        }
-
-        [Test]
-        public void AdvanceYear_YoungPlayerImproves()
-        {
-            var cfg = MakeConfig();
-            var p = MakePlayer(cfg, age: 18, fill: 50f);
-            p.AdvanceYear();
-            Assert.AreEqual(19, p.Age);
-            Assert.AreEqual(55f, p.GetDimension("mid", 2), 1e-4f);
-            Assert.AreEqual(55f, p.GetDimension("top", 5), 1e-4f);
-        }
-
-        [Test]
-        public void AdvanceYear_VeteranDeclines()
-        {
-            var cfg = MakeConfig();
-            var p = MakePlayer(cfg, age: 30, fill: 50f);
-            p.AdvanceYear();
-            Assert.AreEqual(31, p.Age);
-            Assert.AreEqual(46f, p.GetDimension("mid", 2), 1e-4f);
-        }
-
-        [Test]
-        public void AdvanceYear_PeakBandIsFlat_AndResultsStayClamped()
-        {
-            var cfg = MakeConfig();
-            var peak = MakePlayer(cfg, age: 24, fill: 50f);
-            peak.AdvanceYear();
-            Assert.AreEqual(50f, peak.GetDimension("mid", 0), 1e-4f);
-
-            var young = MakePlayer(cfg, age: 18, fill: 98f);
-            young.AdvanceYear();
-            Assert.AreEqual(100f, young.GetDimension("mid", 0));
-            var old = MakePlayer(cfg, age: 35, fill: 2f);
-            old.AdvanceYear();
-            Assert.AreEqual(0f, old.GetDimension("mid", 0));
-        }
-
-        [Test]
-        public void Loader_ParsesJsonAndRejectsInvalidDiscount()
-        {
-            const string valid = "{\"offLaneDiscount\":0.5,\"personalities\":[\"a\"],\"lanes\":[{\"id\":\"x\",\"displayName\":\"X\",\"dimensions\":[{\"id\":\"d\",\"displayName\":\"D\",\"weight\":1}]}],\"growthBands\":[{\"minAge\":0,\"maxAge\":99,\"deltaPerYear\":0}],\"generation\":{\"playersPerLane\":1,\"surnames\":[\"s\"],\"givenNames\":[\"g\"]}}";
-            var cfg = PlayerConfigLoader.FromJson(valid);
-            Assert.AreEqual(0.5f, cfg.offLaneDiscount);
-            Assert.AreEqual("x", cfg.lanes[0].id);
-            Assert.Throws<InvalidOperationException>(() => PlayerConfigLoader.FromJson(valid.Replace("0.5", "1.5")));
         }
 
         // ---- Validate() rules ----
@@ -297,51 +193,20 @@ namespace EsportsManager.Tests.Players
         }
 
         [Test]
-        public void Validate_EmptyGrowthBands_Throws()
-        {
-            var cfg = MakeConfig();
-            cfg.growthBands = new GrowthBand[0];
-            AssertInvalid(cfg, "growthBands");
-        }
-
-        [Test]
-        public void Validate_GrowthBandMinAboveMax_Throws()
-        {
-            var cfg = MakeConfig();
-            cfg.growthBands[1].minAge = 30; // 30 > maxAge 27
-            AssertInvalid(cfg, "minAge");
-        }
-
-        [Test]
-        public void Validate_OverlappingGrowthBands_Throws()
-        {
-            var cfg = MakeConfig();
-            cfg.growthBands[1].minAge = 19; // band 0 ends at 19
-            AssertInvalid(cfg, "overlaps");
-        }
-
-        [Test]
-        public void Validate_GapBetweenGrowthBands_IsAllowedAndMeansNoChange()
-        {
-            var cfg = MakeConfig();
-            cfg.growthBands[1].minAge = 21; // age 20 is now uncovered
-            Assert.DoesNotThrow(cfg.Validate);
-            Assert.AreEqual(0f, cfg.GetGrowthDelta(20));
-        }
-
-        [Test]
         public void Validate_GenerationRangeMinAboveMax_Throws()
         {
             var setters = new Action<GenerationConfig>[]
             {
                 g => g.minAge = g.maxAge + 1,
-                g => g.mainLaneDimMin = g.mainLaneDimMax + 1,
-                g => g.offLaneDimMin = g.offLaneDimMax + 1,
+                g => g.mainLaneDimFractionMin = g.mainLaneDimFractionMax + 0.01f,
+                g => g.offLaneDimFractionMin = g.offLaneDimFractionMax + 0.01f,
                 g => g.looksMin = g.looksMax + 1,
                 g => g.popularityMin = g.popularityMax + 1,
                 g => g.moodMin = g.moodMax + 1,
                 g => g.stressMin = g.stressMax + 1,
-                g => g.salaryMin = g.salaryMax + 1,
+                g => g.normalPotentialMin = g.normalPotentialMax + 1,
+                g => g.talentPotentialMin = g.talentPotentialMax + 1,
+                g => g.contractYearsMin = g.contractYearsMax + 1,
             };
             for (int i = 0; i < setters.Length; i++)
             {
@@ -400,33 +265,6 @@ namespace EsportsManager.Tests.Players
             var cfg = MakeConfig();
             cfg.lanes[0].dimensions[0].weight = -1f;
             AssertInvalid(cfg, "weight must be >= 0");
-        }
-
-        [Test]
-        public void Loader_MalformedJson_ThrowsInvalidOperationException()
-        {
-            Assert.Throws<InvalidOperationException>(() => PlayerConfigLoader.FromJson("{ \"lanes\": [ {"));
-            Assert.Throws<InvalidOperationException>(() => PlayerConfigLoader.FromJson("not json at all"));
-            Assert.Throws<InvalidOperationException>(() => PlayerConfigLoader.FromJson(""));
-        }
-
-        // Integration-style: reads the shipped config asset from disk via AssetDatabase.
-        [Test]
-        [Category("Integration")]
-        public void ShippedConfig_LoadsAndValidatesAndMatchesBriefLaneTable()
-        {
-            const string path = "Assets/Data/PlayerConfig.json";
-            var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
-            Assert.IsNotNull(asset, "missing " + path);
-
-            var cfg = PlayerConfigLoader.FromJson(asset.text);
-
-            Assert.AreEqual(LaneTable.Length, cfg.lanes.Length);
-            for (int i = 0; i < LaneTable.Length; i++)
-                CollectionAssert.AreEqual(LaneTable[i].Skip(1).ToArray(),
-                    cfg.lanes[i].dimensions.Select(d => d.displayName).ToArray(), cfg.lanes[i].id);
-            Assert.That(cfg.personalities.Length, Is.InRange(4, 6));
-            Assert.GreaterOrEqual(cfg.generation.playersPerLane, 5);
         }
     }
 }

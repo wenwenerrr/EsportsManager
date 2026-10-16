@@ -1,0 +1,234 @@
+{
+  "off_lane_discount": 0.8,
+  "lanes": [
+    {
+      "id": "top",
+      "display_name": "对抗路",
+      "dimensions": [
+        {"id": "damage_taken_per_death", "display_name": "每死承伤", "weight": 1.0},
+        {"id": "damage_share", "display_name": "伤害占比", "weight": 1.0},
+        {"id": "engage", "display_name": "开团能力", "weight": 1.5},
+        {"id": "teamfight_participation", "display_name": "参团率", "weight": 1.0},
+        {"id": "kda", "display_name": "KDA", "weight": 1.0},
+        {"id": "command", "display_name": "指挥能力", "weight": 0.5}
+      ]
+    },
+    {
+      "id": "jungle",
+      "display_name": "打野",
+      "dimensions": [
+        {"id": "gold_per_min", "display_name": "分均经济", "weight": 1.0},
+        {"id": "gold_conversion", "display_name": "经济转化", "weight": 1.0},
+        {"id": "teamfight_participation", "display_name": "参团率", "weight": 1.5},
+        {"id": "kda", "display_name": "KDA", "weight": 1.0},
+        {"id": "kill_contribution", "display_name": "击杀贡献", "weight": 1.0},
+        {"id": "command", "display_name": "指挥能力", "weight": 1.0}
+      ]
+    },
+    {
+      "id": "mid",
+      "display_name": "中路",
+      "dimensions": [
+        {"id": "damage_share", "display_name": "伤害占比", "weight": 1.5},
+        {"id": "teamfight_participation", "display_name": "参团率", "weight": 1.0},
+        {"id": "gold_conversion", "display_name": "经济转化", "weight": 1.0},
+        {"id": "kda", "display_name": "KDA", "weight": 1.0},
+        {"id": "cc_duration", "display_name": "控制时长", "weight": 1.0},
+        {"id": "command", "display_name": "指挥能力", "weight": 0.5}
+      ]
+    },
+    {
+      "id": "adc",
+      "display_name": "发育路",
+      "dimensions": [
+        {"id": "farming", "display_name": "发育能力", "weight": 1.5},
+        {"id": "gold_to_damage", "display_name": "经济转伤害", "weight": 1.5},
+        {"id": "kda", "display_name": "KDA", "weight": 1.0},
+        {"id": "teamfight_participation", "display_name": "参团率", "weight": 1.0},
+        {"id": "survival", "display_name": "生存能力", "weight": 1.0},
+        {"id": "command", "display_name": "指挥能力", "weight": 0.5}
+      ]
+    },
+    {
+      "id": "support",
+      "display_name": "游走",
+      "dimensions": [
+        {"id": "teamfight_participation", "display_name": "参团率", "weight": 1.5},
+        {"id": "damage_taken_per_death", "display_name": "每死承伤", "weight": 1.0},
+        {"id": "cc_duration", "display_name": "控制时长", "weight": 1.0},
+        {"id": "engage", "display_name": "开团能力", "weight": 1.0},
+        {"id": "healing", "display_name": "治疗量", "weight": 1.0},
+        {"id": "command", "display_name": "指挥能力", "weight": 1.0}
+      ]
+    }
+  ],
+  "personality_groups": [
+    {
+      "id": "loyalty",
+      "traits": [
+        {"id": "loyal", "display_name": "义气"},
+        {"id": "selfish", "display_name": "自私"}
+      ]
+    },
+    {
+      "id": "temperament",
+      "traits": [
+        {"id": "reserved", "display_name": "内向 / 沉稳"},
+        {"id": "lively", "display_name": "活泼"}
+      ]
+    },
+    {
+      "id": "sincerity",
+      "traits": [
+        {"id": "earnest", "display_name": "单纯 / 认真"},
+        {"id": "slick", "display_name": "圆滑"}
+      ]
+    },
+    {
+      "id": "diligence",
+      "traits": [
+        {"id": "diligent", "display_name": "勤奋"},
+        {"id": "lazy", "display_name": "懒惰"}
+      ]
+    },
+    {
+      "id": "dominance",
+      "traits": [
+        {"id": "assertive", "display_name": "强势"},
+        {"id": "gentle", "display_name": "温和"}
+      ]
+    },
+    {
+      "id": "outlook",
+      "traits": [
+        {"id": "optimistic", "display_name": "乐观"},
+        {"id": "pessimistic", "display_name": "悲观"}
+      ]
+    },
+    {
+      "id": "resilience",
+      "traits": [
+        {"id": "resolute", "display_name": "坚毅"},
+        {"id": "fragile", "display_name": "脆弱 / 依赖"}
+      ]
+    },
+    {
+      "id": "worldview",
+      "traits": [
+        {"id": "idealistic", "display_name": "理想"},
+        {"id": "pragmatic", "display_name": "实际"}
+      ]
+    },
+    {
+      "id": "decisiveness",
+      "traits": [
+        {"id": "decisive", "display_name": "果断"},
+        {"id": "hesitant", "display_name": "犹豫"}
+      ]
+    },
+    {
+      "id": "wit",
+      "traits": [
+        {"id": "clever", "display_name": "聪明"},
+        {"id": "honest", "display_name": "老实"}
+      ]
+    }
+  ],
+  "trait_effects": [
+    {"trait": "loyal", "key": "renewal_ask_price", "multiplier": 0.95},
+    {"trait": "selfish", "key": "ask_price", "multiplier": 1.05},
+    {"trait": "selfish", "key": "bench_mood_drop", "multiplier": 1.03},
+    {"trait": "reserved", "key": "stream_fans", "multiplier": 0.95},
+    {"trait": "reserved", "key": "stress_gain", "multiplier": 0.97},
+    {"trait": "lively", "key": "stream_fans", "multiplier": 1.05},
+    {"trait": "lively", "key": "business_rate", "multiplier": 1.03},
+    {"trait": "earnest", "key": "training_gain", "multiplier": 1.03},
+    {"trait": "earnest", "key": "business_rate", "multiplier": 0.97},
+    {"trait": "slick", "key": "business_amount", "multiplier": 1.03},
+    {"trait": "slick", "key": "negative_compat_impact", "multiplier": 0.95},
+    {"trait": "diligent", "key": "training_gain", "multiplier": 1.05},
+    {"trait": "lazy", "key": "training_gain", "multiplier": 0.95},
+    {"trait": "lazy", "key": "stress_gain", "multiplier": 0.97},
+    {"trait": "assertive", "key": "command", "multiplier": 1.05},
+    {"trait": "gentle", "key": "familiarity_gain", "multiplier": 1.05},
+    {"trait": "optimistic", "key": "negative_mood_change", "multiplier": 0.95},
+    {"trait": "pessimistic", "key": "negative_mood_change", "multiplier": 1.05},
+    {"trait": "resolute", "key": "stress_variance_impact", "multiplier": 0.95},
+    {"trait": "fragile", "key": "loss_mood_drop", "multiplier": 1.05},
+    {"trait": "idealistic", "key": "win_mood_gain", "multiplier": 1.03},
+    {"trait": "idealistic", "key": "salary_satisfaction_weight", "multiplier": 0.97},
+    {"trait": "pragmatic", "key": "salary_satisfaction_weight", "multiplier": 1.05},
+    {"trait": "decisive", "key": "decider_performance", "multiplier": 1.03},
+    {"trait": "hesitant", "key": "decider_performance", "multiplier": 0.97},
+    {"trait": "clever", "key": "training_gain", "multiplier": 1.03},
+    {"trait": "clever", "key": "off_lane_discount", "multiplier": 1.03},
+    {"trait": "honest", "key": "ask_price", "multiplier": 0.97},
+    {"trait": "honest", "key": "mood_change_magnitude", "multiplier": 0.97}
+  ],
+  "trait_pairs": [
+    {"a": "assertive", "b": "gentle", "value": 0.5},
+    {"a": "assertive", "b": "fragile", "value": 0.5},
+    {"a": "loyal", "b": "loyal", "value": 0.5},
+    {"a": "optimistic", "b": "pessimistic", "value": 0.3},
+    {"a": "diligent", "b": "diligent", "value": 0.3},
+    {"a": "lively", "b": "lively", "value": 0.3},
+    {"a": "reserved", "b": "lively", "value": 0.3},
+    {"a": "clever", "b": "honest", "value": 0.3},
+    {"a": "assertive", "b": "assertive", "value": -0.5},
+    {"a": "selfish", "b": "loyal", "value": -0.5},
+    {"a": "selfish", "b": "selfish", "value": -0.5},
+    {"a": "diligent", "b": "lazy", "value": -0.5},
+    {"a": "idealistic", "b": "pragmatic", "value": -0.3},
+    {"a": "decisive", "b": "hesitant", "value": -0.3},
+    {"a": "earnest", "b": "slick", "value": -0.3},
+    {"a": "pessimistic", "b": "pessimistic", "value": -0.3}
+  ],
+  "training": {
+    "base_gain": 2,
+    "stress_factor": 0.5,
+    "soft_cap_floor": 0.15,
+    "age_bands": [
+      {"min_age": 0, "max_age": 19, "coefficient": 1.2},
+      {"min_age": 20, "max_age": 22, "coefficient": 1.0},
+      {"min_age": 23, "max_age": 25, "coefficient": 0.8},
+      {"min_age": 26, "max_age": 28, "coefficient": 0.5},
+      {"min_age": 29, "max_age": 200, "coefficient": 0.3}
+    ]
+  },
+  "aging": {
+    "decline_start_age": 27,
+    "decline_bands": [
+      {"min_age": 27, "max_age": 28, "amount": 1},
+      {"min_age": 29, "max_age": 30, "amount": 2},
+      {"min_age": 31, "max_age": 200, "amount": 4}
+    ]
+  },
+  "potential": {"talent_threshold": 85, "scouting_bias": 10, "estimate_half_width": 20, "estimate_min_half_width": 3, "observation_per_segment": 5, "observation_per_training": 3},
+  "salary": {"min_salary": 20000, "max_salary": 200000, "weight_lane_score": 1, "weight_popularity": 0.8, "weight_potential": 0.3, "random_range": 0.1},
+  "generation": {
+    "players_per_lane": 6,
+    "min_age": 17,
+    "max_age": 30,
+    "main_lane_dim_fraction_min": 0.6,
+    "main_lane_dim_fraction_max": 0.95,
+    "off_lane_dim_fraction_min": 0.35,
+    "off_lane_dim_fraction_max": 0.75,
+    "looks_min": 30,
+    "looks_max": 90,
+    "popularity_min": 5,
+    "popularity_max": 60,
+    "mood_min": 50,
+    "mood_max": 80,
+    "stress_min": 10,
+    "stress_max": 40,
+    "normal_potential_min": 40,
+    "normal_potential_max": 75,
+    "talent_potential_min": 85,
+    "talent_potential_max": 95,
+    "talent_chance": 0.05,
+    "contract_years_min": 1,
+    "contract_years_max": 3,
+    "surnames": ["陈", "林", "黄", "张", "刘", "杨", "吴", "周", "徐", "孙", "马", "朱"],
+    "given_names": ["小北", "阿泽", "大壮", "星河", "一鸣", "夜雨", "墨白", "凌云", "飞鱼", "老七", "沐风", "南风", "千秋", "无痕"]
+  }
+}
