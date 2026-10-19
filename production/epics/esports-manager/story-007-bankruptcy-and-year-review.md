@@ -29,7 +29,7 @@
 *From `design/game-brief.md` (Player goal & fail state + MVP feature 7), scoped to this story:*
 
 - [ ] 资金归零（< 0）时判定破产，显示破产画面，本局结束
-- [ ] 年终总结按四条路线分别评价：竞技（赛季排名）、商业（资金和赞助）、人气（粉丝数）、成长（选手能力提升）
+- [ ] 年终总结按四条路线分别评价：竞技（春季赛、夏季赛、年度总决赛的名次）、商业（资金和赞助）、人气（粉丝数）、成长（选手能力提升）
 - [ ] 每条路线给一个等级（如 S / A / B / C），阈值可配置
 - [ ] 没有"总分"或"唯一正确路线"——四项并列展示
 - [ ] 看完总结后可以继续下一年
@@ -68,5 +68,5 @@
 
 ## Dependencies
 
-- Depends on: Story 006
+- Depends on: Story 005
 - Unlocks: None
