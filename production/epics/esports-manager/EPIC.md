@@ -13,9 +13,10 @@
 |---|-------|------|--------|-----|
 | 001 | 选手数据模型和虚构选手池 | Logic | Ready | N/A (minimal) |
 | 002 | 战队三角和默契 | Logic | Ready | N/A (minimal) |
-| 003 | 赛段行动分配和文字界面 | Integration | Ready | N/A (minimal) |
+| 003 | 赛段行动逻辑 | Logic | Ready | N/A (minimal) |
 | 004 | 比赛模拟和战报 | Logic | Ready | N/A (minimal) |
 | 005 | 年度循环和转会期 | Integration | Ready | N/A (minimal) |
 | 006 | 选手事件 | Logic | Ready | N/A (minimal) |
 | 007 | 破产判定和年终总结 | UI | Ready | N/A (minimal) |
 | 008 | 选手模型升级（按 numbers.md） | Logic | Ready | N/A (minimal) |
+| 009 | 文字界面（第一个可玩版本） | UI | Ready | N/A (minimal) |

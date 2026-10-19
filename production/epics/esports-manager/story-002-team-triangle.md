@@ -1,12 +1,12 @@
 # Story 002: 战队三角和默契（按 numbers.md v2 重写）
 
 > **Epic**: 战队经理人 MVP
-> **Status**: Ready
+> **Status**: Complete
 > **Layer**: Core
 > **Type**: Logic
 > **Estimate**: [fill before starting]
 > **Manifest Version**: N/A (minimal — no control manifest)
-> **Last Updated**: 2026-10-16 (ACs rewritten against design/numbers.md v2; earlier WIP code deleted in Story 008)
+> **Last Updated**: 2026-10-16
 
 ## Context
 
@@ -85,3 +85,14 @@
 
 - Depends on: Story 001 (Complete), Story 008 (Complete)
 - Unlocks: Story 003
+
+---
+
+## Completion Notes
+**Completed**: 2026-10-16
+**Criteria**: 10/10 passing (no deferred items)
+**Deviations**: (1) Doc-comment-only edit to `Assets/Scripts/Players/Player.cs` (outside story scope, user-approved) to replace stale v1 trait multipliers. (2) Empty lineup slots count as 0 in strength and chemistry but are skipped in average mood/stress and starter popularity — Story 004 must decide whether a match can start with an empty slot (recorded in `design/numbers.md` §6).
+**Test Evidence**: Logic: `Assets/Tests/EditMode/Team/` (TeamTests, TeamConfigTests, TeamTestFactory) — 91 new tests; whole suite 313 tests, 313 passed, 0 failed (`test-results/editmode.xml`, from the /dev-story run; /story-done did not re-run them). Waived at `qa.level: minimal`, written anyway at the user's request.
+**Code Review**: Skipped (solo mode); unity-specialist review run, SHOULD-FIX items fixed.
+**Run result**: N/A — pure data/logic layer, no player-visible surface (first UI is Story 003)
+**Carry-forward**: income structure target (sponsorship 40 / stream 25 / business 20 / prize 15 % of salaries) and livestream retune once Story 003 fixes action points; Story 003 owns stream/business count → heat mapping; Story 004 needs a TeamStrength overload for opponents with fixed mood/stress; Story 005 owns the calendar (`segments_per_year`, `SegmentIndexInYear < S`, transfer window is not a segment).
