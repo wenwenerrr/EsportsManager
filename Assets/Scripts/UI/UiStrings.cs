@@ -34,9 +34,14 @@ namespace EsportsManager.UI
         public const string PotentialEstimate = "潜力估计";
         public const string PotentialRangeFormat = "{0}–{1}";
         public const string TraitSeparator = " · ";
+        public const string PairFormat = "{0} / {1}";
+        public const string BeforeAfterFormat = "{0} → {1}";
+        public const string PartSeparator = "  ";
+        public const string ActionSeparator = " ";
 
         // ---- assignment
         public const string Train = "训练";
+        public const string TrainDimFormat = "训练 {0}";
         public const string Stream = "直播";
         public const string Rest = "休息";
         public const string Business = "商务";
@@ -48,7 +53,7 @@ namespace EsportsManager.UI
         public const string PreviewFormat = "预计  压力 {0}  心情 {1}  直播收入 {2}";
         public const string Sponsor = "拉赞助";
         public const string UndoSponsor = "撤销赞助";
-        public const string SponsorInfoFormat = "赞助尝试 {0}（剩余 {1}）· 空闲合约位 {2} · 成功率约 {3:P0}";
+        public const string SponsorInfoFormat = "赞助尝试 {0}（剩余 {1}）· 空闲合约位 {2} · 成功率约 {3}";
         public const string ClearPlan = "清空计划";
         public const string Resolve = "结算本赛段";
         public const string OffersBadgeFormat = "商务邀约 {0}";
@@ -87,7 +92,7 @@ namespace EsportsManager.UI
         public const string PrizeMoney = "奖金";
         public const string SponsorResults = "赞助";
         public const string NoSponsorAttempt = "本赛段没有拉赞助";
-        public const string SponsorAttemptFormat = "第 {0} 次：成功率 {1:P0} → {2}";
+        public const string SponsorAttemptFormat = "第 {0} 次：成功率 {1} → {2}";
         public const string Success = "成功";
         public const string Failure = "失败";
         public const string NewContractFormat = "新合约 {0}/赛段，共 {1} 赛段";

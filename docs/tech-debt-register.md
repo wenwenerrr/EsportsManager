@@ -1,7 +1,9 @@
 ## Technical Debt Register
-Last updated: 2026-10-16
-Total items: 1 | Estimated total effort: S
+Last updated: 2026-10-19
+Total items: 3 | Estimated total effort: M
 
 | ID | Category | Description | Files | Effort | Impact | Priority | Status | Added | Sprint |
 |----|----------|-------------|-------|--------|--------|----------|--------|-------|--------|
 | TD-001 | Code Quality | Data file breaks `.claude/rules/data-files.md`: file is `PlayerConfig.json` (rule: lowercase `[system]_[name].json`) and keys are camelCase (rule: snake_case, bound through a private wire-format DTO). Also `playersPerLane = 5` is a code-side default — from production/epics/esports-manager/story-001-player-model.md | Assets/Data/PlayerConfig.json, Assets/Scripts/Players/PlayerConfig.cs, Assets/Scripts/Players/PlayerConfigLoader.cs | S | Low | — | Resolved 2026-10-16 | 2026-10-15 | Backlog |
+| TD-002 | Portability | CJK font is loaded from OS font files (Hiragino Sans GB on macOS, fallbacks for Windows/Linux); a machine without them renders Chinese as boxes. Bundle an open CJK font (e.g. Source Han Sans) as a project asset before shipping — from production/epics/esports-manager/story-009-text-ui.md review | Assets/Scripts/UI/UiFont.cs | S | Low (hobby build on this Mac) | Before shipping | Open | 2026-10-19 | Backlog |
+| TD-003 | Architecture | Screens are switched by if-branches in GameUi (main / summary / offer pop-up). Add a simple screen stack before Story 004 adds match report screens; add scrollable lists and a shared USS theme before Story 005's transfer market — from production/epics/esports-manager/story-009-text-ui.md review | Assets/Scripts/UI/GameUi.cs, Assets/Scripts/UI/MainScreen.cs, Assets/Scripts/UI/SummaryScreen.cs | M | Medium | Start of Story 004 (stack), Story 005 (scroll/USS) | Open | 2026-10-19 | Backlog |

@@ -48,11 +48,11 @@ namespace EsportsManager.UI
         {
             var bar = UiKit.Row(64);
             bar.style.marginBottom = 6;
-            bar.Add(StatBlock(UiStrings.Strength, t.Strength.ToString("F1"), UiKit.Scale(t.Strength), 150));
-            bar.Add(StatBlock(UiStrings.Popularity, t.Popularity.ToString("F1"), UiKit.Scale(t.Popularity), 150));
+            bar.Add(StatBlock(UiStrings.Strength, UiKit.F1(t.Strength), UiKit.Scale(t.Strength), 150));
+            bar.Add(StatBlock(UiStrings.Popularity, UiKit.F1(t.Popularity), UiKit.Scale(t.Popularity), 150));
             bar.Add(StatBlock(UiStrings.Funds, UiKit.Yuan(t.Funds), t.Funds < 0 ? UiKit.Bad : UiKit.Good, 220));
-            bar.Add(StatBlock(UiStrings.Chemistry, t.Chemistry.ToString("F1"), UiKit.Scale(t.Chemistry), 150));
-            bar.Add(StatBlock(UiStrings.ActionPoints, pv.PointsRemaining + " / " + t.ActionPoints,
+            bar.Add(StatBlock(UiStrings.Chemistry, UiKit.F1(t.Chemistry), UiKit.Scale(t.Chemistry), 150));
+            bar.Add(StatBlock(UiStrings.ActionPoints, string.Format(UiStrings.PairFormat, pv.PointsRemaining, t.ActionPoints),
                 pv.PointsRemaining > 0 ? UiKit.Accent : UiKit.TextDim, 170));
             var seg = UiKit.Block(UiKit.PanelLight);
             seg.style.flexGrow = 1; seg.style.height = Length.Percent(100);
@@ -110,7 +110,7 @@ namespace EsportsManager.UI
 
             var r4 = UiKit.Row(22);
             r4.Add(Gap(UiKit.Lbl(UiStrings.Salary, 12, UiKit.TextDim)));
-            r4.Add(UiKit.Lbl(string.Format(UiStrings.SalaryPerYearFormat, c.Salary.ToString("N0")), 13, UiKit.Text));
+            r4.Add(UiKit.Lbl(string.Format(UiStrings.SalaryPerYearFormat, UiKit.N0(c.Salary)), 13, UiKit.Text));
             r4.Add(UiKit.Spacer());
             r4.Add(Gap(UiKit.Lbl(UiStrings.ContractLeft, 12, UiKit.TextDim)));
             r4.Add(UiKit.Lbl(string.Format(UiStrings.ContractYearsFormat, c.ContractYearsLeft), 13,
@@ -186,7 +186,7 @@ namespace EsportsManager.UI
             chip.style.paddingLeft = chip.style.paddingRight = 6;
             chip.Add(UiKit.Lbl(label, 12, UiKit.TextDim));
             chip.Add(UiKit.Spacer());
-            chip.Add(UiKit.Lbl(Mathf.RoundToInt(value).ToString(), 14, UiKit.Scale(highBad ? 100f - value : value), true));
+            chip.Add(UiKit.Lbl(UiKit.Int(value), 14, UiKit.Scale(highBad ? 100f - value : value), true));
             return chip;
         }
 
@@ -207,9 +207,12 @@ namespace EsportsManager.UI
             cell.Add(UiKit.Spacer());
             if (gain > 0.005f)
             {
-                var g = UiKit.Lbl(UiKit.Delta(gain), 12, UiKit.Good, true); g.style.marginRight = 6; cell.Add(g);
+                var g = UiKit.Lbl(UiKit.Delta(gain), 12, UiKit.Good, true);
+                g.style.backgroundColor = UiKit.LabelPill; g.style.paddingLeft = g.style.paddingRight = 3;
+                g.style.borderTopLeftRadius = g.style.borderTopRightRadius = g.style.borderBottomLeftRadius = g.style.borderBottomRightRadius = 3;
+                g.style.marginRight = 6; cell.Add(g);
             }
-            var v = UiKit.Lbl(Mathf.RoundToInt(value).ToString(), 13, UiKit.Text, true); v.style.marginRight = 6; cell.Add(v);
+            var v = UiKit.Lbl(UiKit.Int(value), 13, UiKit.Text, true); v.style.marginRight = 6; cell.Add(v);
             return cell;
         }
 
@@ -228,7 +231,7 @@ namespace EsportsManager.UI
                 bar.Add(UiKit.Btn(string.Format(UiStrings.OffersBadgeFormat, unanswered), ui.OpenOffers, UiKit.Warn));
 
             var info = UiKit.Lbl(string.Format(UiStrings.SponsorInfoFormat, pv.SponsorPoints, pv.SponsorAttemptsRemaining,
-                pv.FreeContractSlots, pv.SponsorChanceBeforeNoise), 12, UiKit.TextDim);
+                pv.FreeContractSlots, UiKit.Pct(pv.SponsorChanceBeforeNoise)), 12, UiKit.TextDim);
             info.style.marginRight = 8;
             bar.Add(info);
             bar.Add(UiKit.Btn(UiStrings.Sponsor, ui.Sponsor, UiKit.Accent));

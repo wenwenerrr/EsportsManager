@@ -1,12 +1,12 @@
 # Story 009: 文字界面（第一个可玩版本）
 
 > **Epic**: 战队经理人 MVP
-> **Status**: In Progress
+> **Status**: Complete
 > **Layer**: Presentation
 > **Type**: UI
 > **Estimate**: [fill before starting]
 > **Manifest Version**: N/A (minimal — no control manifest)
-> **Last Updated**: 2026-10-16
+> **Last Updated**: 2026-10-19
 
 ## Context
 
@@ -77,7 +77,7 @@
 **Story Type**: UI
 **Required evidence**: retained screenshot of each screen touched in `production/qa/evidence/story-009-text-ui/` (required — not waived at `qa.level: minimal`)
 
-**Status**: [ ] Not yet created
+**Status**: [x] Created — 6 screenshots retained in `production/qa/evidence/story-009-text-ui/`
 
 ---
 
@@ -85,3 +85,15 @@
 
 - Depends on: Story 003
 - Unlocks: Story 004
+
+---
+
+## Completion Notes
+**Completed**: 2026-10-19
+**Criteria**: 9/10 passing, 1 deferred — AC1 "资金为负时显示负数" is implemented (`UiKit.Yuan` signs negatives, `MainScreen` colours them red) but has no test and was not seen in play; check it when funds go negative in a later playtest.
+**Deviations**: None blocking. AC4's over-limit rejection was not tried by hand; it is covered by `GameSessionTests` and the red "全队行动点已用完" message visible in `03-assign.png`. Unity Cloud project link cleared in `ProjectSettings/ProjectSettings.asset` (user-approved).
+**Test Evidence**: UI — 6 retained screenshots (`01-main` … `06-after-4-segments`), all opened and checked; `Assets/Tests/EditMode/UI/GameSessionTests.cs`; full suite 517/517 pass (2026-10-19, after the review fixes).
+**Code Review**: Skipped (solo mode); unity-ui-specialist reviewed — no blocking findings. Fixed: gain-label contrast, separators moved into `UiStrings`, culture-independent number formatting, font-approach comment (NOT SOURCEABLE).
+**Run result**: OBSERVED — rebuilt macOS player, screenshots recaptured 2026-10-19; user also played 12 segments by hand without errors.
+**Tech debt logged**: TD-002 (bundle a CJK font), TD-003 (screen stack before 004; scroll list + USS theme before 005).
+**Carry-forward**: Player-feedback after 12 segments — the loop feels flat without matches, year-end and events. Decided order: 004 match → 006 action-tied events → 005 → 007; procedurally generated avatars as a new story afterwards. UI must still never show `Player.Potential`.

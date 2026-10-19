@@ -36,9 +36,9 @@ namespace EsportsManager.UI
             body.Add(left);
             var team = Section(left, UiStrings.TeamChanges);
             Change(team, UiStrings.Funds, UiKit.Yuan(r.FundsBefore), UiKit.Yuan(r.FundsAfter), UiKit.YuanDelta(r.FundsAfter - r.FundsBefore), r.FundsAfter - r.FundsBefore);
-            Change(team, UiStrings.Popularity, r.PopularityBefore.ToString("F1"), r.PopularityAfter.ToString("F1"), UiKit.Delta(r.PopularityAfter - r.PopularityBefore), r.PopularityAfter - r.PopularityBefore);
-            Change(team, UiStrings.Chemistry, r.ChemistryBefore.ToString("F1"), r.ChemistryAfter.ToString("F1"), UiKit.Delta(r.ChemistryAfter - r.ChemistryBefore), r.ChemistryAfter - r.ChemistryBefore);
-            Change(team, UiStrings.Strength, r.StrengthBefore.ToString("F1"), r.StrengthAfter.ToString("F1"), UiKit.Delta(r.StrengthAfter - r.StrengthBefore), r.StrengthAfter - r.StrengthBefore);
+            Change(team, UiStrings.Popularity, UiKit.F1(r.PopularityBefore), UiKit.F1(r.PopularityAfter), UiKit.Delta(r.PopularityAfter - r.PopularityBefore), r.PopularityAfter - r.PopularityBefore);
+            Change(team, UiStrings.Chemistry, UiKit.F1(r.ChemistryBefore), UiKit.F1(r.ChemistryAfter), UiKit.Delta(r.ChemistryAfter - r.ChemistryBefore), r.ChemistryAfter - r.ChemistryBefore);
+            Change(team, UiStrings.Strength, UiKit.F1(r.StrengthBefore), UiKit.F1(r.StrengthAfter), UiKit.Delta(r.StrengthAfter - r.StrengthBefore), r.StrengthAfter - r.StrengthBefore);
 
             var money = Section(left, UiStrings.MoneyLines);
             Line(money, UiStrings.LivestreamIncome, UiKit.Yuan(sum.LivestreamIncome), UiKit.Text);
@@ -55,7 +55,7 @@ namespace EsportsManager.UI
             for (int i = 0; i < sum.SponsorAttempts.Count; i++)
             {
                 var a = sum.SponsorAttempts[i];
-                sp.Add(UiKit.Lbl(string.Format(UiStrings.SponsorAttemptFormat, i + 1, a.Chance, a.Success ? UiStrings.Success : UiStrings.Failure),
+                sp.Add(UiKit.Lbl(string.Format(UiStrings.SponsorAttemptFormat, i + 1, UiKit.Pct(a.Chance), a.Success ? UiStrings.Success : UiStrings.Failure),
                     13, a.Success ? UiKit.Good : UiKit.Bad));
             }
             foreach (var c in sum.NewContracts)
@@ -95,7 +95,7 @@ namespace EsportsManager.UI
         {
             var row = UiKit.Row(22);
             var l = UiKit.Lbl(label, 13, UiKit.TextDim); l.style.width = 80; row.Add(l);
-            row.Add(UiKit.Lbl(before + " → " + after, 13));
+            row.Add(UiKit.Lbl(string.Format(UiStrings.BeforeAfterFormat, before, after), 13));
             row.Add(UiKit.Spacer());
             row.Add(UiKit.Lbl(delta, 13, UiKit.DeltaColor(d), true));
             parent.Add(row);
@@ -146,11 +146,11 @@ namespace EsportsManager.UI
                     if (t.Gains != null) for (int i = 0; i < t.Gains.Length && i < perDim.Length; i++) perDim[i] += t.Gains[i];
                 }
                 foreach (var g in perDim) total += g;
-                training = string.Join("  ", parts) + "  " + string.Format(UiStrings.TrainingTotalFormat, UiKit.Delta(total));
+                training = string.Join(UiStrings.PartSeparator, parts) + UiStrings.PartSeparator + string.Format(UiStrings.TrainingTotalFormat, UiKit.Delta(total));
             }
             var colors = new[] { UiKit.Text, UiKit.Text, UiKit.DeltaColor(p.MoodDelta), UiKit.DeltaColor(p.StressDelta, true),
                 UiKit.DeltaColor(p.PopularityDelta), UiKit.Good };
-            return TableRow(false, s.PlayerName(p.PlayerId), acts.Count == 0 ? UiStrings.NoActions : string.Join(" ", acts),
+            return TableRow(false, s.PlayerName(p.PlayerId), acts.Count == 0 ? UiStrings.NoActions : string.Join(UiStrings.ActionSeparator, acts),
                 UiKit.Delta(p.MoodDelta), UiKit.Delta(p.StressDelta), UiKit.Delta(p.PopularityDelta), training, colors);
         }
     }

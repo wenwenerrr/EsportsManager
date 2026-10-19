@@ -1,3 +1,4 @@
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -15,6 +16,11 @@ namespace EsportsManager.UI
         public static readonly Color Good = new Color32(90, 200, 130, 255);
         public static readonly Color Warn = new Color32(240, 190, 80, 255);
         public static readonly Color Bad = new Color32(235, 90, 90, 255);
+        /// <summary>Backing pill behind a label drawn over a coloured bar, so green text stays readable on a green fill.</summary>
+        public static readonly Color LabelPill = new Color(0f, 0f, 0f, 0.55f);
+
+        /// <summary>Numbers are formatted culture-independently so the display does not change with the OS locale.</summary>
+        private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
         /// <summary>A single-line label.</summary>
         public static Label Lbl(string text, int size = 13, Color? color = null, bool bold = false)
@@ -64,7 +70,7 @@ namespace EsportsManager.UI
         }
 
         /// <summary>Formats a yuan amount with thousands separators and a sign for negatives.</summary>
-        public static string Yuan(long v) => (v < 0 ? "-" : "") + UiStrings.Yuan + System.Math.Abs(v).ToString("N0");
+        public static string Yuan(long v) => (v < 0 ? "-" : "") + UiStrings.Yuan + System.Math.Abs(v).ToString("N0", Inv);
 
         /// <summary>A styled button (no theme needed). Disabled buttons are dimmed and ignore clicks.</summary>
         public static Button Btn(string text, System.Action onClick, Color bg, bool enabled = true, int size = 13)
@@ -85,7 +91,19 @@ namespace EsportsManager.UI
         }
 
         /// <summary>Signed one-decimal delta, e.g. "+1.2" / "-0.5" / "0.0".</summary>
-        public static string Delta(float v) => v.ToString("+0.0;-0.0;0.0");
+        public static string Delta(float v) => v.ToString("+0.0;-0.0;0.0", Inv);
+
+        /// <summary>One-decimal value, e.g. "52.3".</summary>
+        public static string F1(float v) => v.ToString("F1", Inv);
+
+        /// <summary>Whole number with thousands separators, e.g. "12,000".</summary>
+        public static string N0(long v) => v.ToString("N0", Inv);
+
+        /// <summary>Rounded integer, e.g. "67".</summary>
+        public static string Int(float v) => Mathf.RoundToInt(v).ToString(Inv);
+
+        /// <summary>Probability 0-1 as a whole percent, e.g. "45%".</summary>
+        public static string Pct(float p) => Mathf.RoundToInt(p * 100f).ToString(Inv) + "%";
 
         /// <summary>Signed yuan delta.</summary>
         public static string YuanDelta(long v) => (v > 0 ? "+" : "") + Yuan(v);

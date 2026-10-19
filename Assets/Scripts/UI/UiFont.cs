@@ -10,6 +10,9 @@ namespace EsportsManager.UI
     /// Chinese font setup. The default UI Toolkit font has no CJK glyphs. Font.CreateDynamicFontFromOSFont does NOT work
     /// with UI Toolkit text (it logs "Unable to load font face"), so a font FILE of the OS is opened by path and wrapped in
     /// a dynamic SDF FontAsset (glyphs are added to the atlas on demand).
+    /// NOT SOURCEABLE: this approach is not covered by docs/engine-reference/unity/ or the Unity 6.6 docs we checked;
+    /// it is verified only by running the build (Story 009 screenshots). Before shipping, bundle an open CJK font
+    /// (e.g. Source Han Sans) in the project instead of relying on OS font files (tech debt TD-002).
     /// </summary>
     public static class UiFont
     {

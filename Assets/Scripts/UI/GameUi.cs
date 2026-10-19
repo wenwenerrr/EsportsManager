@@ -52,7 +52,7 @@ namespace EsportsManager.UI
         public void Train(long id, int dim)
         {
             if (Session.TryAddTrain(id, dim, out var e))
-                Say(string.Format(UiStrings.Added, Session.PlayerName(id), UiStrings.Train + " " + Session.DimensionNames(id)[dim]), false);
+                Say(string.Format(UiStrings.Added, Session.PlayerName(id), string.Format(UiStrings.TrainDimFormat, Session.DimensionNames(id)[dim])), false);
             else Say(ErrorText(e), true);
         }
         public void Stream(long id)
