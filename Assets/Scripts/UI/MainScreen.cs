@@ -1,0 +1,241 @@
+using System.Collections.Generic;
+using EsportsManager.Segments;
+using EsportsManager.Session;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace EsportsManager.UI
+{
+    /// <summary>
+    /// The main screen: header (team triangle, chemistry, action points, segment), one card per player with his
+    /// assignment controls and preview, and a bottom bar (message, sponsorship, offers, resolve). Renders
+    /// <see cref="GameSession"/> data and <see cref="SegmentRunner.Preview"/> only.
+    /// </summary>
+    public static class MainScreen
+    {
+        /// <summary>Builds the screen into ui.Root.</summary>
+        public static void Build(GameUi ui)
+        {
+            var root = ui.Root;
+            var s = ui.Session;
+            root.style.flexDirection = FlexDirection.Column;
+            root.style.backgroundColor = UiKit.Background;
+            UiKit.Pad(root, 8);
+
+            var pv = s.Preview();
+            var previews = new Dictionary<long, PlayerPreview>();
+            foreach (var pp in pv.Players) previews[pp.PlayerId] = pp;
+            var team = s.GetTeamData();
+            if (!ui.CardsOnly) root.Add(BuildHeader(team, pv));
+
+            var grid = new VisualElement();
+            grid.style.flexDirection = FlexDirection.Row;
+            grid.style.flexWrap = Wrap.Wrap;
+            grid.style.flexGrow = 1;
+            grid.style.alignContent = Align.FlexStart;
+            root.Add(grid);
+            int n = 0;
+            foreach (var card in s.GetRosterData())
+            {
+                if (n++ >= ui.MaxCards) break;
+                previews.TryGetValue(card.Id, out var pp);
+                grid.Add(BuildCard(ui, card, pp, team.MaxPerPlayer));
+            }
+            if (!ui.CardsOnly) root.Add(BuildBottomBar(ui, pv));
+        }
+
+        private static VisualElement BuildHeader(TeamData t, SegmentPreview pv)
+        {
+            var bar = UiKit.Row(64);
+            bar.style.marginBottom = 6;
+            bar.Add(StatBlock(UiStrings.Strength, t.Strength.ToString("F1"), UiKit.Scale(t.Strength), 150));
+            bar.Add(StatBlock(UiStrings.Popularity, t.Popularity.ToString("F1"), UiKit.Scale(t.Popularity), 150));
+            bar.Add(StatBlock(UiStrings.Funds, UiKit.Yuan(t.Funds), t.Funds < 0 ? UiKit.Bad : UiKit.Good, 220));
+            bar.Add(StatBlock(UiStrings.Chemistry, t.Chemistry.ToString("F1"), UiKit.Scale(t.Chemistry), 150));
+            bar.Add(StatBlock(UiStrings.ActionPoints, pv.PointsRemaining + " / " + t.ActionPoints,
+                pv.PointsRemaining > 0 ? UiKit.Accent : UiKit.TextDim, 170));
+            var seg = UiKit.Block(UiKit.PanelLight);
+            seg.style.flexGrow = 1; seg.style.height = Length.Percent(100);
+            seg.style.justifyContent = Justify.Center; UiKit.Pad(seg, 8);
+            seg.Add(UiKit.Lbl(string.Format(UiStrings.SegmentFormat, t.SegmentNumber), 20, UiKit.Text, true));
+            seg.Add(UiKit.Lbl(string.Format(UiStrings.IncomeLineFormat, UiKit.Yuan(pv.LivestreamIncome), UiKit.Yuan(pv.BusinessIncome)), 12, UiKit.TextDim));
+            bar.Add(seg);
+            return bar;
+        }
+
+        private static VisualElement StatBlock(string label, string value, Color valueColor, float width)
+        {
+            var b = UiKit.Block(UiKit.Panel);
+            b.style.width = width; b.style.height = Length.Percent(100); b.style.marginRight = 6;
+            b.style.justifyContent = Justify.Center; UiKit.Pad(b, 8);
+            b.Add(UiKit.Lbl(label, 12, UiKit.TextDim));
+            b.Add(UiKit.Lbl(value, 22, valueColor, true));
+            return b;
+        }
+
+        private static VisualElement BuildCard(GameUi ui, PlayerCardData c, PlayerPreview pp, int maxPerPlayer)
+        {
+            var card = UiKit.Block(UiKit.Panel, 6);
+            card.name = "card-" + c.Id;
+            card.style.flexGrow = 1; card.style.flexBasis = Length.Percent(ui.CardsOnly ? 45f : 30f);
+            card.style.height = 286;
+            card.style.flexShrink = 0;
+            card.style.marginRight = 6; card.style.marginBottom = 6;
+            UiKit.Pad(card, 8);
+            card.style.borderLeftWidth = 4;
+            card.style.borderLeftColor = c.IsStarter ? UiKit.Accent : UiKit.TextDim;
+
+            var r1 = UiKit.Row(24);
+            r1.Add(UiKit.Lbl(c.Name, 17, UiKit.Text, true));
+            r1.Add(Tag(c.LaneName, UiKit.PanelLight));
+            r1.Add(Tag(c.IsStarter ? UiStrings.Starter : UiStrings.Bench, c.IsStarter ? UiKit.Accent : UiKit.PanelLight));
+            r1.Add(UiKit.Spacer());
+            r1.Add(UiKit.Lbl(string.Format(UiStrings.AgeFormat, c.Age), 13, UiKit.TextDim));
+            card.Add(r1);
+
+            var r2 = UiKit.Row(22);
+            r2.Add(UiKit.Lbl(string.Join(UiStrings.TraitSeparator, c.TraitNames), 13, UiKit.Warn));
+            r2.Add(UiKit.Spacer());
+            r2.Add(Gap(UiKit.Lbl(UiStrings.PotentialEstimate, 12, UiKit.TextDim)));
+            r2.Add(UiKit.Lbl(string.Format(UiStrings.PotentialRangeFormat, c.PotentialLow, c.PotentialHigh), 14, UiKit.Accent, true));
+            card.Add(r2);
+
+            var r3 = UiKit.Row(26);
+            r3.style.marginTop = 2;
+            r3.Add(Chip(UiStrings.Mood, c.Mood, false));
+            r3.Add(Chip(UiStrings.Stress, c.Stress, true));
+            r3.Add(Chip(UiStrings.Looks, c.Looks, false));
+            r3.Add(Chip(UiStrings.PopularityShort, c.Popularity, false));
+            card.Add(r3);
+
+            var r4 = UiKit.Row(22);
+            r4.Add(Gap(UiKit.Lbl(UiStrings.Salary, 12, UiKit.TextDim)));
+            r4.Add(UiKit.Lbl(string.Format(UiStrings.SalaryPerYearFormat, c.Salary.ToString("N0")), 13, UiKit.Text));
+            r4.Add(UiKit.Spacer());
+            r4.Add(Gap(UiKit.Lbl(UiStrings.ContractLeft, 12, UiKit.TextDim)));
+            r4.Add(UiKit.Lbl(string.Format(UiStrings.ContractYearsFormat, c.ContractYearsLeft), 13,
+                c.ContractYearsLeft <= 1 ? UiKit.Warn : UiKit.Text));
+            card.Add(r4);
+
+            var dims = new VisualElement();
+            dims.style.flexDirection = FlexDirection.Row; dims.style.flexWrap = Wrap.Wrap; dims.style.marginTop = 4;
+            for (int i = 0; i < c.DimensionNames.Length; i++)
+            {
+                float gain = pp != null && pp.TrainingGains != null && i < pp.TrainingGains.Length ? pp.TrainingGains[i] : 0f;
+                int dim = i; long id = c.Id;
+                dims.Add(DimBar(c.DimensionNames[i], c.DimensionValues[i], gain, () => ui.Train(id, dim)));
+            }
+            card.Add(dims);
+
+            // Assignment area
+            var a1 = UiKit.Row(22);
+            a1.style.marginTop = 2;
+            a1.Add(UiKit.Lbl(ActionsText(pp), 13, pp != null && pp.PointsUsed > 0 ? UiKit.Text : UiKit.TextDim));
+            a1.Add(UiKit.Spacer());
+            int used = pp != null ? pp.PointsUsed : 0;
+            a1.Add(UiKit.Lbl(string.Format(UiStrings.PlayerPointsFormat, used, maxPerPlayer), 13,
+                used >= maxPerPlayer ? UiKit.Warn : UiKit.Accent, true));
+            card.Add(a1);
+
+            var a2 = UiKit.Row(28);
+            long pid = c.Id;
+            a2.Add(UiKit.Btn(UiStrings.Stream, () => ui.Stream(pid), UiKit.Accent));
+            a2.Add(UiKit.Btn(UiStrings.Rest, () => ui.Rest(pid), UiKit.Good));
+            a2.Add(UiKit.Btn(UiStrings.Undo, () => ui.Undo(pid), UiKit.PanelLight, used > 0));
+            a2.Add(UiKit.Spacer());
+            a2.Add(UiKit.Lbl(UiStrings.ClickDimToTrain, 11, UiKit.TextDim));
+            card.Add(a2);
+
+            if (pp != null)
+            {
+                var a3 = UiKit.Row(20);
+                a3.Add(UiKit.Lbl(string.Format(UiStrings.PreviewFormat, UiKit.Delta(pp.StressDelta), UiKit.Delta(pp.MoodDelta),
+                    UiKit.Yuan(pp.LivestreamIncome)), 12, UiKit.TextDim));
+                card.Add(a3);
+            }
+            return card;
+        }
+
+        private static string ActionsText(PlayerPreview pp)
+        {
+            if (pp == null || pp.PointsUsed == 0) return UiStrings.NoActions;
+            var parts = new List<string>();
+            if (pp.TrainPoints > 0) parts.Add(string.Format(UiStrings.ActionCountFormat, UiStrings.Train, pp.TrainPoints));
+            if (pp.StreamPoints > 0) parts.Add(string.Format(UiStrings.ActionCountFormat, UiStrings.Stream, pp.StreamPoints));
+            if (pp.RestPoints > 0) parts.Add(string.Format(UiStrings.ActionCountFormat, UiStrings.Rest, pp.RestPoints));
+            if (pp.BusinessPoints > 0) parts.Add(string.Format(UiStrings.ActionCountFormat, UiStrings.Business, pp.BusinessPoints));
+            return string.Join("  ", parts);
+        }
+
+        private static Label Gap(Label l) { l.style.marginRight = 5; return l; }
+
+        private static VisualElement Tag(string text, Color bg)
+        {
+            var t = UiKit.Block(bg, 3);
+            t.style.marginLeft = 6; t.style.paddingLeft = t.style.paddingRight = 6; t.style.height = 18;
+            t.style.justifyContent = Justify.Center;
+            t.Add(UiKit.Lbl(text, 11, UiKit.Text));
+            return t;
+        }
+
+        private static VisualElement Chip(string label, float value, bool highBad)
+        {
+            var chip = UiKit.Block(UiKit.PanelLight, 3);
+            chip.style.flexDirection = FlexDirection.Row; chip.style.alignItems = Align.Center;
+            chip.style.flexGrow = 1; chip.style.flexBasis = 0; chip.style.height = 24; chip.style.marginRight = 4;
+            chip.style.paddingLeft = chip.style.paddingRight = 6;
+            chip.Add(UiKit.Lbl(label, 12, UiKit.TextDim));
+            chip.Add(UiKit.Spacer());
+            chip.Add(UiKit.Lbl(Mathf.RoundToInt(value).ToString(), 14, UiKit.Scale(highBad ? 100f - value : value), true));
+            return chip;
+        }
+
+        private static VisualElement DimBar(string name, float value, float gain, System.Action onClick)
+        {
+            var cell = UiKit.Block(UiKit.PanelLight, 3);
+            cell.style.width = Length.Percent(49); cell.style.height = 22; cell.style.marginBottom = 3;
+            cell.style.marginRight = Length.Percent(1);
+            cell.style.flexDirection = FlexDirection.Row; cell.style.alignItems = Align.Center;
+            cell.style.overflow = Overflow.Hidden;
+            cell.AddManipulator(new Clickable(onClick));
+            var fill = new VisualElement();
+            fill.style.position = Position.Absolute; fill.style.left = 0; fill.style.top = 0; fill.style.bottom = 0;
+            fill.style.width = Length.Percent(Mathf.Clamp(value, 0f, 100f));
+            var fc = UiKit.Scale(value); fc.a = 0.35f; fill.style.backgroundColor = fc;
+            cell.Add(fill);
+            var l = UiKit.Lbl(name, 12, UiKit.Text); l.style.marginLeft = 6; cell.Add(l);
+            cell.Add(UiKit.Spacer());
+            if (gain > 0.005f)
+            {
+                var g = UiKit.Lbl(UiKit.Delta(gain), 12, UiKit.Good, true); g.style.marginRight = 6; cell.Add(g);
+            }
+            var v = UiKit.Lbl(Mathf.RoundToInt(value).ToString(), 13, UiKit.Text, true); v.style.marginRight = 6; cell.Add(v);
+            return cell;
+        }
+
+        private static VisualElement BuildBottomBar(GameUi ui, SegmentPreview pv)
+        {
+            var bar = UiKit.Row(44);
+            bar.name = "bottom-bar";
+            bar.style.backgroundColor = UiKit.Panel; bar.style.paddingLeft = bar.style.paddingRight = 8;
+            bar.style.borderTopLeftRadius = bar.style.borderTopRightRadius = 4;
+            var msg = UiKit.Lbl(ui.Message, 13, ui.MessageIsError ? UiKit.Bad : UiKit.TextDim, ui.MessageIsError);
+            msg.style.flexGrow = 1; msg.style.flexShrink = 1; msg.style.minWidth = 0;
+            bar.Add(msg);
+
+            int unanswered = ui.Session.UnansweredOffers().Count;
+            if (unanswered > 0 && !ui.OfferPopupOpen)
+                bar.Add(UiKit.Btn(string.Format(UiStrings.OffersBadgeFormat, unanswered), ui.OpenOffers, UiKit.Warn));
+
+            var info = UiKit.Lbl(string.Format(UiStrings.SponsorInfoFormat, pv.SponsorPoints, pv.SponsorAttemptsRemaining,
+                pv.FreeContractSlots, pv.SponsorChanceBeforeNoise), 12, UiKit.TextDim);
+            info.style.marginRight = 8;
+            bar.Add(info);
+            bar.Add(UiKit.Btn(UiStrings.Sponsor, ui.Sponsor, UiKit.Accent));
+            bar.Add(UiKit.Btn(UiStrings.UndoSponsor, ui.UndoSponsor, UiKit.PanelLight, pv.SponsorPoints > 0));
+            bar.Add(UiKit.Btn(UiStrings.ClearPlan, ui.ClearPlan, UiKit.PanelLight, pv.PointsUsed > 0));
+            bar.Add(UiKit.Btn(UiStrings.Resolve, ui.Resolve, UiKit.Good, pv.Error.IsNone, 14));
+            return bar;
+        }
+    }
+}

@@ -1,0 +1,16 @@
+{
+    "name": "EsportsManager.UI",
+    "rootNamespace": "EsportsManager.UI",
+    "references": [
+        "EsportsManager.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
