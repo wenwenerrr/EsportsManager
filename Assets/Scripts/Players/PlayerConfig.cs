@@ -173,10 +173,8 @@ namespace EsportsManager.Players
         public float talentChance;
         /// <summary>Initial contract years range (inclusive), min >= 0.</summary>
         public int contractYearsMin, contractYearsMax;
-        /// <summary>Fictional surname pool.</summary>
-        public string[] surnames;
-        /// <summary>Fictional given-name pool.</summary>
-        public string[] givenNames;
+        /// <summary>Fictional esports IDs (the player's whole name), unique; a number is appended only when the pool runs out.</summary>
+        public string[] playerIds;
     }
 
     /// <summary>
@@ -483,8 +481,10 @@ namespace EsportsManager.Players
                 throw Fail("generation.talentChance must be in [0,1], got " + g.talentChance + ".");
             CheckRange("contractYears", g.contractYearsMin, g.contractYearsMax);
             if (g.contractYearsMin < 0) throw Fail("generation.contractYears min must be >= 0.");
-            if (g.surnames == null || g.surnames.Length == 0 || g.givenNames == null || g.givenNames.Length == 0)
-                throw Fail("name pools empty.");
+            if (g.playerIds == null || g.playerIds.Length == 0)
+                throw Fail("generation.playerIds is empty.");
+            if (new HashSet<string>(g.playerIds).Count != g.playerIds.Length)
+                throw Fail("generation.playerIds contains duplicates.");
         }
 
         private static void CheckRange(string name, float min, float max)

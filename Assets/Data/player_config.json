@@ -73,14 +73,14 @@
     {
       "id": "temperament",
       "traits": [
-        {"id": "reserved", "display_name": "内向 / 沉稳"},
+        {"id": "reserved", "display_name": "沉稳"},
         {"id": "lively", "display_name": "活泼"}
       ]
     },
     {
       "id": "sincerity",
       "traits": [
-        {"id": "earnest", "display_name": "单纯 / 认真"},
+        {"id": "earnest", "display_name": "认真"},
         {"id": "slick", "display_name": "圆滑"}
       ]
     },
@@ -109,7 +109,7 @@
       "id": "resilience",
       "traits": [
         {"id": "resolute", "display_name": "坚毅"},
-        {"id": "fragile", "display_name": "脆弱 / 依赖"}
+        {"id": "fragile", "display_name": "脆弱"}
       ]
     },
     {
@@ -184,7 +184,7 @@
     {"a": "pessimistic", "b": "pessimistic", "value": -0.3}
   ],
   "training": {
-    "base_gain": 2,
+    "base_gain": 5,
     "stress_factor": 0.5,
     "soft_cap_floor": 0.15,
     "age_bands": [
@@ -228,7 +228,6 @@
     "talent_chance": 0.05,
     "contract_years_min": 1,
     "contract_years_max": 3,
-    "surnames": ["陈", "林", "黄", "张", "刘", "杨", "吴", "周", "徐", "孙", "马", "朱"],
-    "given_names": ["小北", "阿泽", "大壮", "星河", "一鸣", "夜雨", "墨白", "凌云", "飞鱼", "老七", "沐风", "南风", "千秋", "无痕"]
+    "player_ids": ["Nova", "Kiwi", "Echo", "Ripple", "Sable", "Vortex", "Mochi", "Pixel", "Comet", "Blaze", "Frost", "Lynx", "Maple", "Orbit", "Quill", "Raven", "Sprout", "Tango", "Umbra", "Vexa", "Wisp", "Yeti", "Zephyr", "Biscuit", "Clover", "Drift", "Ember", "Fable", "Gale", "Haze", "阿飞", "小火锅", "夜猫", "糯米", "豆包", "橘子汽水", "南瓜", "星野", "白桃", "阿木", "小蘑菇", "青柠", "雪糕", "麻薯", "小鹿", "风铃", "跳跳糖", "柚子", "阿哲", "木鱼", "火柴", "小满", "晚风", "薄荷", "芋圆", "阿酷", "铁锅", "小汤圆", "饭团", "七喜"]
   }
 }

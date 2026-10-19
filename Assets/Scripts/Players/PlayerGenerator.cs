@@ -89,19 +89,22 @@ namespace EsportsManager.Players
             return player;
         }
 
+        // Picks an unused ID uniformly (one draw); only when every ID is taken, a random ID gets a number appended.
         private string UniqueName(HashSet<string> used)
         {
-            var g = _config.generation;
-            string name = null;
-            for (int attempt = 0; attempt < 20; attempt++)
+            var ids = _config.generation.playerIds;
+            var free = new List<string>();
+            foreach (var id in ids) if (!used.Contains(id)) free.Add(id);
+            if (free.Count > 0)
             {
-                name = g.surnames[_rng.NextInt(0, g.surnames.Length)] + g.givenNames[_rng.NextInt(0, g.givenNames.Length)];
-                if (used.Add(name)) return name;
+                string pick = free[_rng.NextInt(0, free.Count)];
+                used.Add(pick);
+                return pick;
             }
-            // Fall back to a numeric suffix so names stay unique even if pools are small.
+            string baseId = ids[_rng.NextInt(0, ids.Length)];
             int suffix = 2;
             string candidate;
-            do { candidate = name + suffix++; } while (!used.Add(candidate));
+            do { candidate = baseId + suffix++; } while (!used.Add(candidate));
             return candidate;
         }
     }

@@ -1,0 +1,51 @@
+{
+    "action_points": { "per_segment": 8, "max_per_player": 2 },
+    "training": { "intensity": 1.0, "target_bonus": 1.5 },
+    "stream": { "cap": 2 },
+    "business": {
+        "weight_popularity": 1.5,
+        "weight_lane_score": 0.5,
+        "weight_looks": 1.0,
+        "max_probability": 0.4,
+        "base_amount": 5000,
+        "amount_per_popularity": 100,
+        "amount_per_looks": 80,
+        "random_range": 0.2,
+        "club_share": 0.7,
+        "heat_cap": 1
+    },
+    "sponsorship": {
+        "weight_club_popularity": 1,
+        "weight_win_rate": 1,
+        "max_success_rate": 0.8,
+        "random_spread": 0.1,
+        "min_chance": 0.05,
+        "max_chance": 0.9,
+        "base_amount": 9500,
+        "amount_per_club_popularity": 100,
+        "duration_segments": 4,
+        "max_attempts_per_segment": 3,
+        "max_active_contracts": 3
+    },
+    "mood": {
+        "result": 8,
+        "play": 4,
+        "salary": 10,
+        "chemistry": 5,
+        "stress": 6,
+        "regression": 0.05,
+        "neutral": 50,
+        "high_stress_threshold": 70,
+        "random_range": 0.15
+    },
+    "stress": {
+        "training": 4,
+        "match": 2,
+        "loss": 3,
+        "business": 4,
+        "rest": 15,
+        "stream": 0,
+        "recovery": 4,
+        "random_range": 0.1
+    }
+}

@@ -197,8 +197,7 @@ namespace EsportsManager.Players
             public float talent_chance = NoFloat;
             public int contract_years_min = NoInt;
             public int contract_years_max = NoInt;
-            public string[] surnames = null;
-            public string[] given_names = null;
+            public string[] player_ids = null;
         }
 
         [Serializable] private class ConfigDto
@@ -389,8 +388,7 @@ namespace EsportsManager.Players
                 talentChance = ReqF(g.talent_chance, k + "talent_chance"),
                 contractYearsMin = ReqI(g.contract_years_min, k + "contract_years_min"),
                 contractYearsMax = ReqI(g.contract_years_max, k + "contract_years_max"),
-                surnames = ReqStrings(g.surnames, k + "surnames"),
-                givenNames = ReqStrings(g.given_names, k + "given_names"),
+                playerIds = ReqStrings(g.player_ids, k + "player_ids"),
             };
         }
     }

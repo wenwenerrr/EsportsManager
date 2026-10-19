@@ -128,8 +128,7 @@ namespace EsportsManager.Tests.Players
                     talentPotentialMin = 85, talentPotentialMax = 95,
                     talentChance = 0.3f, // high so a seeded pool contains both kinds
                     contractYearsMin = 1, contractYearsMax = 3,
-                    surnames = new[] { "S1", "S2", "S3" },
-                    givenNames = new[] { "G1", "G2", "G3" },
+                    playerIds = new[] { "S1", "S2", "S3", "G1", "G2", "G3" },
                 }
             };
         }

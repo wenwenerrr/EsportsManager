@@ -143,7 +143,7 @@ namespace EsportsManager.Players
         /// <summary>
         /// Weighted average (config weights) of the lane's dimensions, range 0-100. Multiplied by
         /// the config's off-lane discount when <paramref name="laneId"/> is not the main lane; the
-        /// discount is itself multiplied by the traits' "off_lane_discount" effect (clever: 0.8 to 0.9)
+        /// discount is itself multiplied by the traits' "off_lane_discount" effect (clever x1.03: 0.8 to about 0.82)
         /// and capped at 1.
         /// </summary>
         public float GetLaneScore(string laneId)
@@ -167,7 +167,7 @@ namespace EsportsManager.Players
         /// Product of both traits' multipliers for an effect key (numbers.md 3.2); 1 for keys the
         /// effect table does not list.
         /// </summary>
-        /// <example><code>float m = player.GetTraitMultiplier("training_gain"); // diligent x clever = 1.2 * 1.1</code></example>
+        /// <example><code>float m = player.GetTraitMultiplier("training_gain"); // diligent x clever = 1.05 * 1.03 (each trait within +-5%, numbers.md 3.2 v2)</code></example>
         public float GetTraitMultiplier(string effectKey)
         {
             return _config.GetEffectMultiplier(_traits[0], effectKey) * _config.GetEffectMultiplier(_traits[1], effectKey);

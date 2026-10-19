@@ -1,0 +1,49 @@
+{
+    "lane_weights": [
+        { "lane": "top", "weight": 1 },
+        { "lane": "jungle", "weight": 1 },
+        { "lane": "mid", "weight": 1 },
+        { "lane": "adc", "weight": 1 },
+        { "lane": "support", "weight": 1 }
+    ],
+    "strength": {
+        "short_board_penalty": 0.3,
+        "stress_factor": 0.2,
+        "mood_factor_base": 0.7,
+        "mood_factor_span": 0.3
+    },
+    "familiarity": {
+        "per_segment": 5,
+        "per_win": 2,
+        "max": 100,
+        "decay": 1,
+        "compatibility_factor": 0.5
+    },
+    "popularity": {
+        "alpha": 0.25,
+        "random_range": 0.15,
+        "weight_club": 1,
+        "weight_lane_score": 1,
+        "weight_looks": 0.8,
+        "weight_stream": 1.5,
+        "weight_win_rate": 1,
+        "weight_business": 0.8
+    },
+    "club_popularity": {
+        "initial": 30,
+        "beta": 0.2,
+        "random_range": 0.1,
+        "weight_starter_popularity": 1,
+        "weight_win_rate": 1,
+        "weight_rank": 0.5
+    },
+    "results": {
+        "window": 10,
+        "default_win_rate": 50
+    },
+    "livestream": {
+        "base_income": 1500,
+        "income_per_popularity": 60,
+        "second_stream_factor": 0.5
+    }
+}

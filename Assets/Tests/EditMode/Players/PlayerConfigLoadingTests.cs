@@ -30,7 +30,7 @@ namespace EsportsManager.Tests.Players
             + "'main_lane_dim_fraction_min':0.6,'main_lane_dim_fraction_max':0.95,'off_lane_dim_fraction_min':0.35,'off_lane_dim_fraction_max':0.75,"
             + "'looks_min':30,'looks_max':90,'popularity_min':5,'popularity_max':60,'mood_min':50,'mood_max':80,'stress_min':10,'stress_max':40,"
             + "'normal_potential_min':40,'normal_potential_max':75,'talent_potential_min':85,'talent_potential_max':95,'talent_chance':0.05,"
-            + "'contract_years_min':1,'contract_years_max':3,'surnames':['s'],'given_names':['g']}}").Replace('\'', '"');
+            + "'contract_years_min':1,'contract_years_max':3,'player_ids':['s','g']}}").Replace('\'', '"');
 
         // Every key in ValidJson. Misspelling any one of them must fail loading.
         private static readonly string[] AllKeys =
@@ -46,7 +46,7 @@ namespace EsportsManager.Tests.Players
             "generation", "players_per_lane", "main_lane_dim_fraction_min", "main_lane_dim_fraction_max", "off_lane_dim_fraction_min", "off_lane_dim_fraction_max",
             "looks_min", "looks_max", "popularity_min", "popularity_max", "mood_min", "mood_max", "stress_min", "stress_max",
             "normal_potential_min", "normal_potential_max", "talent_potential_min", "talent_potential_max", "talent_chance",
-            "contract_years_min", "contract_years_max", "surnames", "given_names",
+            "contract_years_min", "contract_years_max", "player_ids",
         };
 
         // ---- happy path ----
@@ -85,7 +85,7 @@ namespace EsportsManager.Tests.Players
             Assert.AreEqual(1, cfg.generation.playersPerLane);
             Assert.AreEqual(0.05f, cfg.generation.talentChance);
             Assert.AreEqual(3, cfg.generation.contractYearsMax);
-            Assert.AreEqual("g", cfg.generation.givenNames[0]);
+            Assert.AreEqual("g", cfg.generation.playerIds[1]);
         }
 
         [Test]
@@ -147,9 +147,9 @@ namespace EsportsManager.Tests.Players
         [Test]
         public void Loader_MissingArrayKey_IsError()
         {
-            string broken = ValidJson.Replace("\"surnames\":", "\"surname\":");
+            string broken = ValidJson.Replace("\"player_ids\":", "\"player_id\":");
             var ex = Assert.Throws<InvalidOperationException>(() => PlayerConfigLoader.FromJson(broken));
-            StringAssert.Contains("generation.surnames", ex.Message);
+            StringAssert.Contains("generation.player_ids", ex.Message);
         }
 
         [Test]
@@ -185,7 +185,7 @@ namespace EsportsManager.Tests.Players
         [Test]
         public void Loader_TheWordNullInsideAString_IsNotMistakenForNull()
         {
-            string json = ValidJson.Replace("\"given_names\":[\"g\"]", "\"given_names\":[\"null\",\"a\\\"null\"]");
+            string json = ValidJson.Replace("\"player_ids\":[\"s\",\"g\"]", "\"player_ids\":[\"null\",\"a\\\"null\"]");
             Assert.DoesNotThrow(() => PlayerConfigLoader.FromJson(json));
         }
 
@@ -254,13 +254,13 @@ namespace EsportsManager.Tests.Players
         [Test]
         public void Loader_ScalarInArrayField_Throws()
         {
-            AssertLoadFails(ValidJson.Replace("\"surnames\":[\"s\"]", "\"surnames\":\"s\""), "generation.surnames' must be an array");
+            AssertLoadFails(ValidJson.Replace("\"player_ids\":[\"s\",\"g\"]", "\"player_ids\":\"s\""), "generation.player_ids' must be an array");
         }
 
         [Test]
         public void Loader_WrongElementTypeInArray_Throws()
         {
-            AssertLoadFails(ValidJson.Replace("\"surnames\":[\"s\"]", "\"surnames\":[\"s\",3]"), "generation.surnames[1]' must be a string");
+            AssertLoadFails(ValidJson.Replace("\"player_ids\":[\"s\",\"g\"]", "\"player_ids\":[\"s\",3]"), "generation.player_ids[1]' must be a string");
         }
 
         [Test]
@@ -410,7 +410,7 @@ namespace EsportsManager.Tests.Players
             // initial values named by the story
             Assert.AreEqual(85f, cfg.potential.talentThreshold);
             Assert.AreEqual(27, cfg.aging.declineStartAge);
-            Assert.AreEqual(2f, cfg.training.baseGain);
+            Assert.AreEqual(5f, cfg.training.baseGain); // numbers.md v3 T_base
             Assert.AreEqual(0.5f, cfg.training.stressFactor);
             Assert.AreEqual(0.15f, cfg.training.softCapFloor);
             Assert.AreEqual(10f, cfg.potential.scoutingBias);
