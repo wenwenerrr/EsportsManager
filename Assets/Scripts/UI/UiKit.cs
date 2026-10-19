@@ -37,6 +37,14 @@ namespace EsportsManager.UI
             return l;
         }
 
+        /// <summary>Lets a single-line label shrink and end in "…" when it does not fit.</summary>
+        public static Label Ellipsis(Label l)
+        {
+            l.style.flexShrink = 1; l.style.minWidth = 0;
+            l.style.textOverflow = TextOverflow.Ellipsis;
+            return l;
+        }
+
         /// <summary>A flex row.</summary>
         public static VisualElement Row(float height = 0)
         {

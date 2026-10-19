@@ -1,3 +1,4 @@
+using EsportsManager.Matches;
 using EsportsManager.Segments;
 using EsportsManager.Session;
 using UnityEngine;
@@ -6,8 +7,13 @@ using UnityEngine.UIElements;
 namespace EsportsManager.UI
 {
     /// <summary>
-    /// UI controller: owns only presentation state (message line, pop-up open, close-up mode) and rebuilds the screen
-    /// from <see cref="GameSession"/> after every change. Clicks are forwarded to the session; no game rules here.
+    /// UI controller: owns only presentation state (message line, screen stack, close-up mode) and rebuilds the visible
+    /// screens from <see cref="GameSession"/> after every change. Clicks are forwarded to the session; no game rules here.
+    /// Screens live on a <see cref="ScreenStack"/> (TD-003): Main at the bottom; the business pop-up is an overlay on Main;
+    /// resolving pushes Summary; "next segment" resets to Main. After an event segment the summary's "next step" REPLACES the
+    /// top with EventPrep; "开赛" replaces it with RegularResult (split) or Bracket (playoffs / finals); RegularResult leads to
+    /// EventPrep again (playoff adjustment) or straight to Bracket; Bracket's "continue" acknowledges the event and resets to
+    /// Main. Standings is pushed from Main and popped by "back". Events are never auto-played here.
     /// </summary>
     public sealed class GameUi
     {
@@ -15,31 +21,67 @@ namespace EsportsManager.UI
         public GameSession Session { get; }
         /// <summary>Panel root.</summary>
         public VisualElement Root { get; }
+        /// <summary>The screen stack.</summary>
+        public ScreenStack Stack { get; } = new ScreenStack();
         /// <summary>Message line text.</summary>
         public string Message = UiStrings.Hint;
         /// <summary>True when the message is a refusal / error.</summary>
         public bool MessageIsError;
-        /// <summary>Business pop-up visible (opens automatically when a segment begins with offers).</summary>
-        public bool OfferPopupOpen;
+        /// <summary>Business pop-up visible.</summary>
+        public bool OfferPopupOpen => Stack.Contains(ScreenId.OfferPopup);
         /// <summary>Close-up mode: only cards, at most this many.</summary>
         public bool CardsOnly;
         /// <summary>Max cards in close-up mode.</summary>
         public int MaxCards = int.MaxValue;
+        /// <summary>One-off banner on the main screen (e.g. "第 2 年开始"); cleared when the next segment is resolved.</summary>
+        public string Banner;
+        /// <summary>Debug ("report" demo): the event result screen shows only its detailed series reports.</summary>
+        public bool ScrollToReports;
 
-        /// <summary>Creates the controller.</summary>
-        public GameUi(VisualElement root, GameSession session)
+        /// <summary>
+        /// Double-click guard (seconds): flow-advancing actions (resolve, next step, start, to playoffs, continue) are ignored
+        /// this long after the last screen change, because every flow button sits at the same spot and the UI rebuilds
+        /// synchronously. 0 disables it (scripted debug demos).
+        /// </summary>
+        public double FlowGuardSeconds = 0.35;
+        private readonly System.Func<double> _clock;
+        private double _lastScreenChange = double.NegativeInfinity;
+
+        /// <summary>Creates the controller; the business pop-up opens automatically when the segment begins with offers.</summary>
+        /// <param name="root">Panel root.</param>
+        /// <param name="session">The session.</param>
+        /// <param name="clock">Unscaled seconds (injectable for tests); default Time.unscaledTimeAsDouble.</param>
+        public GameUi(VisualElement root, GameSession session, System.Func<double> clock = null)
         {
             Root = root; Session = session;
-            OfferPopupOpen = session.UnansweredOffers().Count > 0;
+            _clock = clock ?? (() => Time.unscaledTimeAsDouble);
+            Stack.Reset(MainUiScreen());
+            if (session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen());
         }
 
-        /// <summary>Rebuilds everything.</summary>
+        /// <summary>True while flow-advancing actions are ignored (just after a screen change).</summary>
+        public bool FlowLocked => _clock() - _lastScreenChange < FlowGuardSeconds;
+
+        private void MarkScreenChange() => _lastScreenChange = _clock();
+
+        /// <summary>
+        /// A newly shown flow button starts disabled while <see cref="FlowLocked"/> and enables itself when the guard window ends,
+        /// so a double click cannot land on it.
+        /// </summary>
+        public void GuardFlowButton(Button b, bool enabled)
+        {
+            if (!enabled || !FlowLocked) return;
+            b.SetEnabled(false);
+            double remain = FlowGuardSeconds - (_clock() - _lastScreenChange);
+            b.schedule.Execute(() => b.SetEnabled(true)).StartingIn((long)(remain * 1000.0) + 1);
+        }
+
+        /// <summary>Rebuilds the visible screens.</summary>
         public void Refresh()
         {
-            Root.Clear();
-            if (Session.AwaitingNext && Session.LastResult != null) { SummaryScreen.Build(this); return; }
-            MainScreen.Build(this);
-            if (OfferPopupOpen && !CardsOnly && Session.UnansweredOffers().Count > 0) BuildOfferPopup();
+            // The pop-up closes itself once every offer is answered.
+            if (Stack.IsTop(ScreenId.OfferPopup) && (CardsOnly || Session.UnansweredOffers().Count == 0)) Stack.Pop();
+            Stack.Render(Root);
         }
 
         /// <summary>Shows a message (error = refusal colour) and rebuilds.</summary>
@@ -47,6 +89,14 @@ namespace EsportsManager.UI
 
         /// <summary>Text for a refused change.</summary>
         public string ErrorText(PlanError e) => UiStrings.PlanError(e, Session.PlayerName);
+
+        private UiScreen MainUiScreen() => new UiScreen(ScreenId.Main, false, r => MainScreen.Build(this, r));
+        private UiScreen OfferUiScreen() => new UiScreen(ScreenId.OfferPopup, true, BuildOfferPopup);
+        private UiScreen PrepUiScreen() => new UiScreen(ScreenId.EventPrep, false, r => EventPrepScreen.Build(this, r));
+        private UiScreen RegularUiScreen() => new UiScreen(ScreenId.RegularResult, false, r => RegularResultScreen.Build(this, r));
+        private UiScreen BracketUiScreen() => new UiScreen(ScreenId.Bracket, false, r => BracketScreen.Build(this, r));
+        private UiScreen SummaryUiScreen() => new UiScreen(ScreenId.Summary, false, r => SummaryScreen.Build(this, r));
+        private UiScreen StandingsUiScreen() => new UiScreen(ScreenId.Standings, false, r => StandingsScreen.Build(this, r));
 
         // ---- actions forwarded from the screens
         public void Train(long id, int dim)
@@ -79,16 +129,128 @@ namespace EsportsManager.UI
         public void ClearPlan() { Session.ClearPlan(); Say(UiStrings.Cleared, false); }
         public void Resolve()
         {
+            if (FlowLocked) return;
             if (!Session.TryValidate(out var e)) { Say(ErrorText(e), true); return; }
             Session.Resolve();
+            Banner = null;
+            MarkScreenChange();
+            // Segments never play matches (numbers.md 4.18); an event after this segment starts from the summary's "next step".
+            Stack.Push(SummaryUiScreen());
             Refresh();
         }
+
+        /// <summary>
+        /// From the settlement summary: an event waiting for preparation opens the prep screen; otherwise the next segment opens
+        /// (Main). Never plays an event.
+        /// </summary>
         public void NextSegment()
         {
-            Session.BeginNext();
-            OfferPopupOpen = Session.UnansweredOffers().Count > 0;
+            if (FlowLocked) return;
+            OpenNext();
+        }
+
+        private void OpenNext()
+        {
+            var phase = Session.EventPhase;
+            if (phase == EventPhase.Prepare || phase == EventPhase.PlayoffPrep) { ShowEventScreen(PrepUiScreen(), UiStrings.PrepHint); return; }
+            if (phase == EventPhase.Done) { ShowEventScreen(BracketUiScreen(), ""); return; }
+            if (!Session.TryBeginNext(out var e)) { Say(ErrorText(e), true); return; }
+            MarkScreenChange();
+            Stack.Reset(MainUiScreen());
+            if (Session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen());
             Message = UiStrings.Hint; MessageIsError = false;
             Refresh();
+        }
+
+        /// <summary>"开赛" / "观看总决赛": plays the next stage of the running event with the current lineup and tactic.</summary>
+        public void StartEventStage()
+        {
+            if (FlowLocked) return;
+            PlayStage();
+        }
+
+        // The session decides which stage runs; the resulting phase decides the screen.
+        private void PlayStage()
+        {
+            if (!Session.TryPlayNextEventStage(out var err)) { Say(ErrorText(err), true); return; }
+            ShowEventScreen(Session.EventPhase == EventPhase.PlayoffPrep ? RegularUiScreen() : BracketUiScreen(), "");
+        }
+
+        /// <summary>From the regular-season result: the playoff adjustment when the club is seeded, else the AI playoffs are played.</summary>
+        public void GoToPlayoffs()
+        {
+            if (FlowLocked) return;
+            var ev = Session.CurrentEvent?.Event;
+            if (Session.EventPhase != EventPhase.PlayoffPrep || ev == null) { Say(ErrorText(new PlanError { Code = PlanErrorCode.WrongEventPhase }), true); return; }
+            if (ev.PlayerInBracket) ShowEventScreen(PrepUiScreen(), UiStrings.PrepHint);
+            else PlayStage();
+        }
+
+        /// <summary>"继续" on the event result: acknowledges the event, opens the next segment; a new year shows its banner.</summary>
+        public void ContinueAfterEvent()
+        {
+            if (FlowLocked) return;
+            int year = Session.Season?.Year ?? 1;
+            if (!Session.TryAcknowledgeEvent(out var e)) { Say(ErrorText(e), true); return; }
+            ScrollToReports = false;
+            if (!Session.TryBeginNext(out var be))
+            {
+                // Never strand the player on a finished event: go home and show why.
+                MarkScreenChange();
+                Stack.Reset(MainUiScreen());
+                Say(ErrorText(be), true);
+                return;
+            }
+            MarkScreenChange();
+            Stack.Reset(MainUiScreen());
+            if (Session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen());
+            Message = UiStrings.Hint; MessageIsError = false;
+            Refresh();
+            int now = Session.Season?.Year ?? 1;
+            if (now > year) { Banner = string.Format(UiStrings.NewYearFormat, now); Refresh(); }
+        }
+
+        private void ShowEventScreen(UiScreen screen, string message)
+        {
+            MarkScreenChange();
+            Stack.Replace(screen);
+            Message = message; MessageIsError = false;
+            Refresh();
+        }
+
+        /// <summary>New game: shows only the club naming screen.</summary>
+        public void ShowNewClub()
+        {
+            Stack.Reset(new UiScreen(ScreenId.NewClub, false, r => NewClubScreen.Build(this, r)));
+            Refresh();
+        }
+        /// <summary>Applies the entered club name (normalized by the session) and opens the main screen.</summary>
+        public void ConfirmClubName(string raw)
+        {
+            string name = Session.SetClubName(raw);
+            Stack.Reset(MainUiScreen());
+            if (Session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen());
+            Message = string.Format(UiStrings.ClubNamedFormat, name); MessageIsError = false;
+            Refresh();
+        }
+        /// <summary>Opens the standings screen (pops back with <see cref="Back"/>).</summary>
+        public void OpenStandings() { Stack.Push(StandingsUiScreen()); Refresh(); }
+        /// <summary>Pops the top screen.</summary>
+        public void Back() { Stack.Pop(); Refresh(); }
+        /// <summary>Sets the tactic for the open segment.</summary>
+        public void SetTactic(MatchTactic t)
+        {
+            if (!Session.SetTactic(t, out var e)) { Say(ErrorText(e), true); return; }
+            Say(string.Format(UiStrings.TacticSet, UiStrings.TacticName(t)), false);
+        }
+        /// <summary>Moves a player between lineup and bench.</summary>
+        public void ToggleStarter(long id)
+        {
+            if (!Session.ToggleStarter(id, out var e)) { Say(ErrorText(e), true); return; }
+            string lane = null;
+            foreach (var slot in Session.GetLineup().Slots) if (slot.PlayerId == id) lane = slot.LaneName;
+            Say(lane != null ? string.Format(UiStrings.BenchToggled, Session.PlayerName(id), lane)
+                : string.Format(UiStrings.StarterToggled, Session.PlayerName(id)), false);
         }
         public void AcceptOffer(BusinessOffer o)
         {
@@ -100,10 +262,10 @@ namespace EsportsManager.UI
             Session.DeclineOffer(o.Id);
             Say(string.Format(UiStrings.OfferDeclined, Session.PlayerName(o.PlayerId)), false);
         }
-        public void OpenOffers() { OfferPopupOpen = true; Refresh(); }
-        public void LaterOffers() { OfferPopupOpen = false; Refresh(); }
+        public void OpenOffers() { if (!OfferPopupOpen && Session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen()); Refresh(); }
+        public void LaterOffers() { if (Stack.IsTop(ScreenId.OfferPopup)) Stack.Pop(); Refresh(); }
 
-        private void BuildOfferPopup()
+        private void BuildOfferPopup(VisualElement root)
         {
             var offers = Session.UnansweredOffers();
             var o = offers[0];
@@ -146,7 +308,7 @@ namespace EsportsManager.UI
             buttons.Add(UiKit.Btn(UiStrings.Later, LaterOffers, UiKit.PanelLight, true, 14));
             box.Add(buttons);
             overlay.Add(box);
-            Root.Add(overlay);
+            root.Add(overlay);
         }
     }
 }

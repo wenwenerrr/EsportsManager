@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using EsportsManager.Matches;
 using EsportsManager.Segments;
 using EsportsManager.Session;
 using UnityEngine;
@@ -14,9 +15,8 @@ namespace EsportsManager.UI
     public static class MainScreen
     {
         /// <summary>Builds the screen into ui.Root.</summary>
-        public static void Build(GameUi ui)
+        public static void Build(GameUi ui, VisualElement root)
         {
-            var root = ui.Root;
             var s = ui.Session;
             root.style.flexDirection = FlexDirection.Column;
             root.style.backgroundColor = UiKit.Background;
@@ -26,14 +26,28 @@ namespace EsportsManager.UI
             var previews = new Dictionary<long, PlayerPreview>();
             foreach (var pp in pv.Players) previews[pp.PlayerId] = pp;
             var team = s.GetTeamData();
-            if (!ui.CardsOnly) root.Add(BuildHeader(team, pv));
+            if (!ui.CardsOnly && !string.IsNullOrEmpty(ui.Banner))
+            {
+                var banner = UiKit.Block(UiKit.Accent, 4);
+                banner.name = "year-banner";
+                banner.style.height = 34; banner.style.flexShrink = 0; banner.style.marginBottom = 6; banner.style.justifyContent = Justify.Center;
+                banner.style.paddingLeft = 12;
+                banner.Add(UiKit.Ellipsis(UiKit.Lbl(ui.Banner, 17, UiKit.Text, true)));
+                root.Add(banner);
+            }
+            if (!ui.CardsOnly) root.Add(BuildHeader(ui, team, pv));
 
-            var grid = new VisualElement();
+            // Cards live in a ScrollView: when the window is shorter than the cards the area scrolls instead of
+            // squeezing header / bottom bar (fixed regions never shrink).
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.name = "cards-scroll";
+            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            scroll.style.flexGrow = 1; scroll.style.flexShrink = 1; scroll.style.flexBasis = 0; scroll.style.minHeight = 0;
+            var grid = scroll.contentContainer;
             grid.style.flexDirection = FlexDirection.Row;
             grid.style.flexWrap = Wrap.Wrap;
-            grid.style.flexGrow = 1;
             grid.style.alignContent = Align.FlexStart;
-            root.Add(grid);
+            root.Add(scroll);
             int n = 0;
             foreach (var card in s.GetRosterData())
             {
@@ -44,32 +58,97 @@ namespace EsportsManager.UI
             if (!ui.CardsOnly) root.Add(BuildBottomBar(ui, pv));
         }
 
-        private static VisualElement BuildHeader(TeamData t, SegmentPreview pv)
+        private static VisualElement BuildHeader(GameUi ui, TeamData t, SegmentPreview pv)
         {
             var bar = UiKit.Row(64);
-            bar.style.marginBottom = 6;
-            bar.Add(StatBlock(UiStrings.Strength, UiKit.F1(t.Strength), UiKit.Scale(t.Strength), 150));
-            bar.Add(StatBlock(UiStrings.Popularity, UiKit.F1(t.Popularity), UiKit.Scale(t.Popularity), 150));
-            bar.Add(StatBlock(UiStrings.Funds, UiKit.Yuan(t.Funds), t.Funds < 0 ? UiKit.Bad : UiKit.Good, 220));
-            bar.Add(StatBlock(UiStrings.Chemistry, UiKit.F1(t.Chemistry), UiKit.Scale(t.Chemistry), 150));
+            bar.style.marginBottom = 6; bar.style.flexShrink = 0;
+            bar.Add(StatBlock(UiStrings.Strength, UiKit.F1(t.Strength), UiKit.Scale(t.Strength), 84));
+            bar.Add(StatBlock(UiStrings.Popularity, UiKit.F1(t.Popularity), UiKit.Scale(t.Popularity), 84));
+            bar.Add(StatBlock(UiStrings.Funds, UiKit.Yuan(t.Funds), t.Funds < 0 ? UiKit.Bad : UiKit.Good, 175));
+            bar.Add(StatBlock(UiStrings.Chemistry, UiKit.F1(t.Chemistry), UiKit.Scale(t.Chemistry), 84));
             bar.Add(StatBlock(UiStrings.ActionPoints, string.Format(UiStrings.PairFormat, pv.PointsRemaining, t.ActionPoints),
-                pv.PointsRemaining > 0 ? UiKit.Accent : UiKit.TextDim, 170));
+                pv.PointsRemaining > 0 ? UiKit.Accent : UiKit.TextDim, 100));
             var seg = UiKit.Block(UiKit.PanelLight);
-            seg.style.flexGrow = 1; seg.style.height = Length.Percent(100);
+            seg.style.flexBasis = 250; seg.style.flexGrow = 1f; seg.style.flexShrink = 1; seg.style.minWidth = 0; seg.style.overflow = Overflow.Hidden; seg.style.height = Length.Percent(100); seg.style.marginRight = 6;
             seg.style.justifyContent = Justify.Center; UiKit.Pad(seg, 8);
-            seg.Add(UiKit.Lbl(string.Format(UiStrings.SegmentFormat, t.SegmentNumber), 20, UiKit.Text, true));
-            seg.Add(UiKit.Lbl(string.Format(UiStrings.IncomeLineFormat, UiKit.Yuan(pv.LivestreamIncome), UiKit.Yuan(pv.BusinessIncome)), 12, UiKit.TextDim));
+            var season = ui.Session.Season;
+            string segText = season != null
+                ? EventTexts.YearSegment(season.Year, season.SegmentIndexInYear + 1, season.SegmentsPerYear)
+                : string.Format(UiStrings.SegmentFormat, t.SegmentNumber);
+            var segLabel = UiKit.Ellipsis(UiKit.Lbl(segText, 17, UiKit.Text, true));
+            segLabel.name = "year-segment";
+            seg.Add(segLabel);
+            seg.Add(UiKit.Ellipsis(UiKit.Lbl(string.Format(UiStrings.IncomeLineFormat, UiKit.Yuan(pv.LivestreamIncome), UiKit.Yuan(pv.BusinessIncome)), 12, UiKit.TextDim)));
             bar.Add(seg);
+            if (ui.Session.Tournament != null) bar.Add(BuildMatchBlock(ui));
             return bar;
+        }
+
+        /// <summary>Countdown to the next event, standings button, tactic selector with the counter cycle (Story 004).</summary>
+        private static VisualElement BuildMatchBlock(GameUi ui)
+        {
+            var s = ui.Session;
+            var block = UiKit.Block(UiKit.Panel);
+            block.name = "match-block";
+            block.style.flexBasis = 430; block.style.flexGrow = 2.5f; block.style.flexShrink = 1; block.style.minWidth = 0; block.style.overflow = Overflow.Hidden; block.style.height = Length.Percent(100);
+            block.style.justifyContent = Justify.SpaceAround;
+            block.style.paddingLeft = block.style.paddingRight = 8; block.style.paddingTop = block.style.paddingBottom = 4;
+
+            var r1 = UiKit.Row(22);
+            var countdown = UiKit.Ellipsis(UiKit.Lbl(EventTexts.Countdown(s.NextEvent()), 14, UiKit.Warn, true));
+            countdown.name = "countdown";
+            r1.Add(countdown);
+            r1.Add(UiKit.Spacer());
+            // Rank of the latest split's regular season; just "积分榜" before the first one.
+            var split = EventTexts.LatestSplit(s.Season);
+            int rank = 0;
+            if (split != null) foreach (var row in split.StandingsRows()) if (row.IsPlayer) rank = row.Rank;
+            var sb = UiKit.Btn(rank > 0 ? string.Format(UiStrings.StandingsButtonFormat, rank) : UiStrings.StandingsButton, ui.OpenStandings, UiKit.PanelLight, true, 12);
+            sb.name = "standings-button";
+            sb.style.height = 20; sb.style.marginRight = 0;
+            r1.Add(sb);
+            block.Add(r1);
+
+            var r2 = UiKit.Row(26);
+            var tl = UiKit.Lbl(UiStrings.OurTactic, 12, UiKit.TextDim); tl.style.marginRight = 6; tl.style.flexShrink = 0;
+            r2.Add(tl);
+            var current = s.CurrentTactic;
+            foreach (var t in MatchTactics.All)
+            {
+                var tt = t;
+                bool sel = t == current;
+                var b = UiKit.Btn(UiStrings.TacticName(t), () => ui.SetTactic(tt), sel ? UiKit.Accent : UiKit.PanelLight, true, 13);
+                b.name = "tactic-" + MatchTactics.Key(t);
+                b.style.height = 24;
+                if (sel) { b.style.unityFontStyleAndWeight = FontStyle.Bold; b.style.borderBottomWidth = 2; b.style.borderBottomColor = UiKit.Text; }
+                r2.Add(b);
+            }
+            r2.Add(UiKit.Spacer());
+            var hint = UiKit.Ellipsis(UiKit.Lbl(CounterHint(s.MatchConfig), 11, UiKit.TextDim));
+            r2.Add(hint);
+            block.Add(r2);
+            return block;
+        }
+
+        /// <summary>"入侵克发育 · 发育克团战 · 团战克入侵" built from the config counter table (data, not code).</summary>
+        public static string CounterHint(MatchConfig config)
+        {
+            var parts = new List<string>();
+            if (config?.tactic?.counters != null)
+                foreach (var c in config.tactic.counters)
+                    parts.Add(string.Format(UiStrings.CounterFormat, UiStrings.TacticName(c.tactic), UiStrings.TacticName(c.beats)));
+            return string.Join(UiStrings.CounterJoin, parts);
         }
 
         private static VisualElement StatBlock(string label, string value, Color valueColor, float width)
         {
             var b = UiKit.Block(UiKit.Panel);
-            b.style.width = width; b.style.height = Length.Percent(100); b.style.marginRight = 6;
+            // Flexible: width is only the preferred basis; blocks grow / shrink with the window.
+            b.style.flexBasis = width; b.style.flexGrow = width > 150 ? 1.6f : 1; b.style.minWidth = width > 150 ? 150 : 0; b.style.flexShrink = 1; b.style.overflow = Overflow.Hidden;
+            b.style.height = Length.Percent(100); b.style.marginRight = 6;
             b.style.justifyContent = Justify.Center; UiKit.Pad(b, 8);
-            b.Add(UiKit.Lbl(label, 12, UiKit.TextDim));
-            b.Add(UiKit.Lbl(value, 22, valueColor, true));
+            b.Add(UiKit.Ellipsis(UiKit.Lbl(label, 12, UiKit.TextDim)));
+            b.Add(UiKit.Ellipsis(UiKit.Lbl(value, 22, valueColor, true)));
             return b;
         }
 
@@ -88,7 +167,17 @@ namespace EsportsManager.UI
             var r1 = UiKit.Row(24);
             r1.Add(UiKit.Lbl(c.Name, 17, UiKit.Text, true));
             r1.Add(Tag(c.LaneName, UiKit.PanelLight));
-            r1.Add(Tag(c.IsStarter ? UiStrings.Starter : UiStrings.Bench, c.IsStarter ? UiKit.Accent : UiKit.PanelLight));
+            if (ui.Session.Tournament != null)
+            {
+                long tid = c.Id;
+                var tog = UiKit.Btn(c.IsStarter ? UiStrings.StarterToggleOff : UiStrings.BenchToggleOn, () => ui.ToggleStarter(tid),
+                    c.IsStarter ? UiKit.Accent : UiKit.Warn, true, 11);
+                tog.name = "starter-toggle-" + c.Id;
+                tog.style.height = 20; tog.style.marginLeft = 6; tog.style.paddingLeft = tog.style.paddingRight = 6;
+                if (!c.IsStarter) tog.style.color = UiKit.Background;
+                r1.Add(tog);
+            }
+            else r1.Add(Tag(c.IsStarter ? UiStrings.Starter : UiStrings.Bench, c.IsStarter ? UiKit.Accent : UiKit.PanelLight));
             r1.Add(UiKit.Spacer());
             r1.Add(UiKit.Lbl(string.Format(UiStrings.AgeFormat, c.Age), 13, UiKit.TextDim));
             card.Add(r1);
@@ -219,11 +308,17 @@ namespace EsportsManager.UI
         private static VisualElement BuildBottomBar(GameUi ui, SegmentPreview pv)
         {
             var bar = UiKit.Row(44);
-            bar.name = "bottom-bar";
+            bar.name = "bottom-bar"; bar.style.flexShrink = 0;
             bar.style.backgroundColor = UiKit.Panel; bar.style.paddingLeft = bar.style.paddingRight = 8;
             bar.style.borderTopLeftRadius = bar.style.borderTopRightRadius = 4;
-            var msg = UiKit.Lbl(ui.Message, 13, ui.MessageIsError ? UiKit.Bad : UiKit.TextDim, ui.MessageIsError);
+            // A plan that cannot be resolved (e.g. an incomplete lineup) shows why, unless a fresh refusal is on screen.
+            bool blocked = !pv.Error.IsNone;
+            string text = blocked && !ui.MessageIsError ? ui.ErrorText(pv.Error) : ui.Message;
+            bool isError = ui.MessageIsError || blocked;
+            var msg = UiKit.Lbl(text, 13, isError ? UiKit.Bad : UiKit.TextDim, isError);
+            msg.name = "message";
             msg.style.flexGrow = 1; msg.style.flexShrink = 1; msg.style.minWidth = 0;
+            msg.style.whiteSpace = WhiteSpace.NoWrap; msg.style.textOverflow = TextOverflow.Ellipsis;
             bar.Add(msg);
 
             int unanswered = ui.Session.UnansweredOffers().Count;
@@ -232,7 +327,7 @@ namespace EsportsManager.UI
 
             var info = UiKit.Lbl(string.Format(UiStrings.SponsorInfoFormat, pv.SponsorPoints, pv.SponsorAttemptsRemaining,
                 pv.FreeContractSlots, UiKit.Pct(pv.SponsorChanceBeforeNoise)), 12, UiKit.TextDim);
-            info.style.marginRight = 8;
+            info.style.marginRight = 8; info.style.flexShrink = 0;
             bar.Add(info);
             bar.Add(UiKit.Btn(UiStrings.Sponsor, ui.Sponsor, UiKit.Accent));
             bar.Add(UiKit.Btn(UiStrings.UndoSponsor, ui.UndoSponsor, UiKit.PanelLight, pv.SponsorPoints > 0));

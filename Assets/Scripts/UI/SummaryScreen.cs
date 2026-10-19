@@ -10,9 +10,8 @@ namespace EsportsManager.UI
     public static class SummaryScreen
     {
         /// <summary>Builds the panel into ui.Root from <see cref="GameSession.LastResult"/>.</summary>
-        public static void Build(GameUi ui)
+        public static void Build(GameUi ui, VisualElement root)
         {
-            var root = ui.Root;
             var s = ui.Session;
             var r = s.LastResult;
             var sum = r.Summary;
@@ -25,7 +24,12 @@ namespace EsportsManager.UI
             var pts = UiKit.Lbl(string.Format(UiStrings.PointsUnusedFormat, sum.PointsUsed, sum.PointsUnused), 13, UiKit.TextDim);
             pts.style.marginLeft = 16; title.Add(pts);
             title.Add(UiKit.Spacer());
-            title.Add(UiKit.Btn(UiStrings.NextSegment, ui.NextSegment, UiKit.Good, true, 15));
+            // After an event segment the next step is the event's prep screen (numbers.md 4.18), not the next segment.
+            var ev = s.EventPhase == EventPhase.Prepare ? s.CurrentEvent?.Event : null;
+            var next = UiKit.Btn(ev != null ? string.Format(UiStrings.NextStepFormat, UiStrings.EventName(ev.Def.nameKey)) : UiStrings.NextSegment,
+                ui.NextSegment, UiKit.Good, true, 15);
+            next.name = "next-step"; ui.GuardFlowButton(next, true);
+            title.Add(next);
             root.Add(title);
 
             var body = new VisualElement();
@@ -74,11 +78,11 @@ namespace EsportsManager.UI
             var right = new VisualElement(); right.style.flexGrow = 1;
             body.Add(right);
             var table = Section(right, UiStrings.PlayerChanges);
-            table.style.flexGrow = 1;
             table.Add(TableRow(true, UiStrings.ColPlayer, UiStrings.ColActions, UiStrings.ColMood, UiStrings.ColStress,
                 UiStrings.ColPopularity, UiStrings.ColTraining, null));
             foreach (var p in sum.Players)
                 table.Add(PlayerRow(s, p));
+
         }
 
         private static VisualElement Section(VisualElement parent, string title)

@@ -392,6 +392,7 @@ MonoBehaviour:
   playerConfig: {fileID: 4900000, guid: c2c803ab227e54554a8fc1c73326b293, type: 3}
   teamConfig: {fileID: 4900000, guid: ae761612dc7404c21ae3a2209932f023, type: 3}
   segmentConfig: {fileID: 4900000, guid: 34e1bccba96a94e69a7f09c29f75f8a2, type: 3}
+  matchConfig: {fileID: 4900000, guid: 9c4f15fea37e4499ea359a5296347e10, type: 3}
 --- !u!4 &990220911
 Transform:
   m_ObjectHideFlags: 0

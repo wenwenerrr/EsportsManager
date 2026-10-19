@@ -7,7 +7,7 @@ namespace EsportsManager.EditorTools
 {
     /// <summary>
     /// Batch-mode scene setup: <c>Unity -batchmode -quit -projectPath . -executeMethod EsportsManager.EditorTools.SceneSetup.Run</c>.
-    /// Adds (once) a GameBootstrap object with the three config TextAssets to Assets/Scenes/SampleScene.unity.
+    /// Adds (once) a GameBootstrap object with the four config TextAssets to Assets/Scenes/SampleScene.unity.
     /// </summary>
     public static class SceneSetup
     {
@@ -22,7 +22,8 @@ namespace EsportsManager.EditorTools
             boot.SetConfigs(
                 AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/player_config.json"),
                 AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/team_config.json"),
-                AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/segment_config.json"));
+                AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/segment_config.json"),
+                AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/match_config.json"));
             EditorUtility.SetDirty(boot);
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);

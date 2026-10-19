@@ -5,7 +5,7 @@ using UnityEngine.UIElements;
 namespace EsportsManager.UI
 {
     /// <summary>
-    /// Scene entry point. Holds the three config TextAssets (assigned by the editor script, no Resources.Load),
+    /// Scene entry point. Holds the four config TextAssets (assigned by the editor script, no Resources.Load),
     /// builds the <see cref="GameSession"/>, creates the runtime PanelSettings + UIDocument and shows the screen.
     /// Debug launch arguments are parsed by <see cref="DebugArgs"/>.
     /// </summary>
@@ -14,65 +14,128 @@ namespace EsportsManager.UI
         [SerializeField] private TextAsset playerConfig;
         [SerializeField] private TextAsset teamConfig;
         [SerializeField] private TextAsset segmentConfig;
+        [SerializeField] private TextAsset matchConfig;
 
         private GameSession _session;
         private GameUi _ui;
 
         /// <summary>Assigns the config assets (used by the editor setup script).</summary>
-        public void SetConfigs(TextAsset player, TextAsset team, TextAsset segment)
+        public void SetConfigs(TextAsset player, TextAsset team, TextAsset segment, TextAsset match)
         {
-            playerConfig = player; teamConfig = team; segmentConfig = segment;
+            playerConfig = player; teamConfig = team; segmentConfig = segment; matchConfig = match;
         }
 
         // Unattended screenshot runs launch the player without focus; macOS pauses an unfocused player unless this is set.
+        // Only for debug runs: a normal game keeps the platform default (pauses in the background).
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void KeepRunningUnfocused() => Application.runInBackground = true;
+        private static void KeepRunningUnfocused()
+        {
+            if (DebugArgs.IsDebugRun(System.Environment.GetCommandLineArgs())) Application.runInBackground = true;
+        }
 
         private void Start()
         {
             var args = DebugArgs.Parse();
-            int seed = args.Seed ?? GameSession.DefaultSeed;
+            // Normal play gets a fresh seed every launch (a fixed seed made every new game identical);
+            // debug / screenshot runs stay on the fixed demo seed so captures are reproducible.
+            bool debugRun = DebugArgs.IsDebugRun(System.Environment.GetCommandLineArgs());
+            int seed = args.Seed ?? (debugRun ? GameSession.DefaultSeed : new System.Random().Next(1, int.MaxValue));
+            string match = matchConfig != null ? matchConfig.text : null;
+            if (match == null) Debug.LogWarning("GameBootstrap: no match_config assigned; re-run SceneSetup. Playing without matches.");
             _session = args.ForceOffer || args.Demo == DemoState.Offer
-                ? GameSession.FromJsonWithOffer(playerConfig.text, teamConfig.text, segmentConfig.text, seed)
-                : GameSession.FromJson(playerConfig.text, teamConfig.text, segmentConfig.text, seed);
-            for (int i = 0; i < args.Segments; i++)
+                ? GameSession.FromJsonWithOffer(playerConfig.text, teamConfig.text, segmentConfig.text, match, seed)
+                : GameSession.FromJson(playerConfig.text, teamConfig.text, segmentConfig.text, match, seed);
+            // Debug only: scripted segments (their events auto-play). Event demos keep the last segment for the UI below.
+            int segments = args.EffectiveSegments;
+            int scripted = args.IsEventDemo ? System.Math.Max(0, segments - 1) : segments;
+            for (int i = 0; i < scripted; i++)
             {
                 _session.ApplyScriptedPlan();
                 _session.ResolveAndAdvance();
             }
-            Debug.Log("GameBootstrap: seed " + _session.Seed + ", auto-played " + args.Segments + " segment(s), demo " + args.Demo);
+            Debug.Log("GameBootstrap: seed " + _session.Seed + ", auto-played " + scripted + " segment(s), demo " + args.Demo);
 
             var panel = ScriptableObject.CreateInstance<PanelSettings>();
             panel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
             panel.referenceResolution = args.Demo == DemoState.Card ? new Vector2Int(800, 450) : new Vector2Int(1280, 720);
-            panel.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
-            panel.match = 0.5f;
+            // Expand: scale = min(w/refW, h/refH), so the panel is never smaller than the reference size in either
+            // dimension (observed: Shrink uses the larger ratio, i.e. a 3440x1440 window gave a 1280x536 panel and cropped
+            // the height; MatchWidthOrHeight 0.5 shrank the width on 16:10 Retina). Wide windows get a wider panel; the content
+            // content fills the safe area (SafeAreaFitter).
+            panel.screenMatchMode = PanelScreenMatchMode.Expand;
             var go = new GameObject("UI");
             go.SetActive(false);
             var doc = go.AddComponent<UIDocument>();
             doc.panelSettings = panel;
             go.SetActive(true);
 
-            var root = doc.rootVisualElement;
-            root.style.flexGrow = 1;
-            UiFont.Apply(root);
+            var panelRoot = doc.rootVisualElement;
+            UiFont.Apply(panelRoot);
+            // Content lives in a safe-area container (notch, menu bar) and fills it on any screen shape.
+            var root = SafeAreaFitter.Attach(go, panelRoot, args.SafeAreaTop).Content;
 
             _ui = new GameUi(root, _session);
+            // Scripted demo steps run back to back; the double-click guard is for players only.
+            double guard = _ui.FlowGuardSeconds;
+            _ui.FlowGuardSeconds = 0;
+            // A real new game (no --demo) and --demo name start at the club naming screen.
+            if (!args.DemoGiven || args.Demo == DemoState.Name) { _ui.FlowGuardSeconds = guard; _ui.ShowNewClub(); return; }
+            // Every other demo first passes through the naming screen exactly like a player (default name), so captures
+            // include anything that screen leaves behind (it once left the shared root centred and squeezed later screens).
+            _ui.ShowNewClub();
+            _ui.Refresh();
+            _ui.ConfirmClubName("");
+            if (args.Demo != DemoState.Offer) _ui.LaterOffers();
             switch (args.Demo)
             {
-                case DemoState.Card: _ui.CardsOnly = true; _ui.MaxCards = 2; _ui.OfferPopupOpen = false; break;
-                case DemoState.Main: _ui.OfferPopupOpen = false; break;
+                case DemoState.Card: _ui.CardsOnly = true; _ui.MaxCards = 2; break;
+                case DemoState.Main: break;
                 case DemoState.Assign:
-                    _ui.OfferPopupOpen = false;
                     foreach (var o in _session.UnansweredOffers()) _session.DeclineOffer(o.Id);
                     _session.ApplyScriptedPlan();
                     // Show a refusal too: one more point than the team has.
                     if (!_session.TryAddRest(_session.Team.Roster[0].Id, out var err)) { _ui.Message = _ui.ErrorText(err); _ui.MessageIsError = true; }
                     break;
-                case DemoState.Offer: _ui.OfferPopupOpen = true; break;
-                case DemoState.Summary: _session.ApplyScriptedPlan(); _session.Resolve(); break;
+                case DemoState.Offer: _ui.OpenOffers(); break;
+                case DemoState.Summary: _session.ApplyScriptedPlan(); _ui.Resolve(); break;
+                case DemoState.EventPrep:
+                case DemoState.FinalsQual:
+                case DemoState.Regular:
+                case DemoState.Bracket:
+                case DemoState.Report:
+                    RunEventDemo(args.Demo);
+                    break;
+                case DemoState.Standings: _ui.OpenStandings(); break;
+                case DemoState.Lineup:
+                    foreach (var o in _session.UnansweredOffers()) _session.DeclineOffer(o.Id);
+                    _ui.SetTactic(Matches.MatchTactic.Teamfight);
+                    var starters = _session.Team.Starters();
+                    if (starters.Count > 0) _ui.ToggleStarter(starters[0].Id);
+                    break;
             }
+            // --clicks: scripted train clicks, only while a segment is open for planning.
+            if (_session.EventPhase == EventPhase.None && !_session.AwaitingNext)
+            {
+                var roster = _session.GetRosterData();
+                for (int i = 0; i < args.Clicks && roster.Count > 0; i++) _ui.Train(roster[i % roster.Count].Id, 0);
+            }
+            _ui.FlowGuardSeconds = guard;
             _ui.Refresh();
+        }
+
+        // Resolves the open segment through the UI (the summary), then walks the event screens exactly as a player would.
+        private void RunEventDemo(DemoState demo)
+        {
+            _session.ApplyScriptedPlan();
+            _ui.Resolve();
+            if (_session.EventPhase == EventPhase.None) { Debug.LogWarning("GameBootstrap: this segment hosts no event; showing the summary."); return; }
+            _ui.NextSegment(); // -> prep
+            if (demo == DemoState.EventPrep || demo == DemoState.FinalsQual) return;
+            _ui.StartEventStage(); // regular season (split) or finals -> result screen
+            if (demo == DemoState.Regular || _session.EventPhase != EventPhase.PlayoffPrep) { _ui.ScrollToReports = demo == DemoState.Report; return; }
+            _ui.GoToPlayoffs(); // playoff prep when seeded, else the AI playoffs are played
+            if (_session.EventPhase == EventPhase.PlayoffPrep) _ui.StartEventStage();
+            _ui.ScrollToReports = demo == DemoState.Report;
         }
     }
 }
