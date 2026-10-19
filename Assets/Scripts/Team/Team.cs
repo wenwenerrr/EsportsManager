@@ -25,6 +25,12 @@ namespace EsportsManager.Teams
         public int SegmentIndexInYear;
         /// <summary>Results of the matches played this segment (true = win). May be null.</summary>
         public IReadOnlyList<bool> MatchResults;
+        /// <summary>
+        /// Story 004: the player ids who actually played each WON series this segment (participant snapshots). When non-null,
+        /// f_win (numbers.md 4.8) is given per won series to every pair inside that lineup, instead of the legacy
+        /// "f_win x wins to every pair of the current starters". Entries must not be null. May be null.
+        /// </summary>
+        public IReadOnlyList<IReadOnlyList<long>> WinningLineups;
         /// <summary>Season rank score 0-100 (numbers.md 4.3).</summary>
         public float SeasonRankScore;
         /// <summary>Per-player heat by Player.Id; missing = 0 / 0. May be null.</summary>
@@ -94,7 +100,10 @@ namespace EsportsManager.Teams
         }
 
         /// <summary>Team name (display only).</summary>
-        public string Name { get; }
+        public string Name { get; private set; }
+
+        /// <summary>Renames the club (display only; the caller normalizes the text).</summary>
+        public void Rename(string name) => Name = name ?? "";
         /// <summary>Money in integer yuan; may go negative (bankruptcy is Story 007).</summary>
         public long Funds { get; set; }
         /// <summary>Club popularity 0-100.</summary>
@@ -288,6 +297,21 @@ namespace EsportsManager.Teams
         /// <summary>The kept win/loss records, oldest first (true = win). At most results.window entries.</summary>
         public IReadOnlyCollection<bool> RecentResults => _results;
 
+        /// <summary>
+        /// The recent win rate AS IF <paramref name="pending"/> had already been recorded (same window), without changing anything.
+        /// Used where a rate must include this segment's matches before <see cref="SettleSegment"/> records them (sponsorship, §6).
+        /// </summary>
+        public float RecentWinRateWith(IReadOnlyList<bool> pending)
+        {
+            if (pending == null || pending.Count == 0) return RecentWinRate();
+            var q = new Queue<bool>(_results);
+            foreach (bool w in pending) { q.Enqueue(w); while (q.Count > _config.results.window) q.Dequeue(); }
+            if (q.Count == 0) return _config.results.defaultWinRate;
+            int wins = 0;
+            foreach (bool w in q) if (w) wins++;
+            return 100f * wins / q.Count;
+        }
+
         /// <summary>Recent win rate as 0-100; the config's default when there are no records.</summary>
         public float RecentWinRate()
         {
@@ -345,7 +369,8 @@ namespace EsportsManager.Teams
         /// 1. Validate the input AND every rostered player's Salary (>= 0) - all throwing happens here, before any state changes.
         /// 2. Record this segment's match results (window-bounded); recent win rate now includes them.
         /// 3. Pair familiarity (numbers.md 4.8), using the lineup as it is now: every pair of starters gets
-        ///    + f_seg x pair multiplier + f_win x wins-this-segment; every other recorded pair decays by f_decay;
+        ///    + f_seg x pair multiplier + f_win x wins-this-segment (or, when <see cref="SegmentInput.WinningLineups"/> is set,
+        ///    + f_win per won series to every pair that played it together); every other recorded pair decays by f_decay;
         ///    clamp [0, F_max].
         /// 4. Club popularity then player popularity are BOTH computed from the pre-update popularity values, then applied.
         ///    Random draws: club first, then every rostered player in roster order, one R(r) each.
@@ -370,17 +395,20 @@ namespace EsportsManager.Teams
                 }
             float winRate = RecentWinRate();
 
-            // 3. familiarity
+            // 3. familiarity: gains per pair are summed first, then applied once (one clamp)
             var starters = Starters();
             var together = new HashSet<PairKey>();
+            var gains = new Dictionary<PairKey, float>();
+            bool perLineupWins = input.WinningLineups != null;
             for (int i = 0; i < starters.Count; i++)
                 for (int j = i + 1; j < starters.Count; j++)
                 {
                     var key = new PairKey(starters[i].Id, starters[j].Id);
                     together.Add(key);
-                    float gain = fc.perSegment * starters[i].PairFamiliarityMultiplier(starters[j]) + fc.perWin * wins;
-                    StoreF(key, GetFamiliarity(key.Lo, key.Hi) + gain);
+                    gains[key] = fc.perSegment * starters[i].PairFamiliarityMultiplier(starters[j]) + (perLineupWins ? 0f : fc.perWin * wins);
                 }
+            if (perLineupWins) AccumulateWinGains(input.WinningLineups, gains, together);
+            foreach (var kv in gains) StoreF(kv.Key, GetFamiliarity(kv.Key.Lo, kv.Key.Hi) + kv.Value);
             foreach (var key in new List<PairKey>(_familiarity.Keys))
                 if (!together.Contains(key)) StoreF(key, _familiarity[key] - fc.decay);
 
@@ -422,6 +450,52 @@ namespace EsportsManager.Teams
             };
         }
 
+        // f_win per won series to every pair inside each lineup (numbers.md 4.8); shared by SettleSegment and AddWinFamiliarity.
+        private void AccumulateWinGains(IReadOnlyList<IReadOnlyList<long>> lineups, Dictionary<PairKey, float> gains, HashSet<PairKey> together)
+        {
+            foreach (var lineup in lineups)
+                for (int i = 0; i < lineup.Count; i++)
+                    for (int j = i + 1; j < lineup.Count; j++)
+                    {
+                        if (lineup[i] == lineup[j]) continue;
+                        var key = new PairKey(lineup[i], lineup[j]);
+                        together.Add(key);
+                        gains.TryGetValue(key, out float g);
+                        gains[key] = g + _config.familiarity.perWin;
+                    }
+        }
+
+        /// <summary>
+        /// Event familiarity (numbers.md 4.18 / 4.8): + f_win per won series to every pair that played it together (participant
+        /// snapshots), summed then applied once, clamped to [0, F_max]. No f_seg and no decay (those belong to SettleSegment).
+        /// </summary>
+        public void AddWinFamiliarity(IReadOnlyList<IReadOnlyList<long>> winningLineups)
+        {
+            if (winningLineups == null) throw new ArgumentNullException(nameof(winningLineups));
+            foreach (var l in winningLineups) if (l == null) throw new ArgumentException("winningLineups must not contain null entries.", nameof(winningLineups));
+            var gains = new Dictionary<PairKey, float>();
+            AccumulateWinGains(winningLineups, gains, new HashSet<PairKey>());
+            foreach (var kv in gains) StoreF(kv.Key, GetFamiliarity(kv.Key.Lo, kv.Key.Hi) + kv.Value);
+        }
+
+        /// <summary>
+        /// Replaces the recent results with the series results of the latest event (numbers.md 4.18: recent win rate = series
+        /// win rate of the most recent event). Keeps at most results.window entries (the latest). Null or empty: no change.
+        /// </summary>
+        public void SetRecentResults(IReadOnlyList<bool> eventSeriesResults)
+        {
+            if (eventSeriesResults == null || eventSeriesResults.Count == 0) return;
+            _results.Clear();
+            foreach (bool w in eventSeriesResults) { _results.Enqueue(w); while (_results.Count > _config.results.window) _results.Dequeue(); }
+        }
+
+        /// <summary>Adds event prize money (numbers.md 4.18) to the funds; amount must be >= 0.</summary>
+        public void ReceivePrize(long amount)
+        {
+            if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount), "must be >= 0.");
+            Funds += amount;
+        }
+
         private float Roll(float r) => _rng.NextFloat(1f - r, 1f + r);
 
         private void StoreF(PairKey key, float value)
@@ -442,6 +516,9 @@ namespace EsportsManager.Teams
             if (i.PrizeMoney < 0 || i.LivestreamIncome < 0 || i.BusinessIncome < 0 || i.Sponsorship < 0 || i.EventIncome < 0
                 || i.TransferFees < 0 || i.EventExpenses < 0)
                 throw new ArgumentOutOfRangeException(nameof(i), "money amounts must be >= 0.");
+            if (i.WinningLineups != null)
+                foreach (var l in i.WinningLineups)
+                    if (l == null) throw new ArgumentException("WinningLineups must not contain null entries.", nameof(i));
             if (i.Heat != null)
                 foreach (var kv in i.Heat)
                     if (!(kv.Value.Stream >= 0f && kv.Value.Stream <= 100f && kv.Value.Business >= 0f && kv.Value.Business <= 100f))

@@ -52,6 +52,10 @@ namespace EsportsManager.Segments
         public float PopularityDelta;
         /// <summary>Observation after minus before.</summary>
         public float ObservationDelta;
+        /// <summary>Series he played this segment (legacy context MatchResults, starters only; 0 in the calendar flow).</summary>
+        public int MatchesPlayed;
+        /// <summary>Of those, series lost.</summary>
+        public int MatchesLost;
     }
 
     /// <summary>One sponsorship attempt.</summary>
@@ -88,7 +92,7 @@ namespace EsportsManager.Segments
         public int BusinessIncome;
         /// <summary>Sponsorship paid this segment, yuan.</summary>
         public int SponsorshipIncome;
-        /// <summary>Prize money passed in, yuan.</summary>
+        /// <summary>Prize money passed in the context, yuan (event prizes are paid at event end, see the session's EventRecord).</summary>
         public int PrizeMoney;
         /// <summary>The team's settlement report (income, expenses, salary share, net, funds, win rate, club popularity).</summary>
         public SegmentReport Report;

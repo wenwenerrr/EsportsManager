@@ -108,9 +108,34 @@ namespace EsportsManager.Segments
         public static float StressDelta(SegmentConfig cfg, Player p, in StressInputs t, float randomFactor)
         {
             var s = cfg.stress;
-            float raw = s.training * t.TrainingIntensity + s.match * t.Matches + s.loss * t.Losses + s.business * t.Business
+            float raw = s.training * t.TrainingIntensity + MatchStressRaw(cfg, t.Matches, t.Losses) + s.business * t.Business
                 - s.rest * t.Rest - s.stream * t.Streams;
             return raw * p.GetTraitMultiplier(PlayerEffectKeys.StressGain) * randomFactor - s.recovery;
+        }
+
+        /// <summary>The match part of the 4.7 bracket: s_match x series played + s_loss x series lost.</summary>
+        public static float MatchStressRaw(SegmentConfig cfg, int matches, int losses) => cfg.stress.match * matches + cfg.stress.loss * losses;
+
+        /// <summary>
+        /// Stress from an event stage (numbers.md 4.18 / 4.7): ONLY the match terms of the 4.7 bracket, x stress_gain trait
+        /// multiplier x R; no s_recover (that is a per-segment term). Same code path as <see cref="StressDelta"/>.
+        /// </summary>
+        public static float MatchStressDelta(SegmentConfig cfg, Player p, int matches, int losses, float randomFactor)
+            => MatchStressRaw(cfg, matches, losses) * p.GetTraitMultiplier(PlayerEffectKeys.StressGain) * randomFactor;
+
+        /// <summary>
+        /// Mood from an event (numbers.md 4.18 / 4.6): ONLY the win/loss term of the 4.6 bracket (result = sign of series won -
+        /// lost), x mood_change_magnitude x R; no regression, play, salary, chemistry or stress terms (those are per segment).
+        /// </summary>
+        public static float MatchMoodDelta(SegmentConfig cfg, Player p, int result, float randomFactor)
+            => ResultTerm(cfg, p, result) * p.GetTraitMultiplier(PlayerEffectKeys.MoodChangeMagnitude) * randomFactor;
+
+        private static float ResultTerm(SegmentConfig cfg, Player p, int resultSign)
+        {
+            float result = cfg.mood.result * resultSign;
+            if (resultSign > 0) result *= p.GetTraitMultiplier(PlayerEffectKeys.WinMoodGain);
+            else if (resultSign < 0) result *= p.GetTraitMultiplier(PlayerEffectKeys.LossMoodDrop) * p.GetTraitMultiplier(PlayerEffectKeys.NegativeMoodChange);
+            return result;
         }
 
         /// <summary>
@@ -125,9 +150,7 @@ namespace EsportsManager.Segments
             var m = cfg.mood;
             float neg = p.GetTraitMultiplier(PlayerEffectKeys.NegativeMoodChange);
 
-            float result = m.result * t.Result;
-            if (t.Result > 0) result *= p.GetTraitMultiplier(PlayerEffectKeys.WinMoodGain);
-            else if (t.Result < 0) result *= p.GetTraitMultiplier(PlayerEffectKeys.LossMoodDrop) * neg;
+            float result = ResultTerm(cfg, p, t.Result);
 
             float play = t.IsStarter ? m.play : -m.play * p.GetTraitMultiplier(PlayerEffectKeys.BenchMoodDrop) * neg;
 

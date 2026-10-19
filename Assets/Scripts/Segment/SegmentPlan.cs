@@ -73,7 +73,7 @@ namespace EsportsManager.Segments
         public int SegmentsPerYear;
         /// <summary>0-based index inside the year, in [0, SegmentsPerYear).</summary>
         public int SegmentIndexInYear;
-        /// <summary>Match results this segment (true = win). null = no matches. Also recorded by Team.SettleSegment.</summary>
+        /// <summary>Legacy / test input: matches played this segment (true = win); null = none (the calendar plays matches in events, numbers.md 4.18, so the session always passes null).</summary>
         public IReadOnlyList<bool> MatchResults;
         /// <summary>Season rank score 0-100.</summary>
         public float SeasonRankScore;

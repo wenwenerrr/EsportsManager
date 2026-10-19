@@ -46,6 +46,16 @@ namespace EsportsManager.Segments
         SponsorAttemptsOverLimit,
         /// <summary>Sponsor points while every contract slot is taken (Used = active contracts, Limit = max_active_contracts).</summary>
         ContractsFull,
+        /// <summary>Story 004: an event stage needs one starter in every lane (Used = starters, Limit = lanes).</summary>
+        IncompleteLineup,
+        /// <summary>Story 004: the tactic is not a defined <c>MatchTactic</c>.</summary>
+        UnknownTactic,
+        /// <summary>Story 004 (numbers.md 4.18): an event is in progress; finish and acknowledge it before the next segment.</summary>
+        EventPending,
+        /// <summary>Story 004: this event step is not possible in the current event phase.</summary>
+        WrongEventPhase,
+        /// <summary>Story 004: lineup / tactic can only change while planning a segment or before an event stage.</summary>
+        LineupLocked,
     }
 
     /// <summary>Machine-readable plan error. Fields that do not apply to the code are null.</summary>
@@ -87,7 +97,10 @@ namespace EsportsManager.Segments
         public int BusinessPoints;
         /// <summary>Total training gain per main-lane dimension (before clamping); all zero without training.</summary>
         public float[] TrainingGains;
-        /// <summary>Stress change at R = 1, before clamping (includes match terms from the context and recovery).</summary>
+        /// <summary>
+        /// Stress change at R = 1, before clamping (includes match terms from the context and recovery). With a league: a starter
+        /// is counted as playing every scheduled series, losses unknown (0).
+        /// </summary>
         public float StressDelta;
         /// <summary>
         /// Mood change at R = 1, before clamping. Approximate: salary satisfaction uses today's lane score, while Resolve
@@ -115,7 +128,10 @@ namespace EsportsManager.Segments
         public int SponsorAttemptsRemaining;
         /// <summary>Contract slots free at segment start (max_active_contracts - active contracts).</summary>
         public int FreeContractSlots;
-        /// <summary>Success chance of each attempt BEFORE the U(-spread, +spread) noise (still clamped).</summary>
+        /// <summary>
+        /// Success chance of each attempt BEFORE the U(-spread, +spread) noise (still clamped). Uses the win rate including the
+        /// context's MatchResults; with a league the real chance uses the post-match rate, unknown here, so this shows the current rate.
+        /// </summary>
         public float SponsorChanceBeforeNoise;
         /// <summary>Pending offers the draft accepts (each carries ClubAmount).</summary>
         public List<BusinessOffer> AcceptedOffers = new List<BusinessOffer>();

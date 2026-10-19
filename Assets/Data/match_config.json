@@ -1,0 +1,76 @@
+{
+    "series": {
+        "opponent_count": 7
+    },
+    "calendar": {
+        "segments_per_year": 12,
+        "events": [
+            { "type": "split", "name_key": "spring", "after_segment": 3 },
+            { "type": "split", "name_key": "summer", "after_segment": 6 },
+            { "type": "finals", "name_key": "finals", "after_segment": 12 }
+        ]
+    },
+    "format": {
+        "regular_best_of": 3,
+        "playoff_teams": 4,
+        "playoff_best_of": 5,
+        "split_final_best_of": 5,
+        "finals_teams": 4,
+        "finals_semi_best_of": 5,
+        "finals_final_best_of": 7,
+        "finals_points": [10, 7, 5, 5, 3, 2, 1, 0],
+        "split_prizes": [80000, 50000, 30000, 30000, 10000, 10000, 10000, 10000],
+        "finals_prizes": [200000, 120000, 60000, 60000]
+    },
+    "power": {
+        "weight_skill": 4,
+        "weight_chemistry": 0.7,
+        "weight_style": 1,
+        "style_weight_command": 1,
+        "style_weight_lane_match": 1,
+        "command_dimension_id": "command"
+    },
+    "noise": {
+        "sigma0": 0.03,
+        "sigma1": 0.12
+    },
+    "win_probability": {
+        "k": 8,
+        "p_min": 0.1,
+        "p_max": 0.9
+    },
+    "tactic": {
+        "counter_bonus": 4,
+        "counters": [
+            { "tactic": "invade", "beats": "develop" },
+            { "tactic": "develop", "beats": "teamfight" },
+            { "tactic": "teamfight", "beats": "invade" }
+        ]
+    },
+    "opponent": {
+        "fixed_mood": 80,
+        "fixed_stress": 50,
+        "starter_pick_range": 3,
+        "roster_extra_min": 0,
+        "roster_extra_max": 2,
+        "familiarity_min": 60,
+        "familiarity_max": 80,
+        "club_names": ["Aurora", "Blue Comet", "Crimson Tide", "Dragon Gate", "Eclipse", "Frost Wolves", "Golden Dawn", "Harbor Lights", "Iron Owls", "Jade Phoenix"],
+        "form_down": 4,
+        "form_up_base": 4,
+        "form_up_pop": 8,
+        "form_step": 2,
+        "pop_min": 20,
+        "pop_max": 80
+    },
+    "report": {
+        "min_reasons": 2,
+        "max_reasons": 3,
+        "min_contribution": 0.5,
+        "even_threshold": 0.05
+    },
+    "club": {
+        "default_name": "Rookie Stars",
+        "name_max_length": 16
+    }
+}

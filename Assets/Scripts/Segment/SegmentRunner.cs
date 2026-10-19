@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EsportsManager.Matches;
 using EsportsManager.Players;
 using EsportsManager.Teams;
 
@@ -14,9 +15,10 @@ namespace EsportsManager.Segments
     /// points never matters. Same target twice = one pass at intensity 2.</para>
     /// <list type="number">
     /// <item><see cref="BeginSegment"/> rolls the business offers ONCE and opens the segment; read <see cref="GetState"/>.</item>
-    /// <item><see cref="Resolve"/> is the one entry method. Order: validate (throws, changes NOTHING) -> execute actions
-    /// (training, sponsorship) -> resolve business -> update mood and stress -> build the <see cref="SegmentInput"/>
-    /// (livestream income BEFORE settling) -> <see cref="Team.SettleSegment"/> -> expire contracts -> return the summary.</item>
+    /// <item><see cref="Resolve"/> is the one entry method. Order: validate (throws, changes NOTHING) -> actions: training ->
+    /// sponsorship attempts -> resolve business -> update mood and stress -> build the <see cref="SegmentInput"/> (livestream income
+    /// BEFORE settling) -> <see cref="Team.SettleSegment"/> -> expire contracts -> return the summary. NO matches are played in a
+    /// segment (numbers.md 4.18 v3.4): events run between segments in the session (EventEffects applies their match terms).</item>
     /// </list>
     /// <para>RANDOM DRAW ORDER (fixed): Begin: for each rostered player in roster order, one U(0,1) trigger draw, and when
     /// it triggers, one R(business.randomRange) amount draw. Resolve: for each sponsor point in order, one
@@ -24,7 +26,8 @@ namespace EsportsManager.Segments
     /// R(stress.randomRange) then one R(mood.randomRange); then Team.SettleSegment draws from the TEAM's own random
     /// source (club first, then every player in roster order).</para>
     /// <para>DECISIONS: sponsorship contracts live here, not in Team (Team has no place for them); a contract won this
-    /// segment pays from this segment on (N segments including this one); matches and losses stress only starters.
+    /// segment pays from this segment on (N segments including this one); legacy context MatchResults (tests only) stress the
+    /// starters and give the team's win/loss sign to every rostered player (unchanged Story 003 behaviour).
     /// Accepting a business offer costs one action point on that player (numbers.md 4.11 v3 / 4.16); his remaining
     /// points can still be used for training etc. Training (4.1 v3): every point raises all six main-lane dimensions,
     /// the target dimension x target_bonus. Stress (4.7 v3): s_recover is subtracted every segment for every rostered player.</para>
@@ -173,6 +176,10 @@ namespace EsportsManager.Segments
                     throw new InvalidOperationException("Plan has " + e.Used + " sponsorship attempts, only " + e.Limit + " are allowed this segment.");
                 case PlanErrorCode.ContractsFull:
                     throw new InvalidOperationException("All " + e.Limit + " sponsorship contract slots are taken; no attempt is possible.");
+                case PlanErrorCode.IncompleteLineup:
+                    throw new InvalidOperationException("The lineup has " + e.Used + " starters; all " + e.Limit + " lanes need one to play.");
+                case PlanErrorCode.UnknownTactic: throw new ArgumentException("Unknown tactic.", nameof(plan));
+                case PlanErrorCode.EventPending: throw new InvalidOperationException("An event is in progress.");
                 case PlanErrorCode.OverTotalPoints:
                     throw new InvalidOperationException("Plan spends " + e.Used + " action points, only " + e.Limit + " are available.");
                 default: throw new InvalidOperationException("Invalid plan: " + e.Code + ".");
@@ -257,7 +264,7 @@ namespace EsportsManager.Segments
                 SponsorPoints = plan.SponsorPoints,
                 FreeContractSlots = FreeContractSlots(),
                 SponsorAttemptsRemaining = AllowedSponsorAttempts() - Math.Max(0, plan.SponsorPoints),
-                SponsorChanceBeforeNoise = SegmentFormulas.SponsorChance(_cfg, _team.ClubPopularity, _team.RecentWinRate(), 0f),
+                SponsorChanceBeforeNoise = SegmentFormulas.SponsorChance(_cfg, _team.ClubPopularity, _team.RecentWinRateWith(ctx.MatchResults), 0f),
             };
             var roster = _team.Roster;
             var tallies = new Dictionary<long, PlayerSegmentSummary>();
@@ -286,7 +293,7 @@ namespace EsportsManager.Segments
                     PlayerId = p.Id, PointsUsed = used, PointsRemaining = _cfg.actionPoints.maxPerPlayer - used,
                     TrainPoints = ps.TrainPoints, StreamPoints = ps.StreamPoints, RestPoints = ps.RestPoints, BusinessPoints = ps.BusinessPoints,
                     TrainingGains = ComputeTraining(p, ps.Training),
-                    StressDelta = SegmentFormulas.StressDelta(_cfg, p, StressFor(ps, starter, matches, losses), 1f),
+                    StressDelta = SegmentFormulas.StressDelta(_cfg, p, StressFor(ps, starter ? matches : 0, starter ? losses : 0), 1f),
                     MoodDelta = SegmentFormulas.MoodDelta(_cfg, p, MoodFor(p, starter, result, starters), 1f),
                     LivestreamIncome = _team.LivestreamIncome(p, ps.StreamPoints),
                 };
@@ -347,12 +354,16 @@ namespace EsportsManager.Segments
                 p.AddObservation(o * ps.TrainPoints);
             }
 
-            // sponsorship attempts
+            // ---- 2. no matches here: the calendar plays them in events between segments (numbers.md 4.18 v3.4)
+            IReadOnlyList<bool> results = ctx.MatchResults;
+
+            // ---- 3. sponsorship attempts (the chance reads the recent win rate = the latest event's, numbers.md 4.18)
+            float postMatchWinRate = _team.RecentWinRateWith(results);
             var sp = _cfg.sponsorship;
             for (int i = 0; i < plan.SponsorPoints; i++)
             {
                 float noise = _rng.NextFloat(-sp.randomSpread, sp.randomSpread);
-                float chance = SegmentFormulas.SponsorChance(_cfg, _team.ClubPopularity, _team.RecentWinRate(), noise);
+                float chance = SegmentFormulas.SponsorChance(_cfg, _team.ClubPopularity, postMatchWinRate, noise);
                 bool ok = _rng.NextFloat(0f, 1f) < chance;
                 summary.SponsorAttempts.Add(new SponsorAttempt { Chance = chance, Success = ok });
                 if (!ok) continue;
@@ -361,7 +372,7 @@ namespace EsportsManager.Segments
                 summary.NewContracts.Add(contract);
             }
 
-            // ---- 2. resolve business
+            // ---- 4. resolve business
             long businessIncome = 0;
             var accepted = new HashSet<int>(plan.AcceptedOfferIds);
             foreach (var offer in _offers)
@@ -373,7 +384,7 @@ namespace EsportsManager.Segments
                 businessIncome += offer.ClubAmount;
             }
 
-            // ---- 3. mood and stress (both deltas from segment-start values, then applied)
+            // ---- 5. mood and stress (both deltas from segment-start values, then applied)
             var starters = _team.Starters();
             MatchCounts(ctx, out int matches, out int losses, out int result);
             float rs = _cfg.stress.randomRange, rm = _cfg.mood.randomRange;
@@ -382,16 +393,18 @@ namespace EsportsManager.Segments
                 var p = roster[i];
                 var ps = byId[p.Id];
                 bool starter = IsIn(starters, p);
+                int pm = starter ? matches : 0, pl = starter ? losses : 0, pr = result;
+                ps.MatchesPlayed = pm; ps.MatchesLost = pl;
                 float stressR = _rng.NextFloat(1f - rs, 1f + rs);
                 float moodR = _rng.NextFloat(1f - rm, 1f + rm);
-                float stressDelta = SegmentFormulas.StressDelta(_cfg, p, StressFor(ps, starter, matches, losses), stressR);
-                float moodDelta = SegmentFormulas.MoodDelta(_cfg, p, MoodFor(p, starter, result, starters), moodR);
+                float stressDelta = SegmentFormulas.StressDelta(_cfg, p, StressFor(ps, pm, pl), stressR);
+                float moodDelta = SegmentFormulas.MoodDelta(_cfg, p, MoodFor(p, starter, pr, starters), moodR);
                 p.Stress += stressDelta;
                 p.Mood += moodDelta;
                 p.AddObservation(_players.potential.observationPerSegment);
             }
 
-            // ---- 4. build SegmentInput (livestream income BEFORE settling, popularity still unchanged)
+            // ---- 6. build SegmentInput (livestream income BEFORE settling, popularity still unchanged)
             var heat = new Dictionary<long, PlayerHeat>();
             long livestream = 0;
             foreach (var p in roster)
@@ -411,12 +424,12 @@ namespace EsportsManager.Segments
             var input = new SegmentInput
             {
                 SegmentsPerYear = ctx.SegmentsPerYear, SegmentIndexInYear = ctx.SegmentIndexInYear,
-                MatchResults = ctx.MatchResults, SeasonRankScore = ctx.SeasonRankScore, Heat = heat,
-                PrizeMoney = ctx.PrizeMoney, LivestreamIncome = summary.LivestreamIncome,
+                MatchResults = results, SeasonRankScore = ctx.SeasonRankScore, Heat = heat,
+                PrizeMoney = summary.PrizeMoney, LivestreamIncome = summary.LivestreamIncome,
                 BusinessIncome = summary.BusinessIncome, Sponsorship = summary.SponsorshipIncome,
             };
 
-            // ---- 5. settle, then expire contracts and close
+            // ---- 7. settle, then expire contracts and close
             summary.Report = _team.SettleSegment(input);
             foreach (var c in _contracts) c.SegmentsRemaining--;
             _contracts.RemoveAll(c => c.SegmentsRemaining <= 0);
@@ -483,10 +496,10 @@ namespace EsportsManager.Segments
             return total;
         }
 
-        private StressInputs StressFor(PlayerSegmentSummary ps, bool starter, int matches, int losses) => new StressInputs
+        private StressInputs StressFor(PlayerSegmentSummary ps, int matches, int losses) => new StressInputs
         {
             TrainingIntensity = ps.TrainPoints * _cfg.training.intensity,
-            Matches = starter ? matches : 0, Losses = starter ? losses : 0,
+            Matches = matches, Losses = losses,
             Business = ps.BusinessPoints, Rest = ps.RestPoints, Streams = ps.StreamPoints,
         };
 
