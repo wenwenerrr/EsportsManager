@@ -16,7 +16,7 @@
 | 003 | 赛段行动逻辑 | Logic | Complete | N/A (minimal) |
 | 004 | 比赛模拟、战报和积分榜 | Logic | Complete | N/A (minimal) |
 | 005 | 年度循环和转会期 | Integration | Ready | N/A (minimal) |
-| 006 | 意外事件 | Logic | Ready | N/A (minimal) |
+| 006 | 意外事件 | Logic | Complete | N/A (minimal) |
 | 007 | 破产判定和年终总结 | UI | Ready | N/A (minimal) |
 | 008 | 选手模型升级（按 numbers.md） | Logic | Complete | N/A (minimal) |
 | 009 | 文字界面（第一个可玩版本） | UI | Complete | N/A (minimal) |

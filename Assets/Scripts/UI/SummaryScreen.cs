@@ -32,12 +32,17 @@ namespace EsportsManager.UI
             title.Add(next);
             root.Add(title);
 
+            // Both columns scroll inside the window instead of overflowing it (many events / sponsor lines).
             var body = new VisualElement();
-            body.style.flexDirection = FlexDirection.Row; body.style.flexGrow = 1;
+            body.style.flexDirection = FlexDirection.Row; body.style.flexGrow = 1; body.style.flexShrink = 1; body.style.flexBasis = 0; body.style.minHeight = 0;
             root.Add(body);
 
-            var left = new VisualElement(); left.style.width = 430; left.style.marginRight = 8;
-            body.Add(left);
+            var leftScroll = new ScrollView(ScrollViewMode.Vertical);
+            leftScroll.name = "summary-left";
+            leftScroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            leftScroll.style.width = 430; leftScroll.style.flexShrink = 0; leftScroll.style.marginRight = 8;
+            body.Add(leftScroll);
+            var left = leftScroll.contentContainer;
             var team = Section(left, UiStrings.TeamChanges);
             Change(team, UiStrings.Funds, UiKit.Yuan(r.FundsBefore), UiKit.Yuan(r.FundsAfter), UiKit.YuanDelta(r.FundsAfter - r.FundsBefore), r.FundsAfter - r.FundsBefore);
             Change(team, UiStrings.Popularity, UiKit.F1(r.PopularityBefore), UiKit.F1(r.PopularityAfter), UiKit.Delta(r.PopularityAfter - r.PopularityBefore), r.PopularityAfter - r.PopularityBefore);
@@ -49,6 +54,8 @@ namespace EsportsManager.UI
             Line(money, UiStrings.BusinessIncome, UiKit.Yuan(sum.BusinessIncome), UiKit.Text);
             Line(money, UiStrings.SponsorIncome, UiKit.Yuan(sum.SponsorshipIncome), UiKit.Text);
             Line(money, UiStrings.PrizeMoney, UiKit.Yuan(sum.PrizeMoney), UiKit.Text);
+            Line(money, UiStrings.EventIncome, UiKit.Yuan(sum.EventIncome), sum.EventIncome > 0 ? UiKit.Good : UiKit.Text);
+            Line(money, UiStrings.EventExpenses, UiKit.Yuan(-sum.EventExpenses), sum.EventExpenses > 0 ? UiKit.Bad : UiKit.Text);
             Line(money, UiStrings.Income, UiKit.Yuan(sum.Report.Income), UiKit.Good);
             Line(money, UiStrings.Expenses, UiKit.Yuan(-sum.Report.Expenses), UiKit.Bad);
             Line(money, UiStrings.SalaryShare, UiKit.Yuan(-sum.Report.SalaryShare), UiKit.TextDim);
@@ -59,6 +66,7 @@ namespace EsportsManager.UI
             for (int i = 0; i < sum.SponsorAttempts.Count; i++)
             {
                 var a = sum.SponsorAttempts[i];
+                if (a.Voided) { sp.Add(UiKit.Lbl(string.Format(UiStrings.SponsorVoidedFormat, i + 1), 13, UiKit.Bad)); continue; }
                 sp.Add(UiKit.Lbl(string.Format(UiStrings.SponsorAttemptFormat, i + 1, UiKit.Pct(a.Chance), a.Success ? UiStrings.Success : UiStrings.Failure),
                     13, a.Success ? UiKit.Good : UiKit.Bad));
             }
@@ -75,14 +83,86 @@ namespace EsportsManager.UI
             foreach (var o in sum.OffersVoided)
                 of.Add(UiKit.Lbl(string.Format(UiStrings.OfferVoidedFormat, s.PlayerName(o.PlayerId), UiKit.Yuan(o.Amount)), 13, UiKit.Bad));
 
-            var right = new VisualElement(); right.style.flexGrow = 1;
+            var right = new VisualElement(); right.style.flexGrow = 1; right.style.flexShrink = 1; right.style.minWidth = 0; right.style.minHeight = 0;
             body.Add(right);
             var table = Section(right, UiStrings.PlayerChanges);
+            table.style.flexShrink = 0;
             table.Add(TableRow(true, UiStrings.ColPlayer, UiStrings.ColActions, UiStrings.ColMood, UiStrings.ColStress,
                 UiStrings.ColPopularity, UiStrings.ColTraining, null));
             foreach (var p in sum.Players)
                 table.Add(PlayerRow(s, p));
+            right.Add(BuildEvents(ui, sum));
 
+        }
+
+        /// <summary>
+        /// Story 006 "本赛段事件": one card per occurrence, in order, in a scrolling wrap grid that takes the rest of the right
+        /// column. Potential effects show only their direction (EventEffectText never prints a potential number).
+        /// </summary>
+        private static VisualElement BuildEvents(GameUi ui, SegmentSummary sum)
+        {
+            var sec = UiKit.Block(UiKit.Panel, 6);
+            sec.name = "events-panel";
+            UiKit.Pad(sec, 10); sec.style.marginBottom = 8;
+            sec.style.flexGrow = 1; sec.style.flexShrink = 1; sec.style.minHeight = 96;
+            var head = UiKit.Row(24);
+            head.Add(UiKit.Lbl(UiStrings.EventsTitle, 15, UiKit.Accent, true));
+            if (sum.Events.Count > 0)
+            {
+                var n = UiKit.Lbl(string.Format(UiStrings.EventsCountFormat, sum.Events.Count), 13, UiKit.TextDim);
+                n.style.marginLeft = 8; head.Add(n);
+            }
+            sec.Add(head);
+            if (sum.Events.Count == 0) { sec.Add(UiKit.Lbl(UiStrings.NoEvents, 13, UiKit.TextDim)); return sec; }
+
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.name = "events-scroll";
+            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            scroll.style.flexGrow = 1; scroll.style.flexShrink = 1; scroll.style.flexBasis = 0; scroll.style.minHeight = 0; scroll.style.marginTop = 4;
+            var grid = scroll.contentContainer;
+            grid.style.flexDirection = FlexDirection.Row; grid.style.flexWrap = Wrap.Wrap; grid.style.alignItems = Align.FlexStart;
+            for (int i = 0; i < sum.Events.Count; i++) grid.Add(EventCard(ui, sum.Events[i], i));
+            sec.Add(scroll);
+            return sec;
+        }
+
+        private static VisualElement EventCard(GameUi ui, EsportsManager.Events.EventOccurrence e, int index)
+        {
+            var s = ui.Session;
+            var card = UiKit.Block(UiKit.PanelLight, 4);
+            card.name = "event-card-" + index;
+            card.style.flexGrow = 1; card.style.flexShrink = 1; card.style.flexBasis = Length.Percent(45); card.style.minWidth = 280;
+            card.style.marginRight = 6; card.style.marginBottom = 6;
+            UiKit.Pad(card, 8);
+            card.style.borderLeftWidth = 5; card.style.borderLeftColor = ChoicePopup.ToneColor(e.Tone);
+
+            var r1 = UiKit.Row(22);
+            var t = UiKit.Ellipsis(UiKit.Lbl(ui.EventText(e.TitleKey, e.PlayerId, e.PartnerId), 15, UiKit.Text, true));
+            r1.Add(t);
+            string who = e.PlayerId.HasValue
+                ? (e.PartnerId.HasValue ? string.Format(UiStrings.PairFormat, s.PlayerName(e.PlayerId.Value), s.PlayerName(e.PartnerId.Value)) : s.PlayerName(e.PlayerId.Value))
+                : null;
+            if (who != null) { var w = UiKit.Lbl(who, 12, UiKit.Warn); w.style.marginLeft = 8; w.style.flexShrink = 0; r1.Add(w); }
+            r1.Add(UiKit.Spacer());
+            long funds = e.FundsDelta;
+            if (funds != 0) { var f = UiKit.Lbl(UiKit.YuanDelta(funds), 13, funds > 0 ? UiKit.Good : UiKit.Bad, true); f.style.flexShrink = 0; f.style.marginLeft = 8; r1.Add(f); }
+            card.Add(r1);
+
+            var text = ChoicePopup.Wrap(UiKit.Lbl(ui.EventText(e.TextKey, e.PlayerId, e.PartnerId), 12, UiKit.TextDim));
+            text.style.marginTop = 2;
+            card.Add(text);
+            if (e.Kind == EsportsManager.Events.EventKind.Choice && e.OptionLabelKey != null)
+            {
+                string taken = string.Format(UiStrings.EventChoiceTakenFormat, ui.EventText(e.OptionLabelKey, e.PlayerId, e.PartnerId))
+                    + (e.OptionWasDefault ? UiStrings.ChoiceDefaultTag : "");
+                var c = ChoicePopup.Wrap(UiKit.Lbl(taken, 13, UiKit.Accent, true));
+                c.style.marginTop = 4;
+                card.Add(c);
+            }
+            var fx = ChoicePopup.PhraseRow(EventEffectText.DescribeAll(e.Effects, true, e.PartnerId.HasValue), 13);
+            fx.style.marginTop = 4;
+            card.Add(fx);
+            return card;
         }
 
         private static VisualElement Section(VisualElement parent, string title)

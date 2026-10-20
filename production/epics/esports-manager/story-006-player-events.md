@@ -1,12 +1,12 @@
 # Story 006: 意外事件（行动事件 + 状态事件）
 
 > **Epic**: 战队经理人 MVP
-> **Status**: Ready
+> **Status**: Complete
 > **Layer**: Feature
 > **Type**: Logic
 > **Estimate**: [fill before starting]
 > **Manifest Version**: N/A (minimal — no control manifest)
-> **Last Updated**: 2026-10-19 (rewritten after the first playtest; user-approved)
+> **Last Updated**: 2026-10-20
 
 ## Context
 
@@ -43,7 +43,7 @@
 - 事件文本写成不依赖 KPL 知识也能看懂；梗是加分项，不是理解门槛
 - 潜力变化走任务 008 的 `AdjustPotential`（或新增），界面仍然不显示真实潜力
 - 资金类效果计入 §4.10 的事件收入 / 事件支出，出现在结算汇总里
-- **（2026-10-19 用户决定并入本任务）"躺平"不应是好策略**：试玩中一个赛季什么都不做也夺冠——不安排行动时压力自然下降、心情偏高，比赛状态反而最好；训练 3 个赛段的成长抵不过训练压力。本任务一并调整并用固定种子的模拟验证：长期不训练技术缓慢退步（或状态需要训练和比赛保持）；训练收益看得见（提高成长或降低训练压力，先给用户看方案再改数值）；事件让"不管不顾"随机受罚（懈怠、粉丝不满、赞助商撤资等）
+- **（2026-10-20 改）平衡不在本任务做**：用户认为逐项调数值是"哪里不对改哪里"，决定先做结构性重设计（`design/match-model-v4.md`：对手风格与克制、专精绝活、整个联赛作为会成长的系统）；本任务只做事件，不改现有平衡数值。以下原记录保留备查——**（2026-10-19 用户决定并入本任务）"躺平"不应是好策略**：试玩中一个赛季什么都不做也夺冠——不安排行动时压力自然下降、心情偏高，比赛状态反而最好；训练 3 个赛段的成长抵不过训练压力。本任务一并调整并用固定种子的模拟验证：长期不训练技术缓慢退步（或状态需要训练和比赛保持）；训练收益看得见（提高成长或降低训练压力，先给用户看方案再改数值）；事件让"不管不顾"随机受罚（懈怠、粉丝不满、赞助商撤资等）
 - （2026-10-19 用户决定）用事件代替"让钱重新紧张"的新机制：事件表里要有足量的扣钱事件（违约金、罚款、设备损坏、选手医疗费等）和少量意外收入，让盈利不再稳定
 - 界面切换先完成 TD-003 的界面栈（若任务 004 还没做）
 
@@ -51,7 +51,7 @@
 
 ## Out of Scope
 
-- 带选项分支的复杂剧情事件（以后再加）
+- 多步剧情分支（以后再加）；**简单的二选一事件在本任务内**（2026-10-20 用户同意）：少量事件给玩家两个选项，各有即时效果和可选的后续影响
 - 选手头像（任务 010）
 
 ---
@@ -69,7 +69,7 @@
 **Story Type**: Logic
 **Required evidence**: `Assets/Tests/EditMode/Events/` NUnit tests (advisory) + retained screenshot of event cards in the settlement screen in `production/qa/evidence/story-006-events/` (player-observable — required)
 
-**Status**: [ ] Not yet created
+**Status**: [x] Created — `Assets/Tests/EditMode/Events/EventTests.cs`, `Assets/Tests/EditMode/UI/Story006EventUiTests.cs`; screenshots 01–04 in `production/qa/evidence/story-006-events/`
 
 ---
 
@@ -77,3 +77,13 @@
 
 - Depends on: Story 004 (recent match results in state-event conditions)
 - Unlocks: Story 005
+
+---
+
+## Completion Notes
+**Completed**: 2026-10-20
+**Criteria**: 7/7 verified (钱变紧的体感未达到——起始资金高、年终总决赛奖金大；属数值平衡，留给 v4 重设计 `design/match-model-v4.md`，不算本任务缺陷)
+**Deviations**: 40 个事件（24 行动 / 11 状态 / 5 二选一）；二选一事件在范围内（2026-10-20 用户同意）；平衡不在本任务做
+**Test Evidence**: tests present (708 passed at last run); screenshots `production/qa/evidence/story-006-events/01-04`; user playtest confirmed events trigger and the choice/leave flow works
+**Code Review**: Skipped (solo)
+**Open items**: 开窍时潜力已封顶仍显示"潜力上升"；多人效果显示平均值；事件卡无行动标签；无"请假中"卡片截图

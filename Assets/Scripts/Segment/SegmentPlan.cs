@@ -41,11 +41,14 @@ namespace EsportsManager.Segments
     {
         private readonly List<ActionAssignment> _assignments = new List<ActionAssignment>();
         private readonly List<int> _acceptedOffers = new List<int>();
+        private readonly List<ChoiceAnswer> _choiceAnswers = new List<ChoiceAnswer>();
 
         /// <summary>The per-player action points, in the order added.</summary>
         public IReadOnlyList<ActionAssignment> Assignments => _assignments;
         /// <summary>Ids of the business offers the player accepts (each costs one point on the offer's player).</summary>
         public IReadOnlyList<int> AcceptedOfferIds => _acceptedOffers;
+        /// <summary>Answers to pending choice events (Story 006), one per choice id; unanswered choices take their default option.</summary>
+        public IReadOnlyList<ChoiceAnswer> ChoiceAnswers => _choiceAnswers;
         /// <summary>Number of "Sponsor" club-action points (>= 0).</summary>
         public int SponsorPoints { get; set; }
 
@@ -62,8 +65,28 @@ namespace EsportsManager.Segments
         public SegmentPlan Sponsor() { SponsorPoints++; return this; }
         /// <summary>Accepts a pending business offer by id.</summary>
         public SegmentPlan AcceptOffer(int offerId) { _acceptedOffers.Add(offerId); return this; }
+        /// <summary>Answers a pending choice event (replaces an earlier answer to the same choice). Costs no action point.</summary>
+        public SegmentPlan AnswerChoice(int choiceId, int option)
+        {
+            _choiceAnswers.RemoveAll(a => a.ChoiceId == choiceId);
+            _choiceAnswers.Add(new ChoiceAnswer(choiceId, option));
+            return this;
+        }
+        /// <summary>Removes the answer to a choice (it falls back to its default option).</summary>
+        public SegmentPlan ClearChoiceAnswer(int choiceId) { _choiceAnswers.RemoveAll(a => a.ChoiceId == choiceId); return this; }
         /// <summary>Removes everything.</summary>
-        public void Clear() { _assignments.Clear(); _acceptedOffers.Clear(); SponsorPoints = 0; }
+        public void Clear() { _assignments.Clear(); _acceptedOffers.Clear(); _choiceAnswers.Clear(); SponsorPoints = 0; }
+    }
+
+    /// <summary>The option picked for one pending choice event (Story 006).</summary>
+    public readonly struct ChoiceAnswer
+    {
+        /// <summary>PendingChoice.Id.</summary>
+        public readonly int ChoiceId;
+        /// <summary>Option index.</summary>
+        public readonly int Option;
+        /// <summary>Creates an answer.</summary>
+        public ChoiceAnswer(int choiceId, int option) { ChoiceId = choiceId; Option = option; }
     }
 
     /// <summary>The non-gameplay inputs of a segment: calendar (Story 005), matches (Story 004), prize money.</summary>
@@ -138,5 +161,7 @@ namespace EsportsManager.Segments
         public int FreeContractSlots;
         /// <summary>Sponsor points a plan may use this segment: min(max_attempts_per_segment, FreeContractSlots).</summary>
         public int SponsorAttemptsRemaining;
+        /// <summary>Choice events of the open segment (Story 006), empty when not open or without an event engine.</summary>
+        public IReadOnlyList<EsportsManager.Events.PendingChoice> PendingChoices = new EsportsManager.Events.PendingChoice[0];
     }
 }

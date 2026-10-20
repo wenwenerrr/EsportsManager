@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using EsportsManager.Matches;
+using EsportsManager.Events;
 using EsportsManager.Players;
 using EsportsManager.Teams;
 
@@ -25,6 +26,13 @@ namespace EsportsManager.Segments
     /// U(-spread,+spread) noise draw then one U(0,1) outcome draw; then for each rostered player in roster order one
     /// R(stress.randomRange) then one R(mood.randomRange); then Team.SettleSegment draws from the TEAM's own random
     /// source (club first, then every player in roster order).</para>
+    /// <para>RANDOM EVENTS (Story 006, numbers.md 4.17), only with an <see cref="EventEngine"/> (own random source, so the
+    /// draws above are unchanged): BeginSegment rolls choice events after the offers; Resolve, right after validation, rolls the
+    /// action events for every point (order: assignments in plan order, accepted offers in plan order, sponsor points) and
+    /// feeds their modifiers into training / sponsorship / business / stress (rest) / livestream income; after mood and stress
+    /// it applies choice answers (unanswered = the default option), then the action events' mood / stress / potential, then
+    /// rolls and applies state events; funds effects go into SegmentInput as event income / expenses; popularity, club
+    /// popularity and familiarity effects are applied after Team.SettleSegment.</para>
     /// <para>DECISIONS: sponsorship contracts live here, not in Team (Team has no place for them); a contract won this
     /// segment pays from this segment on (N segments including this one); legacy context MatchResults (tests only) stress the
     /// starters and give the team's win/loss sign to every rostered player (unchanged Story 003 behaviour).
@@ -48,11 +56,16 @@ namespace EsportsManager.Segments
         private int _nextOfferId;
         private int _serial;
         private SegmentSummary _lastSummary;
+        private readonly EventEngine _events;
+        private readonly List<PendingChoice> _choices = new List<PendingChoice>();
+        private int _nextChoiceId;
 
         /// <summary>Creates a runner. Validates the config; all dependencies are injected.</summary>
         /// <param name="rng">Random source for offers, sponsorship and the R factors (the team keeps its own).</param>
-        public SegmentRunner(SegmentConfig config, PlayerConfig players, Team team, IRandomSource rng)
+        /// <param name="events">Optional random-event engine (Story 006); null = no events (Story 003 behaviour).</param>
+        public SegmentRunner(SegmentConfig config, PlayerConfig players, Team team, IRandomSource rng, EventEngine events = null)
         {
+            _events = events;
             _cfg = config ?? throw new ArgumentNullException(nameof(config));
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _team = team ?? throw new ArgumentNullException(nameof(team));
@@ -98,6 +111,7 @@ namespace EsportsManager.Segments
                 SponsorAttemptsRemaining = AllowedSponsorAttempts(),
                 Serial = _serial,
                 LastSummary = _lastSummary,
+                PendingChoices = _open ? _choices.ToArray() : new PendingChoice[0],
             };
         }
 
@@ -125,6 +139,8 @@ namespace EsportsManager.Segments
                 int amount = SegmentFormulas.BusinessAmount(_cfg, p, r);
                 _offers.Add(new BusinessOffer(_nextOfferId++, p.Id, amount, SegmentFormulas.ClubShare(_cfg, amount)));
             }
+            _choices.Clear();
+            if (_events != null) _choices.AddRange(_events.RollChoices(_team, ref _nextChoiceId));
             _serial++;
             _open = true;
         }
@@ -180,6 +196,11 @@ namespace EsportsManager.Segments
                     throw new InvalidOperationException("The lineup has " + e.Used + " starters; all " + e.Limit + " lanes need one to play.");
                 case PlanErrorCode.UnknownTactic: throw new ArgumentException("Unknown tactic.", nameof(plan));
                 case PlanErrorCode.EventPending: throw new InvalidOperationException("An event is in progress.");
+                case PlanErrorCode.UnknownChoice: throw new ArgumentException("Unknown choice id " + e.ChoiceId + ".", nameof(plan));
+                case PlanErrorCode.ChoiceOptionOutOfRange:
+                    throw new ArgumentException("Choice " + e.ChoiceId + " has options 0.." + (e.Limit - 1) + ".", nameof(plan));
+                case PlanErrorCode.PlayerOnLeave:
+                    throw new InvalidOperationException("Player " + e.PlayerId + " is on leave (choice " + e.ChoiceId + ") and may get no action point.");
                 case PlanErrorCode.OverTotalPoints:
                     throw new InvalidOperationException("Plan spends " + e.Used + " action points, only " + e.Limit + " are available.");
                 default: throw new InvalidOperationException("Invalid plan: " + e.Code + ".");
@@ -230,6 +251,17 @@ namespace EsportsManager.Segments
                     return new PlanError { Code = PlanErrorCode.OfferPlayerLeft, OfferId = id, PlayerId = offer.Value.PlayerId };
                 Count(perPlayer, order, offer.Value.PlayerId);
             }
+
+            foreach (var ans in plan.ChoiceAnswers)
+            {
+                var ch = FindChoice(ans.ChoiceId);
+                if (ch == null) return new PlanError { Code = PlanErrorCode.UnknownChoice, ChoiceId = ans.ChoiceId };
+                if (ans.Option < 0 || ans.Option >= ch.Options.Count)
+                    return new PlanError { Code = PlanErrorCode.ChoiceOptionOutOfRange, ChoiceId = ans.ChoiceId, Limit = ch.Options.Count };
+            }
+            foreach (var ch in _choices)
+                if (ch.PlayerId != null && ch.Options[EffectiveOption(plan, ch, out _)].PutsOnLeave && perPlayer.ContainsKey(ch.PlayerId.Value))
+                    return new PlanError { Code = PlanErrorCode.PlayerOnLeave, PlayerId = ch.PlayerId, ChoiceId = ch.Id };
 
             int max = _cfg.actionPoints.maxPerPlayer;
             foreach (long id in order)
@@ -330,6 +362,18 @@ namespace EsportsManager.Segments
                 before[i, 0] = p.Mood; before[i, 1] = p.Stress; before[i, 2] = p.Popularity; before[i, 3] = p.Observation;
             }
 
+            // ---- 0. random events (Story 006): roll the action events for every point; nothing changes yet
+            int offerBase = plan.Assignments.Count, sponsorBase = offerBase + plan.AcceptedOfferIds.Count;
+            var points = new List<ActionPointRef>();
+            foreach (var a in plan.Assignments) points.Add(new ActionPointRef(ToEventAction(a.Action), a.PlayerId, a.DimensionIndex));
+            foreach (int id in plan.AcceptedOfferIds) points.Add(new ActionPointRef(EventAction.Business, FindOffer(id).Value.PlayerId));
+            for (int i = 0; i < plan.SponsorPoints; i++) points.Add(new ActionPointRef(EventAction.Sponsor, 0));
+            var actionEvents = _events != null ? _events.RollActionEvents(_team, points) : new List<EventOccurrence>();
+            var mods = new PointMods[points.Count];
+            for (int i = 0; i < mods.Length; i++) mods[i] = new PointMods();
+            foreach (var ev in actionEvents)
+                foreach (var fx in ev.Effects) mods[ev.PointIndex].Add(fx);
+
             // ---- 1. execute actions: tally, then training (order independent, see class remarks)
             TallyAssignments(plan, byId, skipInvalid: false);
             float o = _players.potential.observationPerTraining;
@@ -337,7 +381,25 @@ namespace EsportsManager.Segments
             {
                 var ps = byId[p.Id];
                 if (ps.TrainPoints == 0) continue;
-                float[] total = ComputeTraining(p, ps.Training);
+                // event modifiers: effective points per target (sum of multipliers) and flat adds on the target
+                var effective = new Dictionary<int, float>();
+                var adds = new Dictionary<int, float>();
+                for (int i = 0; i < plan.Assignments.Count; i++)
+                {
+                    var a = plan.Assignments[i];
+                    if (a.PlayerId != p.Id || a.Action != SegmentAction.Train) continue;
+                    var m = mods[i];
+                    effective.TryGetValue(a.DimensionIndex, out float ef); effective[a.DimensionIndex] = ef + m.TrainMult;
+                    adds.TryGetValue(a.DimensionIndex, out float ad); adds[a.DimensionIndex] = ad + m.TrainAdd;
+                    foreach (var fx in m.Fx)
+                    {
+                        if (fx.Type == EffectType.TrainMultiplier)
+                            fx.Applied = (fx.Value - 1f) * p.TrainingGain(p.MainLane, a.DimensionIndex, _cfg.training.intensity) * _cfg.training.targetBonus;
+                        else if (fx.Type == EffectType.TrainAdd) fx.Applied = fx.Value;
+                    }
+                }
+                float[] total = ComputeTraining(p, ps.Training, effective);
+                foreach (var kv in adds) total[kv.Key] += kv.Value;
                 var finals = new float[total.Length];
                 for (int d = 0; d < total.Length; d++)
                 {
@@ -362,8 +424,16 @@ namespace EsportsManager.Segments
             var sp = _cfg.sponsorship;
             for (int i = 0; i < plan.SponsorPoints; i++)
             {
+                var m = mods[sponsorBase + i];
+                if (m.Void) { summary.SponsorAttempts.Add(new SponsorAttempt { Voided = true }); continue; }
                 float noise = _rng.NextFloat(-sp.randomSpread, sp.randomSpread);
                 float chance = SegmentFormulas.SponsorChance(_cfg, _team.ClubPopularity, postMatchWinRate, noise);
+                if (m.SponsorAdd != 0f)
+                {
+                    float chanceBefore = chance;
+                    chance = Math.Max(sp.minChance, Math.Min(sp.maxChance, chance + m.SponsorAdd));
+                    foreach (var fx in m.Fx) if (fx.Type == EffectType.SponsorChanceAdd) fx.Applied = chance - chanceBefore;
+                }
                 bool ok = _rng.NextFloat(0f, 1f) < chance;
                 summary.SponsorAttempts.Add(new SponsorAttempt { Chance = chance, Success = ok });
                 if (!ok) continue;
@@ -381,7 +451,10 @@ namespace EsportsManager.Segments
                 if (!accepted.Contains(offer.Id)) { summary.OffersDeclined.Add(offer); continue; }
                 summary.OffersAccepted.Add(offer);
                 byId[offer.PlayerId].BusinessPoints++;
-                businessIncome += offer.ClubAmount;
+                var bm = mods[offerBase + IndexOf(plan.AcceptedOfferIds, offer.Id)];
+                long extra = (long)Math.Round(offer.ClubAmount * (double)(bm.BizMult - 1f), MidpointRounding.AwayFromZero);
+                foreach (var fx in bm.Fx) if (fx.Type == EffectType.BusinessMultiplier) fx.Applied = extra;
+                businessIncome += Math.Max(0L, offer.ClubAmount + extra);
             }
 
             // ---- 5. mood and stress (both deltas from segment-start values, then applied)
@@ -397,12 +470,47 @@ namespace EsportsManager.Segments
                 ps.MatchesPlayed = pm; ps.MatchesLost = pl;
                 float stressR = _rng.NextFloat(1f - rs, 1f + rs);
                 float moodR = _rng.NextFloat(1f - rm, 1f + rm);
-                float stressDelta = SegmentFormulas.StressDelta(_cfg, p, StressFor(ps, pm, pl), stressR);
+                float rest = 0f;
+                for (int k = 0; k < plan.Assignments.Count; k++)
+                {
+                    var a = plan.Assignments[k];
+                    if (a.PlayerId != p.Id || a.Action != SegmentAction.Rest) continue;
+                    rest += mods[k].RestMult;
+                    foreach (var fx in mods[k].Fx) if (fx.Type == EffectType.RestMultiplier) fx.Applied = (fx.Value - 1f) * _cfg.stress.rest;
+                }
+                var si = StressFor(ps, pm, pl); si.Rest = rest;
+                float stressDelta = SegmentFormulas.StressDelta(_cfg, p, si, stressR);
                 float moodDelta = SegmentFormulas.MoodDelta(_cfg, p, MoodFor(p, starter, pr, starters), moodR);
                 p.Stress += stressDelta;
                 p.Mood += moodDelta;
                 p.AddObservation(_players.potential.observationPerSegment);
             }
+
+            // ---- 5b. random events (Story 006): choices, action events' personal effects, then state events; funds are booked
+            var occurrences = new List<EventOccurrence>();
+            foreach (var ch in _choices)
+            {
+                if ((ch.PlayerId != null && Find(ch.PlayerId.Value) == null) || (ch.PartnerId != null && Find(ch.PartnerId.Value) == null)) continue;
+                int opt = EffectiveOption(plan, ch, out bool answered);
+                occurrences.Add(_events.ResolveChoice(ch, opt, !answered));
+            }
+            occurrences.AddRange(actionEvents);
+            foreach (var ev in occurrences) EventApplier.ApplyPersonal(ev, _team);
+            if (_events != null)
+            {
+                var states = _events.RollStateEvents(_team);
+                foreach (var ev in states) EventApplier.ApplyPersonal(ev, _team);
+                occurrences.AddRange(states);
+            }
+            long eventIn = 0, eventOut = 0;
+            foreach (var ev in occurrences)
+            {
+                long f = EventApplier.Funds(ev);
+                if (f > 0) eventIn += f; else eventOut -= f;
+            }
+            summary.Events = occurrences;
+            summary.EventIncome = ClampInt(eventIn);
+            summary.EventExpenses = ClampInt(eventOut);
 
             // ---- 6. build SegmentInput (livestream income BEFORE settling, popularity still unchanged)
             var heat = new Dictionary<long, PlayerHeat>();
@@ -413,6 +521,25 @@ namespace EsportsManager.Segments
                 ps.StreamHeat = SegmentFormulas.StreamHeat(_cfg, p, ps.StreamPoints);
                 ps.BusinessHeat = SegmentFormulas.BusinessHeat(_cfg, ps.BusinessPoints);
                 ps.LivestreamIncome = _team.LivestreamIncome(p, ps.StreamPoints);
+                // Story 006: stream events scale the MARGINAL income of their point (k-th stream = L(k+1) - L(k))
+                long streamExtra = 0; int nth = 0;
+                for (int k = 0; k < plan.Assignments.Count; k++)
+                {
+                    var a = plan.Assignments[k];
+                    if (a.PlayerId != p.Id || a.Action != SegmentAction.Stream) continue;
+                    var m = mods[k];
+                    if (m.Fx.Count > 0)
+                    {
+                        int marginal = _team.LivestreamIncome(p, nth + 1) - _team.LivestreamIncome(p, nth);
+                        long extra = (long)Math.Round(marginal * (double)(m.StreamMult - 1f) + m.StreamAdd, MidpointRounding.AwayFromZero);
+                        foreach (var fx in m.Fx)
+                            if (fx.Type == EffectType.StreamMultiplier) fx.Applied = (float)Math.Round(marginal * (double)(fx.Value - 1f));
+                            else if (fx.Type == EffectType.StreamAdd) fx.Applied = fx.Value;
+                        streamExtra += extra;
+                    }
+                    nth++;
+                }
+                ps.LivestreamIncome = ClampInt(Math.Max(0L, ps.LivestreamIncome + streamExtra));
                 livestream += ps.LivestreamIncome;
                 heat[p.Id] = new PlayerHeat { Stream = ps.StreamHeat, Business = ps.BusinessHeat };
             }
@@ -427,13 +554,16 @@ namespace EsportsManager.Segments
                 MatchResults = results, SeasonRankScore = ctx.SeasonRankScore, Heat = heat,
                 PrizeMoney = summary.PrizeMoney, LivestreamIncome = summary.LivestreamIncome,
                 BusinessIncome = summary.BusinessIncome, Sponsorship = summary.SponsorshipIncome,
+                EventIncome = summary.EventIncome, EventExpenses = summary.EventExpenses,
             };
 
             // ---- 7. settle, then expire contracts and close
             summary.Report = _team.SettleSegment(input);
             foreach (var c in _contracts) c.SegmentsRemaining--;
             _contracts.RemoveAll(c => c.SegmentsRemaining <= 0);
+            foreach (var ev in occurrences) EventApplier.ApplyAfterSettle(ev, _team);
             _offers.Clear();
+            _choices.Clear();
             _open = false;
 
             for (int i = 0; i < roster.Count; i++)
@@ -475,14 +605,15 @@ namespace EsportsManager.Segments
 
         // Fills Gains / Gain of every pass from the player's CURRENT (segment-start) values and returns the per-dimension
         // sum over all passes. Changes nothing on the player.
-        private float[] ComputeTraining(Player p, List<TrainingResult> passes)
+        private float[] ComputeTraining(Player p, List<TrainingResult> passes, Dictionary<int, float> effectivePoints = null)
         {
             int dims = DimensionCount(p);
             var total = new float[dims];
             for (int k = 0; k < passes.Count; k++)
             {
                 var t = passes[k];
-                float intensity = t.Points * _cfg.training.intensity;
+                float pts = effectivePoints != null && effectivePoints.TryGetValue(t.DimensionIndex, out float ep) ? ep : t.Points;
+                float intensity = pts * _cfg.training.intensity;
                 t.Gains = new float[dims];
                 for (int d = 0; d < dims; d++)
                 {
@@ -558,6 +689,55 @@ namespace EsportsManager.Segments
                 sum += p.CompatibilityWith(o); n++;
             }
             return n == 0 ? 0f : (float)(sum / n);
+        }
+
+        private PendingChoice FindChoice(int id)
+        {
+            foreach (var c in _choices) if (c.Id == id) return c;
+            return null;
+        }
+
+        // The answered option, else the choice's default.
+        private static int EffectiveOption(SegmentPlan plan, PendingChoice ch, out bool answered)
+        {
+            foreach (var a in plan.ChoiceAnswers)
+                if (a.ChoiceId == ch.Id) { answered = true; return a.Option; }
+            answered = false;
+            return ch.DefaultOption;
+        }
+
+        private static int IndexOf(IReadOnlyList<int> list, int value)
+        {
+            for (int i = 0; i < list.Count; i++) if (list[i] == value) return i;
+            return -1;
+        }
+
+        private static EventAction ToEventAction(SegmentAction a) =>
+            a == SegmentAction.Train ? EventAction.Train : (a == SegmentAction.Stream ? EventAction.Stream : EventAction.Rest);
+
+        // Modifiers one action event put on one action point (Story 006); defaults = no change.
+        private sealed class PointMods
+        {
+            public float TrainMult = 1f, TrainAdd, StreamMult = 1f, StreamAdd, RestMult = 1f, BizMult = 1f, SponsorAdd;
+            public bool Void;
+            public readonly List<EventEffectResult> Fx = new List<EventEffectResult>();
+
+            public void Add(EventEffectResult fx)
+            {
+                switch (fx.Type)
+                {
+                    case EffectType.TrainMultiplier: TrainMult *= fx.Value; break;
+                    case EffectType.TrainAdd: TrainAdd += fx.Value; break;
+                    case EffectType.StreamMultiplier: StreamMult *= fx.Value; break;
+                    case EffectType.StreamAdd: StreamAdd += fx.Value; break;
+                    case EffectType.RestMultiplier: RestMult *= fx.Value; break;
+                    case EffectType.BusinessMultiplier: BizMult *= fx.Value; break;
+                    case EffectType.SponsorChanceAdd: SponsorAdd += fx.Value; break;
+                    case EffectType.VoidAction: Void = true; break;
+                    default: return;
+                }
+                Fx.Add(fx);
+            }
         }
 
         private static int ClampInt(long v) => v > int.MaxValue ? int.MaxValue : (int)v;

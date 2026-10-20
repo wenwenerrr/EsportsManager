@@ -27,8 +27,8 @@ namespace EsportsManager.Segments
         public int Losses;
         /// <summary>Accepted business deals.</summary>
         public int Business;
-        /// <summary>Rest points.</summary>
-        public int Rest;
+        /// <summary>Rest points (Story 006: effective points = sum of the rest event multipliers, 1 per plain point).</summary>
+        public float Rest;
         /// <summary>Stream points.</summary>
         public int Streams;
     }

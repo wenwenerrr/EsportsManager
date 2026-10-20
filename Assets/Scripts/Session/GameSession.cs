@@ -1,3 +1,4 @@
+using EsportsManager.Events;
 using System;
 using System.Collections.Generic;
 using EsportsManager.Matches;
@@ -168,6 +169,24 @@ namespace EsportsManager.Session
                 matchJson == null ? null : MatchConfigLoader.FromJson(matchJson));
         }
 
+        /// <summary>
+        /// Builds a session with the league AND random events (Story 006). <paramref name="eventJson"/> null = no events.
+        /// </summary>
+        public static GameSession FromJson(string playerJson, string teamJson, string segmentJson, string matchJson, string eventJson,
+            int seed = DefaultSeed, long startingFunds = DefaultFunds)
+        {
+            var players = PlayerConfigLoader.FromJson(playerJson);
+            return new GameSession(players, TeamConfigLoader.FromJson(teamJson), SegmentConfigLoader.FromJson(segmentJson), seed, startingFunds,
+                matchJson == null ? null : MatchConfigLoader.FromJson(matchJson),
+                eventJson == null ? null : EventConfigLoader.FromJson(eventJson, players));
+        }
+
+        /// <summary>Event text table for the UI (set by the bootstrap; null in tests that do not need texts).</summary>
+        public EventTextTable EventTexts { get; set; }
+
+        /// <summary>The random event engine (Story 006), or null when the session has no event config.</summary>
+        public EventEngine Events { get; }
+
         /// <summary>The tournament runner (league, opponents, simulator), or null for a session without matches.</summary>
         public TournamentRunner Tournament { get; }
         /// <summary>Calendar + event state machine (numbers.md 4.18), or null for a session without matches.</summary>
@@ -182,7 +201,7 @@ namespace EsportsManager.Session
         /// team (seed + 1) and runner (seed + 2) streams draw exactly as before.
         /// </summary>
         public GameSession(PlayerConfig players, TeamConfig team, SegmentConfig segment, int seed = DefaultSeed,
-            long startingFunds = DefaultFunds, MatchConfig match = null)
+            long startingFunds = DefaultFunds, MatchConfig match = null, EventConfig events = null)
         {
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _segment = segment ?? throw new ArgumentNullException(nameof(segment));
@@ -214,7 +233,9 @@ namespace EsportsManager.Session
                 Tournament = new TournamentRunner(league, match, team, players, new SeededRandomSource(seed + 4));
                 Season = new SeasonFlow(match, segment, players, Tournament, Team);
             }
-            Runner = new SegmentRunner(segment, players, Team, new SeededRandomSource(seed + 2));
+            // Story 006: events draw on their own source (seed + 5) so the other streams are unchanged.
+            if (events != null) Events = new EventEngine(events, players, new SeededRandomSource(seed + 5));
+            Runner = new SegmentRunner(segment, players, Team, new SeededRandomSource(seed + 2), Events);
             Runner.BeginSegment();
         }
 
@@ -240,11 +261,16 @@ namespace EsportsManager.Session
 
         /// <summary>Same as the overload above, with the league when <paramref name="matchJson"/> is not null.</summary>
         public static GameSession FromJsonWithOffer(string playerJson, string teamJson, string segmentJson, string matchJson, int seed, int maxTries = 500)
+            => FromJsonWithOffer(playerJson, teamJson, segmentJson, matchJson, null, seed, maxTries);
+
+        /// <summary>Same, with random events when <paramref name="eventJson"/> is not null.</summary>
+        public static GameSession FromJsonWithOffer(string playerJson, string teamJson, string segmentJson, string matchJson, string eventJson,
+            int seed, int maxTries = 500)
         {
             GameSession s = null;
             for (int i = 0; i < maxTries; i++)
             {
-                s = FromJson(playerJson, teamJson, segmentJson, matchJson, seed + i * 7);
+                s = FromJson(playerJson, teamJson, segmentJson, matchJson, eventJson, seed + i * 7);
                 if (s.Runner.GetState().PendingOffers.Count > 0) return s;
             }
             return s;
@@ -348,6 +374,32 @@ namespace EsportsManager.Session
             return list;
         }
 
+        // ------------------------------------------------------------ choice events (Story 006)
+
+        /// <summary>Choice events of the open segment (empty while the settlement panel is up or without events).</summary>
+        public IReadOnlyList<PendingChoice> PendingChoices => AwaitingNext ? new PendingChoice[0] : Runner.GetState().PendingChoices;
+
+        /// <summary>
+        /// Answers a choice in the draft plan (validated: false + UnknownChoice / ChoiceOptionOutOfRange / PlayerOnLeave when the
+        /// player already has action points and the option puts him on leave). Re-answering replaces the earlier answer.
+        /// </summary>
+        public bool TryAnswerChoice(int choiceId, int option, out PlanError error) => TryChange(p => p.AnswerChoice(choiceId, option), out error);
+
+        /// <summary>The option that will apply at resolve: the draft answer, else the default; -1 for an unknown choice.</summary>
+        public int EffectiveChoiceOption(int choiceId)
+        {
+            foreach (var a in Plan.ChoiceAnswers) if (a.ChoiceId == choiceId) return a.Option;
+            foreach (var c in PendingChoices) if (c.Id == choiceId) return c.DefaultOption;
+            return -1;
+        }
+
+        /// <summary>True when the draft plan answers the choice.</summary>
+        public bool IsChoiceAnswered(int choiceId)
+        {
+            foreach (var a in Plan.ChoiceAnswers) if (a.ChoiceId == choiceId) return true;
+            return false;
+        }
+
         /// <summary>Removes the player's last assignment, else his last accepted offer. False when he has neither.</summary>
         public bool UndoLast(long playerId)
         {
@@ -368,8 +420,13 @@ namespace EsportsManager.Session
             return true;
         }
 
-        /// <summary>Empties the draft plan (declined offers stay declined).</summary>
-        public void ClearPlan() => Plan = new SegmentPlan();
+        /// <summary>Empties the draft plan's points (declined offers stay declined, choice answers stay).</summary>
+        public void ClearPlan()
+        {
+            var c = new SegmentPlan();
+            foreach (var a in Plan.ChoiceAnswers) c.AnswerChoice(a.ChoiceId, a.Option);
+            Plan = c;
+        }
 
         // ------------------------------------------------------------ lineup, tactic, league (Story 004)
 
@@ -535,6 +592,7 @@ namespace EsportsManager.Session
             }
             for (int i = 0; i < src.AcceptedOfferIds.Count; i++) if (i != skipOffer) c.AcceptOffer(src.AcceptedOfferIds[i]);
             c.SponsorPoints = src.SponsorPoints;
+            foreach (var a in src.ChoiceAnswers) c.AnswerChoice(a.ChoiceId, a.Option);
             return c;
         }
 

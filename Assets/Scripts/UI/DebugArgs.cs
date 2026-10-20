@@ -3,7 +3,7 @@ using System;
 namespace EsportsManager.UI
 {
     /// <summary>The state the player build should present at launch (debug / screenshot use).</summary>
-    public enum DemoState { Main, Card, Assign, Offer, Summary, Lineup, Report, Standings, Name, EventPrep, Regular, Bracket, FinalsQual }
+    public enum DemoState { Main, Card, Assign, Offer, Summary, Lineup, Report, Standings, Name, EventPrep, Regular, Bracket, FinalsQual, Choice, Events }
 
     /// <summary>
     /// Debug launch arguments of the built player, all parsed here:
@@ -18,6 +18,9 @@ namespace EsportsManager.UI
     /// <c>regular</c> = regular-season result (splits); <c>bracket</c> = event result (playoffs played, through the playoff prep
     /// when the club is seeded); <c>report</c> = the same result screen showing only the detailed series reports;
     /// <c>finals-qual</c> = finals prep with the qualification table (default 12 segments).
+    /// STORY 006: <c>choice</c> = main screen with the two-choice pop-up open; <c>events</c> = settlement summary with several
+    /// event cards (a bad money event and a choice result). Both search seeds from <c>--seed</c> (default
+    /// <see cref="DemoSeeds.ChoiceDemoSeed"/> / <see cref="DemoSeeds.EventsDemoSeed"/>) upwards, see <see cref="DemoSeeds"/>.
     /// Without <c>--demo</c> the game starts at the naming screen; every other demo skips it and keeps the default club name.</item>
     /// <item><c>--segments N</c> auto-play N scripted segments before presenting (events of earlier segments are auto-played
     /// with the scripted lineup - debug only, never in normal play).</item>

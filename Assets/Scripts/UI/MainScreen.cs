@@ -178,6 +178,8 @@ namespace EsportsManager.UI
                 r1.Add(tog);
             }
             else r1.Add(Tag(c.IsStarter ? UiStrings.Starter : UiStrings.Bench, c.IsStarter ? UiKit.Accent : UiKit.PanelLight));
+            bool onLeave = ui.IsOnLeave(c.Id);
+            if (onLeave) { var lt = Tag(UiStrings.OnLeaveTag, UiKit.Warn); lt.name = "on-leave-" + c.Id; r1.Add(lt); }
             r1.Add(UiKit.Spacer());
             r1.Add(UiKit.Lbl(string.Format(UiStrings.AgeFormat, c.Age), 13, UiKit.TextDim));
             card.Add(r1);
@@ -228,11 +230,12 @@ namespace EsportsManager.UI
 
             var a2 = UiKit.Row(28);
             long pid = c.Id;
-            a2.Add(UiKit.Btn(UiStrings.Stream, () => ui.Stream(pid), UiKit.Accent));
-            a2.Add(UiKit.Btn(UiStrings.Rest, () => ui.Rest(pid), UiKit.Good));
+            // On leave (Story 006 choice): no action point may go to him; the buttons are disabled and the reason shown.
+            a2.Add(UiKit.Btn(UiStrings.Stream, () => ui.Stream(pid), UiKit.Accent, !onLeave));
+            a2.Add(UiKit.Btn(UiStrings.Rest, () => ui.Rest(pid), UiKit.Good, !onLeave));
             a2.Add(UiKit.Btn(UiStrings.Undo, () => ui.Undo(pid), UiKit.PanelLight, used > 0));
             a2.Add(UiKit.Spacer());
-            a2.Add(UiKit.Lbl(UiStrings.ClickDimToTrain, 11, UiKit.TextDim));
+            a2.Add(UiKit.Ellipsis(UiKit.Lbl(onLeave ? UiStrings.OnLeaveCardNote : UiStrings.ClickDimToTrain, 11, onLeave ? UiKit.Warn : UiKit.TextDim, onLeave)));
             card.Add(a2);
 
             if (pp != null)
@@ -324,6 +327,15 @@ namespace EsportsManager.UI
             int unanswered = ui.Session.UnansweredOffers().Count;
             if (unanswered > 0 && !ui.OfferPopupOpen)
                 bar.Add(UiKit.Btn(string.Format(UiStrings.OffersBadgeFormat, unanswered), ui.OpenOffers, UiKit.Warn));
+            // Choice events: "待决定 N" while any is unanswered, else a quiet button to review / change an answer.
+            if (!ui.ChoicePopupOpen && ui.Session.PendingChoices.Count > 0)
+            {
+                int open = ui.UnansweredChoices().Count;
+                var cb = UiKit.Btn(open > 0 ? string.Format(UiStrings.ChoicesBadgeFormat, open) : UiStrings.ChoicesReview, ui.OpenChoices,
+                    open > 0 ? UiKit.Warn : UiKit.PanelLight);
+                cb.name = "choices-badge";
+                bar.Add(cb);
+            }
 
             var info = UiKit.Lbl(string.Format(UiStrings.SponsorInfoFormat, pv.SponsorPoints, pv.SponsorAttemptsRemaining,
                 pv.FreeContractSlots, UiKit.Pct(pv.SponsorChanceBeforeNoise)), 12, UiKit.TextDim);

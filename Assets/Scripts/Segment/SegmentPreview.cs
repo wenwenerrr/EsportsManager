@@ -56,6 +56,12 @@ namespace EsportsManager.Segments
         WrongEventPhase,
         /// <summary>Story 004: lineup / tactic can only change while planning a segment or before an event stage.</summary>
         LineupLocked,
+        /// <summary>Story 006: a choice answer names a choice that is not pending (ChoiceId set).</summary>
+        UnknownChoice,
+        /// <summary>Story 006: a choice answer's option is out of range (ChoiceId, Limit = option count).</summary>
+        ChoiceOptionOutOfRange,
+        /// <summary>Story 006: the player is on leave by a choice answer (or default) and may get no action point (PlayerId, ChoiceId).</summary>
+        PlayerOnLeave,
     }
 
     /// <summary>Machine-readable plan error. Fields that do not apply to the code are null.</summary>
@@ -67,6 +73,8 @@ namespace EsportsManager.Segments
         public long? PlayerId;
         /// <summary>The offer involved, if any.</summary>
         public int? OfferId;
+        /// <summary>The choice event involved, if any (Story 006).</summary>
+        public int? ChoiceId;
         /// <summary>The training target involved, if any.</summary>
         public int? DimensionIndex;
         /// <summary>Points used (limit errors).</summary>

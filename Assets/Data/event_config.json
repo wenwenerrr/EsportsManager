@@ -1,0 +1,1305 @@
+{
+  "action_events": {
+    "p_event": 0.25,
+    "max_per_segment": 3
+  },
+  "good_chance": {
+    "base": 0.55,
+    "mood_weight": 0.003,
+    "stress_weight": 0.004,
+    "neutral": 50.0,
+    "min": 0.2,
+    "max": 0.85
+  },
+  "max_trait_modifier": 0.05,
+  "trait_modifiers": [
+    {
+      "trait": "optimistic",
+      "value": 0.05
+    },
+    {
+      "trait": "pessimistic",
+      "value": -0.05
+    },
+    {
+      "trait": "lively",
+      "value": 0.03
+    },
+    {
+      "trait": "reserved",
+      "value": -0.02
+    },
+    {
+      "trait": "diligent",
+      "value": 0.03
+    },
+    {
+      "trait": "lazy",
+      "value": -0.03
+    },
+    {
+      "trait": "resolute",
+      "value": 0.02
+    },
+    {
+      "trait": "fragile",
+      "value": -0.03
+    },
+    {
+      "trait": "clever",
+      "value": 0.02
+    },
+    {
+      "trait": "hesitant",
+      "value": -0.02
+    }
+  ],
+  "state_events": {
+    "max_per_segment": 1
+  },
+  "state_attempt_chance": 0.5,
+  "choice_events": {
+    "p_choice": 0.3,
+    "max_per_segment": 1
+  },
+  "events": [
+    {
+      "id": "train_breakthrough",
+      "kind": "action",
+      "tone": "good",
+      "action": "train",
+      "subject": "player",
+      "weight": 1.0,
+      "chance": 1.0,
+      "title_key": "evt.train_breakthrough.title",
+      "text_key": "evt.train_breakthrough.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "train_multiplier",
+          "target": "subject",
+          "min": 2.0,
+          "max": 2.0
+        },
+        {
+          "type": "potential",
+          "target": "subject",
+          "min": 5.0,
+          "max": 15.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "train_hot_hands",
+      "kind": "action",
+      "tone": "good",
+      "action": "train",
+      "subject": "player",
+      "weight": 4.0,
+      "chance": 1.0,
+      "title_key": "evt.train_hot_hands.title",
+      "text_key": "evt.train_hot_hands.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "train_add",
+          "target": "subject",
+          "min": 1.5,
+          "max": 2.5
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "train_coach_praise",
+      "kind": "action",
+      "tone": "good",
+      "action": "train",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.train_coach_praise.title",
+      "text_key": "evt.train_coach_praise.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "train_multiplier",
+          "target": "subject",
+          "min": 1.3,
+          "max": 1.3
+        },
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": 4.0,
+          "max": 8.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "train_scrim_crushed",
+      "kind": "action",
+      "tone": "bad",
+      "action": "train",
+      "subject": "player",
+      "weight": 4.0,
+      "chance": 1.0,
+      "title_key": "evt.train_scrim_crushed.title",
+      "text_key": "evt.train_scrim_crushed.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "stress",
+          "target": "subject",
+          "min": 6.0,
+          "max": 10.0
+        },
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": -5.0,
+          "max": -3.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "train_sore_wrist",
+      "kind": "action",
+      "tone": "bad",
+      "action": "train",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.train_sore_wrist.title",
+      "text_key": "evt.train_sore_wrist.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "train_multiplier",
+          "target": "subject",
+          "min": 0.5,
+          "max": 0.5
+        },
+        {
+          "type": "stress",
+          "target": "subject",
+          "min": 5.0,
+          "max": 5.0
+        },
+        {
+          "type": "funds",
+          "target": "club",
+          "min": -15000.0,
+          "max": -7500.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "train_pc_broken",
+      "kind": "action",
+      "tone": "bad",
+      "action": "train",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.train_pc_broken.title",
+      "text_key": "evt.train_pc_broken.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "train_multiplier",
+          "target": "subject",
+          "min": 0.7,
+          "max": 0.7
+        },
+        {
+          "type": "funds",
+          "target": "club",
+          "min": -30000.0,
+          "max": -12500.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "stream_viral",
+      "kind": "action",
+      "tone": "good",
+      "action": "stream",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.stream_viral.title",
+      "text_key": "evt.stream_viral.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "stream_multiplier",
+          "target": "subject",
+          "min": 2.0,
+          "max": 2.0
+        },
+        {
+          "type": "player_popularity",
+          "target": "subject",
+          "min": 3.0,
+          "max": 6.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "stream_big_tipper",
+      "kind": "action",
+      "tone": "good",
+      "action": "stream",
+      "subject": "player",
+      "weight": 2.0,
+      "chance": 1.0,
+      "title_key": "evt.stream_big_tipper.title",
+      "text_key": "evt.stream_big_tipper.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "funds",
+          "target": "club",
+          "min": 3000.0,
+          "max": 8000.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "stream_fan_art",
+      "kind": "action",
+      "tone": "good",
+      "action": "stream",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.stream_fan_art.title",
+      "text_key": "evt.stream_fan_art.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": 5.0,
+          "max": 8.0
+        },
+        {
+          "type": "player_popularity",
+          "target": "subject",
+          "min": 1.0,
+          "max": 2.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "stream_slip",
+      "kind": "action",
+      "tone": "bad",
+      "action": "stream",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.stream_slip.title",
+      "text_key": "evt.stream_slip.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "player_popularity",
+          "target": "subject",
+          "min": -4.0,
+          "max": -2.0
+        },
+        {
+          "type": "stress",
+          "target": "subject",
+          "min": 4.0,
+          "max": 6.0
+        },
+        {
+          "type": "club_popularity",
+          "target": "club",
+          "min": -1.0,
+          "max": -1.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "stream_trolls",
+      "kind": "action",
+      "tone": "bad",
+      "action": "stream",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.stream_trolls.title",
+      "text_key": "evt.stream_trolls.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": -12.0,
+          "max": -8.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "stream_platform_fine",
+      "kind": "action",
+      "tone": "bad",
+      "action": "stream",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.stream_platform_fine.title",
+      "text_key": "evt.stream_platform_fine.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "stream_multiplier",
+          "target": "subject",
+          "min": 0.5,
+          "max": 0.5
+        },
+        {
+          "type": "funds",
+          "target": "club",
+          "min": -20000.0,
+          "max": -10000.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "rest_slept_well",
+      "kind": "action",
+      "tone": "good",
+      "action": "rest",
+      "subject": "player",
+      "weight": 4.0,
+      "chance": 1.0,
+      "title_key": "evt.rest_slept_well.title",
+      "text_key": "evt.rest_slept_well.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "stress",
+          "target": "subject",
+          "min": -12.0,
+          "max": -8.0
+        },
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": 3.0,
+          "max": 5.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "rest_family_visit",
+      "kind": "action",
+      "tone": "good",
+      "action": "rest",
+      "subject": "player",
+      "weight": 2.0,
+      "chance": 1.0,
+      "title_key": "evt.rest_family_visit.title",
+      "text_key": "evt.rest_family_visit.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": 6.0,
+          "max": 10.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "rest_secret_ranked",
+      "kind": "action",
+      "tone": "bad",
+      "action": "rest",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.rest_secret_ranked.title",
+      "text_key": "evt.rest_secret_ranked.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "rest_multiplier",
+          "target": "subject",
+          "min": 0.5,
+          "max": 0.5
+        },
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": 2.0,
+          "max": 2.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "rest_food_poisoning",
+      "kind": "action",
+      "tone": "bad",
+      "action": "rest",
+      "subject": "player",
+      "weight": 2.0,
+      "chance": 1.0,
+      "title_key": "evt.rest_food_poisoning.title",
+      "text_key": "evt.rest_food_poisoning.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "rest_multiplier",
+          "target": "subject",
+          "min": 0.6,
+          "max": 0.6
+        },
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": -4.0,
+          "max": -4.0
+        },
+        {
+          "type": "funds",
+          "target": "club",
+          "min": -15000.0,
+          "max": -7500.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "biz_ad_viral",
+      "kind": "action",
+      "tone": "good",
+      "action": "business",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.biz_ad_viral.title",
+      "text_key": "evt.biz_ad_viral.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "player_popularity",
+          "target": "subject",
+          "min": 3.0,
+          "max": 5.0
+        },
+        {
+          "type": "club_popularity",
+          "target": "club",
+          "min": 1.0,
+          "max": 2.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "biz_bonus",
+      "kind": "action",
+      "tone": "good",
+      "action": "business",
+      "subject": "player",
+      "weight": 2.0,
+      "chance": 1.0,
+      "title_key": "evt.biz_bonus.title",
+      "text_key": "evt.biz_bonus.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "business_multiplier",
+          "target": "subject",
+          "min": 1.5,
+          "max": 1.5
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "biz_exhausting_shoot",
+      "kind": "action",
+      "tone": "bad",
+      "action": "business",
+      "subject": "player",
+      "weight": 4.0,
+      "chance": 1.0,
+      "title_key": "evt.biz_exhausting_shoot.title",
+      "text_key": "evt.biz_exhausting_shoot.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "stress",
+          "target": "subject",
+          "min": 6.0,
+          "max": 10.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "biz_contract_penalty",
+      "kind": "action",
+      "tone": "bad",
+      "action": "business",
+      "subject": "player",
+      "weight": 2.0,
+      "chance": 1.0,
+      "title_key": "evt.biz_contract_penalty.title",
+      "text_key": "evt.biz_contract_penalty.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "funds",
+          "target": "club",
+          "min": -30000.0,
+          "max": -15000.0
+        },
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": -3.0,
+          "max": -3.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "sponsor_boss_dinner",
+      "kind": "action",
+      "tone": "good",
+      "action": "sponsor",
+      "subject": "team",
+      "weight": 4.0,
+      "chance": 1.0,
+      "title_key": "evt.sponsor_boss_dinner.title",
+      "text_key": "evt.sponsor_boss_dinner.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "sponsor_chance_add",
+          "target": "subject",
+          "min": 0.15,
+          "max": 0.15
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "sponsor_deposit",
+      "kind": "action",
+      "tone": "good",
+      "action": "sponsor",
+      "subject": "team",
+      "weight": 1.0,
+      "chance": 1.0,
+      "title_key": "evt.sponsor_deposit.title",
+      "text_key": "evt.sponsor_deposit.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "funds",
+          "target": "club",
+          "min": 5000.0,
+          "max": 10000.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "sponsor_stood_up",
+      "kind": "action",
+      "tone": "bad",
+      "action": "sponsor",
+      "subject": "team",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.sponsor_stood_up.title",
+      "text_key": "evt.sponsor_stood_up.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "void_action",
+          "target": "subject",
+          "min": 0.0,
+          "max": 0.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "sponsor_dinner_bill",
+      "kind": "action",
+      "tone": "bad",
+      "action": "sponsor",
+      "subject": "team",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.sponsor_dinner_bill.title",
+      "text_key": "evt.sponsor_dinner_bill.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "funds",
+          "target": "club",
+          "min": -20000.0,
+          "max": -10000.0
+        },
+        {
+          "type": "sponsor_chance_add",
+          "target": "subject",
+          "min": -0.05,
+          "max": -0.05
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_breakdown",
+      "kind": "state",
+      "tone": "bad",
+      "action": "",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 0.6,
+      "title_key": "evt.state_breakdown.title",
+      "text_key": "evt.state_breakdown.text",
+      "conditions": [
+        {
+          "type": "stress_above",
+          "value": 80.0,
+          "trait": ""
+        }
+      ],
+      "effects": [
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": -20.0,
+          "max": -15.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_pair_quarrel",
+      "kind": "state",
+      "tone": "bad",
+      "action": "",
+      "subject": "pair",
+      "weight": 3.0,
+      "chance": 0.4,
+      "title_key": "evt.state_pair_quarrel.title",
+      "text_key": "evt.state_pair_quarrel.text",
+      "conditions": [
+        {
+          "type": "pair_bad_compat",
+          "value": -0.3,
+          "trait": ""
+        }
+      ],
+      "effects": [
+        {
+          "type": "familiarity",
+          "target": "subject",
+          "min": -12.0,
+          "max": -8.0
+        },
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": -3.0,
+          "max": -3.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_breakthrough",
+      "kind": "state",
+      "tone": "good",
+      "action": "",
+      "subject": "starter",
+      "weight": 2.0,
+      "chance": 0.25,
+      "title_key": "evt.state_breakthrough.title",
+      "text_key": "evt.state_breakthrough.text",
+      "conditions": [
+        {
+          "type": "mood_above",
+          "value": 75.0,
+          "trait": ""
+        },
+        {
+          "type": "stress_below",
+          "value": 50.0,
+          "trait": ""
+        }
+      ],
+      "effects": [
+        {
+          "type": "potential",
+          "target": "subject",
+          "min": 5.0,
+          "max": 15.0
+        },
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": 3.0,
+          "max": 3.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_diligent_grind",
+      "kind": "state",
+      "tone": "good",
+      "action": "",
+      "subject": "player",
+      "weight": 1.0,
+      "chance": 0.15,
+      "title_key": "evt.state_diligent_grind.title",
+      "text_key": "evt.state_diligent_grind.text",
+      "conditions": [
+        {
+          "type": "trait_has",
+          "value": 0.0,
+          "trait": "diligent"
+        },
+        {
+          "type": "mood_above",
+          "value": 60.0,
+          "trait": ""
+        }
+      ],
+      "effects": [
+        {
+          "type": "potential",
+          "target": "subject",
+          "min": 5.0,
+          "max": 10.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_slump",
+      "kind": "state",
+      "tone": "bad",
+      "action": "",
+      "subject": "player",
+      "weight": 2.0,
+      "chance": 0.4,
+      "title_key": "evt.state_slump.title",
+      "text_key": "evt.state_slump.text",
+      "conditions": [
+        {
+          "type": "stress_above",
+          "value": 70.0,
+          "trait": ""
+        },
+        {
+          "type": "mood_below",
+          "value": 40.0,
+          "trait": ""
+        }
+      ],
+      "effects": [
+        {
+          "type": "potential",
+          "target": "subject",
+          "min": -8.0,
+          "max": -3.0
+        },
+        {
+          "type": "mood",
+          "target": "subject",
+          "min": -5.0,
+          "max": -5.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_losing_streak",
+      "kind": "state",
+      "tone": "bad",
+      "action": "",
+      "subject": "team",
+      "weight": 2.0,
+      "chance": 0.5,
+      "title_key": "evt.state_losing_streak.title",
+      "text_key": "evt.state_losing_streak.text",
+      "conditions": [
+        {
+          "type": "recent_loss_streak",
+          "value": 3.0,
+          "trait": ""
+        }
+      ],
+      "effects": [
+        {
+          "type": "mood",
+          "target": "starters",
+          "min": -8.0,
+          "max": -5.0
+        },
+        {
+          "type": "club_popularity",
+          "target": "club",
+          "min": -2.0,
+          "max": -2.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_win_hype",
+      "kind": "state",
+      "tone": "good",
+      "action": "",
+      "subject": "team",
+      "weight": 2.0,
+      "chance": 0.4,
+      "title_key": "evt.state_win_hype.title",
+      "text_key": "evt.state_win_hype.text",
+      "conditions": [
+        {
+          "type": "recent_win_rate_above",
+          "value": 65.0,
+          "trait": ""
+        }
+      ],
+      "effects": [
+        {
+          "type": "club_popularity",
+          "target": "club",
+          "min": 2.0,
+          "max": 4.0
+        },
+        {
+          "type": "funds",
+          "target": "club",
+          "min": 5000.0,
+          "max": 10000.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_team_bonding",
+      "kind": "state",
+      "tone": "good",
+      "action": "",
+      "subject": "team",
+      "weight": 2.0,
+      "chance": 0.3,
+      "title_key": "evt.state_team_bonding.title",
+      "text_key": "evt.state_team_bonding.text",
+      "conditions": [
+        {
+          "type": "chemistry_below",
+          "value": 40.0,
+          "trait": ""
+        }
+      ],
+      "effects": [
+        {
+          "type": "familiarity",
+          "target": "starters",
+          "min": 4.0,
+          "max": 6.0
+        },
+        {
+          "type": "funds",
+          "target": "club",
+          "min": -20000.0,
+          "max": -12500.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_fan_meetup_loss",
+      "kind": "state",
+      "tone": "bad",
+      "action": "",
+      "subject": "team",
+      "weight": 2.0,
+      "chance": 0.25,
+      "title_key": "evt.state_fan_meetup_loss.title",
+      "text_key": "evt.state_fan_meetup_loss.text",
+      "conditions": [
+        {
+          "type": "club_popularity_at_least",
+          "value": 40.0,
+          "trait": ""
+        }
+      ],
+      "effects": [
+        {
+          "type": "funds",
+          "target": "club",
+          "min": -30000.0,
+          "max": -15000.0
+        },
+        {
+          "type": "club_popularity",
+          "target": "club",
+          "min": 1.0,
+          "max": 1.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_fire_inspection",
+      "kind": "state",
+      "tone": "bad",
+      "action": "",
+      "subject": "team",
+      "weight": 1.0,
+      "chance": 0.3,
+      "title_key": "evt.state_fire_inspection.title",
+      "text_key": "evt.state_fire_inspection.text",
+      "conditions": [],
+      "effects": [
+        {
+          "type": "funds",
+          "target": "club",
+          "min": -15000.0,
+          "max": -7500.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "state_medical",
+      "kind": "state",
+      "tone": "bad",
+      "action": "",
+      "subject": "starter",
+      "weight": 2.0,
+      "chance": 0.4,
+      "title_key": "evt.state_medical.title",
+      "text_key": "evt.state_medical.text",
+      "conditions": [
+        {
+          "type": "stress_above",
+          "value": 75.0,
+          "trait": ""
+        }
+      ],
+      "effects": [
+        {
+          "type": "funds",
+          "target": "club",
+          "min": -25000.0,
+          "max": -12500.0
+        },
+        {
+          "type": "stress",
+          "target": "subject",
+          "min": 5.0,
+          "max": 5.0
+        }
+      ],
+      "options": [],
+      "default_option": 0
+    },
+    {
+      "id": "choice_home_leave",
+      "kind": "choice",
+      "tone": "neutral",
+      "action": "",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.choice_home_leave.title",
+      "text_key": "evt.choice_home_leave.text",
+      "conditions": [],
+      "effects": [],
+      "options": [
+        {
+          "label_key": "evt.choice_home_leave.opt0",
+          "effects": [
+            {
+              "type": "on_leave",
+              "target": "subject",
+              "min": 0.0,
+              "max": 0.0
+            },
+            {
+              "type": "mood",
+              "target": "subject",
+              "min": 10.0,
+              "max": 15.0
+            },
+            {
+              "type": "stress",
+              "target": "subject",
+              "min": -10.0,
+              "max": -10.0
+            }
+          ]
+        },
+        {
+          "label_key": "evt.choice_home_leave.opt1",
+          "effects": [
+            {
+              "type": "mood",
+              "target": "subject",
+              "min": -10.0,
+              "max": -6.0
+            }
+          ]
+        }
+      ],
+      "default_option": 1
+    },
+    {
+      "id": "choice_extra_stream",
+      "kind": "choice",
+      "tone": "neutral",
+      "action": "",
+      "subject": "player",
+      "weight": 3.0,
+      "chance": 1.0,
+      "title_key": "evt.choice_extra_stream.title",
+      "text_key": "evt.choice_extra_stream.text",
+      "conditions": [],
+      "effects": [],
+      "options": [
+        {
+          "label_key": "evt.choice_extra_stream.opt0",
+          "effects": [
+            {
+              "type": "funds",
+              "target": "club",
+              "min": 6000.0,
+              "max": 10000.0
+            },
+            {
+              "type": "stress",
+              "target": "subject",
+              "min": 6.0,
+              "max": 8.0
+            }
+          ]
+        },
+        {
+          "label_key": "evt.choice_extra_stream.opt1",
+          "effects": [
+            {
+              "type": "club_popularity",
+              "target": "club",
+              "min": -2.0,
+              "max": -1.0
+            }
+          ]
+        }
+      ],
+      "default_option": 1
+    },
+    {
+      "id": "choice_equipment_upgrade",
+      "kind": "choice",
+      "tone": "neutral",
+      "action": "",
+      "subject": "team",
+      "weight": 2.0,
+      "chance": 1.0,
+      "title_key": "evt.choice_equipment_upgrade.title",
+      "text_key": "evt.choice_equipment_upgrade.text",
+      "conditions": [],
+      "effects": [],
+      "options": [
+        {
+          "label_key": "evt.choice_equipment_upgrade.opt0",
+          "effects": [
+            {
+              "type": "funds",
+              "target": "club",
+              "min": -50000.0,
+              "max": -37500.0
+            },
+            {
+              "type": "mood",
+              "target": "roster",
+              "min": 4.0,
+              "max": 4.0
+            }
+          ]
+        },
+        {
+          "label_key": "evt.choice_equipment_upgrade.opt1",
+          "effects": [
+            {
+              "type": "mood",
+              "target": "roster",
+              "min": -2.0,
+              "max": -2.0
+            }
+          ]
+        }
+      ],
+      "default_option": 1
+    },
+    {
+      "id": "choice_variety_show",
+      "kind": "choice",
+      "tone": "neutral",
+      "action": "",
+      "subject": "player",
+      "weight": 2.0,
+      "chance": 1.0,
+      "title_key": "evt.choice_variety_show.title",
+      "text_key": "evt.choice_variety_show.text",
+      "conditions": [],
+      "effects": [],
+      "options": [
+        {
+          "label_key": "evt.choice_variety_show.opt0",
+          "effects": [
+            {
+              "type": "player_popularity",
+              "target": "subject",
+              "min": 4.0,
+              "max": 6.0
+            },
+            {
+              "type": "club_popularity",
+              "target": "club",
+              "min": 1.0,
+              "max": 2.0
+            },
+            {
+              "type": "stress",
+              "target": "subject",
+              "min": 8.0,
+              "max": 10.0
+            },
+            {
+              "type": "funds",
+              "target": "club",
+              "min": 3000.0,
+              "max": 5000.0
+            }
+          ]
+        },
+        {
+          "label_key": "evt.choice_variety_show.opt1",
+          "effects": []
+        }
+      ],
+      "default_option": 1
+    },
+    {
+      "id": "choice_teammate_conflict",
+      "kind": "choice",
+      "tone": "neutral",
+      "action": "",
+      "subject": "pair",
+      "weight": 2.0,
+      "chance": 1.0,
+      "title_key": "evt.choice_teammate_conflict.title",
+      "text_key": "evt.choice_teammate_conflict.text",
+      "conditions": [
+        {
+          "type": "pair_bad_compat",
+          "value": -0.3,
+          "trait": ""
+        }
+      ],
+      "effects": [],
+      "options": [
+        {
+          "label_key": "evt.choice_teammate_conflict.opt0",
+          "effects": [
+            {
+              "type": "mood",
+              "target": "subject",
+              "min": -3.0,
+              "max": -3.0
+            },
+            {
+              "type": "familiarity",
+              "target": "subject",
+              "min": 5.0,
+              "max": 5.0
+            }
+          ]
+        },
+        {
+          "label_key": "evt.choice_teammate_conflict.opt1",
+          "effects": [
+            {
+              "type": "familiarity",
+              "target": "subject",
+              "min": -6.0,
+              "max": -6.0
+            }
+          ]
+        }
+      ],
+      "default_option": 1
+    }
+  ]
+}

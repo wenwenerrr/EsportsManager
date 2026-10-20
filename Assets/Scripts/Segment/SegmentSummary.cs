@@ -65,6 +65,8 @@ namespace EsportsManager.Segments
         public float Chance;
         /// <summary>True when a contract was won.</summary>
         public bool Success;
+        /// <summary>Story 006: an event voided the attempt (no draw, no chance; the point was wasted).</summary>
+        public bool Voided;
     }
 
     /// <summary>Everything one segment did: for the UI and for tests.</summary>
@@ -94,6 +96,12 @@ namespace EsportsManager.Segments
         public int SponsorshipIncome;
         /// <summary>Prize money passed in the context, yuan (event prizes are paid at event end, see the session's EventRecord).</summary>
         public int PrizeMoney;
+        /// <summary>Story 006: events of this segment in order: choices, action events (point order), state events.</summary>
+        public List<EsportsManager.Events.EventOccurrence> Events = new List<EsportsManager.Events.EventOccurrence>();
+        /// <summary>Story 006: event income booked this segment (numbers.md 4.10), yuan >= 0.</summary>
+        public int EventIncome;
+        /// <summary>Story 006: event expenses booked this segment (numbers.md 4.10), yuan >= 0.</summary>
+        public int EventExpenses;
         /// <summary>The team's settlement report (income, expenses, salary share, net, funds, win rate, club popularity).</summary>
         public SegmentReport Report;
     }

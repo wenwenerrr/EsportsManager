@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using EsportsManager.Events;
 using EsportsManager.Matches;
 using EsportsManager.Segments;
 using EsportsManager.Session;
@@ -56,7 +58,7 @@ namespace EsportsManager.UI
             Root = root; Session = session;
             _clock = clock ?? (() => Time.unscaledTimeAsDouble);
             Stack.Reset(MainUiScreen());
-            if (session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen());
+            PushStartPopups();
         }
 
         /// <summary>True while flow-advancing actions are ignored (just after a screen change).</summary>
@@ -79,8 +81,15 @@ namespace EsportsManager.UI
         /// <summary>Rebuilds the visible screens.</summary>
         public void Refresh()
         {
-            // The pop-up closes itself once every offer is answered.
-            if (Stack.IsTop(ScreenId.OfferPopup) && (CardsOnly || Session.UnansweredOffers().Count == 0)) Stack.Pop();
+            // Pop-ups close themselves once there is nothing left to show (the choice pop-up closes after the last answer,
+            // see AnswerChoice; it can be reopened to change an answer).
+            bool popped = true;
+            while (popped)
+            {
+                popped = false;
+                if (Stack.IsTop(ScreenId.ChoicePopup) && (CardsOnly || Session.PendingChoices.Count == 0)) popped = Stack.Pop();
+                else if (Stack.IsTop(ScreenId.OfferPopup) && (CardsOnly || Session.UnansweredOffers().Count == 0)) popped = Stack.Pop();
+            }
             Stack.Render(Root);
         }
 
@@ -92,6 +101,83 @@ namespace EsportsManager.UI
 
         private UiScreen MainUiScreen() => new UiScreen(ScreenId.Main, false, r => MainScreen.Build(this, r));
         private UiScreen OfferUiScreen() => new UiScreen(ScreenId.OfferPopup, true, BuildOfferPopup);
+        private UiScreen ChoiceUiScreen() => new UiScreen(ScreenId.ChoicePopup, true, r => ChoicePopup.Build(this, r));
+
+        /// <summary>
+        /// Segment start: the business pop-up, then the choice pop-up ON TOP of it (choices are shown first; the offer
+        /// pop-up only draws while no choice pop-up is above it, so the two never overlap).
+        /// </summary>
+        private void PushStartPopups()
+        {
+            ChoiceError = null;
+            if (Session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen());
+            if (UnansweredChoices().Count > 0) Stack.Push(ChoiceUiScreen());
+        }
+
+        // ---- choice events (Story 006)
+        /// <summary>Refusal text of the last failed answer (shown in the choice pop-up), else null.</summary>
+        public string ChoiceError;
+        /// <summary>Choice pop-up visible.</summary>
+        public bool ChoicePopupOpen => Stack.Contains(ScreenId.ChoicePopup);
+
+        /// <summary>Pending choices the draft plan does not answer yet, in order.</summary>
+        public List<PendingChoice> UnansweredChoices()
+        {
+            var list = new List<PendingChoice>();
+            foreach (var c in Session.PendingChoices) if (!Session.IsChoiceAnswered(c.Id)) list.Add(c);
+            return list;
+        }
+
+        /// <summary>The choice the pop-up shows: the first unanswered one, else the first one (reviewing an answer).</summary>
+        public PendingChoice ShownChoice()
+        {
+            var open = UnansweredChoices();
+            if (open.Count > 0) return open[0];
+            return Session.PendingChoices.Count > 0 ? Session.PendingChoices[0] : null;
+        }
+
+        /// <summary>True when the option that will apply (answer, else default) puts the player on leave this segment.</summary>
+        public bool IsOnLeave(long playerId)
+        {
+            foreach (var c in Session.PendingChoices)
+            {
+                if (c.PlayerId != playerId) continue;
+                int o = Session.EffectiveChoiceOption(c.Id);
+                if (o >= 0 && o < c.Options.Count && c.Options[o].PutsOnLeave) return true;
+            }
+            return false;
+        }
+
+        /// <summary>An event text from the session's text table with player names filled in.</summary>
+        public string EventText(string key, long? player, long? partner)
+        {
+            string t = Session.EventTexts != null ? Session.EventTexts.Get(key) : "[" + key + "]";
+            // Display only: no-break spaces, because UI Toolkit otherwise breaks the line at the space after a leading player
+            // name and leaves the name alone on the first line (observed in the 1512x950 capture).
+            return EventEffectText.Fill(t, player.HasValue ? Session.PlayerName(player.Value) : "", partner.HasValue ? Session.PlayerName(partner.Value) : "")
+                .Replace(' ', '\u00A0');
+        }
+
+        /// <summary>Answers a choice through the session; a refusal (e.g. leave vs. planned actions) stays in the pop-up.</summary>
+        public void AnswerChoice(PendingChoice c, int option)
+        {
+            if (!Session.TryAnswerChoice(c.Id, option, out var e)) { ChoiceError = ErrorText(e); Say(ChoiceError, true); return; }
+            ChoiceError = null;
+            if (UnansweredChoices().Count == 0 && Stack.IsTop(ScreenId.ChoicePopup)) Stack.Pop();
+            Say(string.Format(UiStrings.ChoiceAnsweredFormat, EventText(c.Options[option].LabelKey, c.PlayerId, c.PartnerId)), false);
+        }
+
+        /// <summary>Closes every pop-up (debug demos that show the bare main screen).</summary>
+        public void ClosePopups()
+        {
+            while (Stack.IsTop(ScreenId.OfferPopup) || Stack.IsTop(ScreenId.ChoicePopup)) Stack.Pop();
+            Refresh();
+        }
+
+        /// <summary>Opens the choice pop-up (badge).</summary>
+        public void OpenChoices() { ChoiceError = null; if (!ChoicePopupOpen && Session.PendingChoices.Count > 0) Stack.Push(ChoiceUiScreen()); Refresh(); }
+        /// <summary>Closes the choice pop-up; unanswered choices keep their default.</summary>
+        public void LaterChoices() { ChoiceError = null; if (Stack.IsTop(ScreenId.ChoicePopup)) Stack.Pop(); Refresh(); }
         private UiScreen PrepUiScreen() => new UiScreen(ScreenId.EventPrep, false, r => EventPrepScreen.Build(this, r));
         private UiScreen RegularUiScreen() => new UiScreen(ScreenId.RegularResult, false, r => RegularResultScreen.Build(this, r));
         private UiScreen BracketUiScreen() => new UiScreen(ScreenId.Bracket, false, r => BracketScreen.Build(this, r));
@@ -157,7 +243,7 @@ namespace EsportsManager.UI
             if (!Session.TryBeginNext(out var e)) { Say(ErrorText(e), true); return; }
             MarkScreenChange();
             Stack.Reset(MainUiScreen());
-            if (Session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen());
+            PushStartPopups();
             Message = UiStrings.Hint; MessageIsError = false;
             Refresh();
         }
@@ -203,7 +289,7 @@ namespace EsportsManager.UI
             }
             MarkScreenChange();
             Stack.Reset(MainUiScreen());
-            if (Session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen());
+            PushStartPopups();
             Message = UiStrings.Hint; MessageIsError = false;
             Refresh();
             int now = Session.Season?.Year ?? 1;
@@ -229,7 +315,7 @@ namespace EsportsManager.UI
         {
             string name = Session.SetClubName(raw);
             Stack.Reset(MainUiScreen());
-            if (Session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen());
+            PushStartPopups();
             Message = string.Format(UiStrings.ClubNamedFormat, name); MessageIsError = false;
             Refresh();
         }
@@ -267,6 +353,7 @@ namespace EsportsManager.UI
 
         private void BuildOfferPopup(VisualElement root)
         {
+            if (ChoicePopupOpen) return; // a choice pop-up above it is shown first
             var offers = Session.UnansweredOffers();
             var o = offers[0];
             var overlay = new VisualElement();

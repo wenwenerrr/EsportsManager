@@ -1,0 +1,364 @@
+{
+  "texts": [
+    {
+      "key": "evt.train_breakthrough.title",
+      "text": "突然开窍"
+    },
+    {
+      "key": "evt.train_breakthrough.text",
+      "text": "{player} 练着练着忽然一拍大腿：“原来是这么回事！”这一练顶两练，天花板好像也高了一截。"
+    },
+    {
+      "key": "evt.train_hot_hands.title",
+      "text": "手感火热"
+    },
+    {
+      "key": "evt.train_hot_hands.text",
+      "text": "{player} 今天手感好得离谱，练的那一项肉眼可见地进步了。"
+    },
+    {
+      "key": "evt.train_coach_praise.title",
+      "text": "教练点名表扬"
+    },
+    {
+      "key": "evt.train_coach_praise.text",
+      "text": "教练当着全队夸了 {player} 一句，他练得更起劲了。"
+    },
+    {
+      "key": "evt.train_scrim_crushed.title",
+      "text": "训练赛被虐"
+    },
+    {
+      "key": "evt.train_scrim_crushed.text",
+      "text": "{player} 在训练赛里被对面按在地上摩擦，复盘时脸都是黑的。"
+    },
+    {
+      "key": "evt.train_sore_wrist.title",
+      "text": "手腕酸痛"
+    },
+    {
+      "key": "evt.train_sore_wrist.text",
+      "text": "{player} 练太久手腕疼，去做了理疗，这次训练只练了一半。"
+    },
+    {
+      "key": "evt.train_pc_broken.title",
+      "text": "电脑冒烟了"
+    },
+    {
+      "key": "evt.train_pc_broken.text",
+      "text": "{player} 的电脑在关键时刻冒出一股青烟。换新主机花了一笔钱，训练也被耽误了。"
+    },
+    {
+      "key": "evt.stream_viral.title",
+      "text": "直播出圈了"
+    },
+    {
+      "key": "evt.stream_viral.text",
+      "text": "{player} 直播里一个神操作被剪成短视频疯传，直播间挤满了新观众。"
+    },
+    {
+      "key": "evt.stream_big_tipper.title",
+      "text": "榜一大哥"
+    },
+    {
+      "key": "evt.stream_big_tipper.text",
+      "text": "一位神秘观众在 {player} 的直播间连刷礼物，留言只有四个字：“好好打球。”"
+    },
+    {
+      "key": "evt.stream_fan_art.title",
+      "text": "粉丝送画"
+    },
+    {
+      "key": "evt.stream_fan_art.text",
+      "text": "粉丝给 {player} 画了一张帅气的同人图，他开心了一整晚。"
+    },
+    {
+      "key": "evt.stream_slip.title",
+      "text": "直播口误"
+    },
+    {
+      "key": "evt.stream_slip.text",
+      "text": "{player} 直播时说错话被截图，评论区吵成一锅粥。"
+    },
+    {
+      "key": "evt.stream_trolls.title",
+      "text": "黑粉带节奏"
+    },
+    {
+      "key": "evt.stream_trolls.text",
+      "text": "一群黑粉涌进 {player} 的直播间刷屏嘲讽，他下播后一句话也不想说。"
+    },
+    {
+      "key": "evt.stream_platform_fine.title",
+      "text": "直播被罚款"
+    },
+    {
+      "key": "evt.stream_platform_fine.text",
+      "text": "{player} 直播时背景放了没有版权的歌，平台罚款，这场收入也打了折。"
+    },
+    {
+      "key": "evt.rest_slept_well.title",
+      "text": "睡了个好觉"
+    },
+    {
+      "key": "evt.rest_slept_well.text",
+      "text": "{player} 一觉睡到自然醒，整个人都轻松了。"
+    },
+    {
+      "key": "evt.rest_family_visit.title",
+      "text": "家人来探班"
+    },
+    {
+      "key": "evt.rest_family_visit.text",
+      "text": "{player} 的家人带着家乡菜来基地看他，他笑得合不拢嘴。"
+    },
+    {
+      "key": "evt.rest_secret_ranked.title",
+      "text": "偷偷打排位"
+    },
+    {
+      "key": "evt.rest_secret_ranked.text",
+      "text": "说好休息，{player} 却偷偷打了一整天排位。玩得挺开心，就是没休息好。"
+    },
+    {
+      "key": "evt.rest_food_poisoning.title",
+      "text": "吃坏肚子"
+    },
+    {
+      "key": "evt.rest_food_poisoning.text",
+      "text": "{player} 休息日吃了路边摊，进了趟医院，医药费俱乐部出。"
+    },
+    {
+      "key": "evt.biz_ad_viral.title",
+      "text": "广告爆了"
+    },
+    {
+      "key": "evt.biz_ad_viral.text",
+      "text": "{player} 拍的广告意外走红，选手和俱乐部都涨了一波人气。"
+    },
+    {
+      "key": "evt.biz_bonus.title",
+      "text": "甲方加钱"
+    },
+    {
+      "key": "evt.biz_bonus.text",
+      "text": "甲方对 {player} 的表现非常满意，主动把报酬提高了一半。"
+    },
+    {
+      "key": "evt.biz_exhausting_shoot.title",
+      "text": "拍摄太累"
+    },
+    {
+      "key": "evt.biz_exhausting_shoot.text",
+      "text": "广告拍了十几条才过，{player} 回到基地直接瘫在沙发上。"
+    },
+    {
+      "key": "evt.biz_contract_penalty.title",
+      "text": "迟到赔违约金"
+    },
+    {
+      "key": "evt.biz_contract_penalty.text",
+      "text": "{player} 拍摄迟到两小时，合同里写着要赔违约金。"
+    },
+    {
+      "key": "evt.sponsor_boss_dinner.title",
+      "text": "老板饭局"
+    },
+    {
+      "key": "evt.sponsor_boss_dinner.text",
+      "text": "饭桌上聊得很投机，对方老板说：“回去就让人拟合同。”"
+    },
+    {
+      "key": "evt.sponsor_deposit.title",
+      "text": "意向金到账"
+    },
+    {
+      "key": "evt.sponsor_deposit.text",
+      "text": "对方还没决定签不签长约，但先打来了一笔“意向金”。"
+    },
+    {
+      "key": "evt.sponsor_stood_up.title",
+      "text": "被放鸽子"
+    },
+    {
+      "key": "evt.sponsor_stood_up.text",
+      "text": "约好的赞助商临时说来不了了，白跑一趟。"
+    },
+    {
+      "key": "evt.sponsor_dinner_bill.title",
+      "text": "饭局你买单"
+    },
+    {
+      "key": "evt.sponsor_dinner_bill.text",
+      "text": "谈赞助的饭局，对方点了最贵的龙虾，最后是俱乐部买单。"
+    },
+    {
+      "key": "evt.state_breakdown.title",
+      "text": "情绪崩溃"
+    },
+    {
+      "key": "evt.state_breakdown.text",
+      "text": "压力太大了，{player} 训练时突然摔了键盘，躲进房间不出来。"
+    },
+    {
+      "key": "evt.state_pair_quarrel.title",
+      "text": "队友吵架"
+    },
+    {
+      "key": "evt.state_pair_quarrel.text",
+      "text": "{player} 和 {partner} 因为一波团战谁该先上吵了起来，两人现在谁也不理谁。"
+    },
+    {
+      "key": "evt.state_breakthrough.title",
+      "text": "开窍"
+    },
+    {
+      "key": "evt.state_breakthrough.text",
+      "text": "状态正好的 {player} 好像突然看懂了这个游戏，比以前更有潜力了。"
+    },
+    {
+      "key": "evt.state_diligent_grind.title",
+      "text": "苦练见效"
+    },
+    {
+      "key": "evt.state_diligent_grind.text",
+      "text": "勤奋的 {player} 每天最后一个离开训练室，终于练出了新东西。"
+    },
+    {
+      "key": "evt.state_slump.title",
+      "text": "陷入低谷"
+    },
+    {
+      "key": "evt.state_slump.text",
+      "text": "{player} 心情差、压力大，怎么打都不对劲，开始怀疑自己。"
+    },
+    {
+      "key": "evt.state_losing_streak.title",
+      "text": "连败挨骂"
+    },
+    {
+      "key": "evt.state_losing_streak.text",
+      "text": "连输几场，网上骂声一片，队员们都不敢看手机。"
+    },
+    {
+      "key": "evt.state_win_hype.title",
+      "text": "周边卖爆了"
+    },
+    {
+      "key": "evt.state_win_hype.text",
+      "text": "战绩亮眼，俱乐部的周边被抢购一空。"
+    },
+    {
+      "key": "evt.state_team_bonding.title",
+      "text": "团建"
+    },
+    {
+      "key": "evt.state_team_bonding.text",
+      "text": "大家默契不够，经理组织去吃了顿火锅。花了点钱，但关系近多了。"
+    },
+    {
+      "key": "evt.state_fan_meetup_loss.title",
+      "text": "粉丝见面会亏本"
+    },
+    {
+      "key": "evt.state_fan_meetup_loss.text",
+      "text": "办了场粉丝见面会，来的人比预想少一半，场地费照付。"
+    },
+    {
+      "key": "evt.state_fire_inspection.title",
+      "text": "消防检查罚款"
+    },
+    {
+      "key": "evt.state_fire_inspection.text",
+      "text": "消防检查发现基地的灭火器过期了，罚款。"
+    },
+    {
+      "key": "evt.state_medical.title",
+      "text": "腱鞘炎"
+    },
+    {
+      "key": "evt.state_medical.text",
+      "text": "{player} 的手腕查出了腱鞘炎，治疗费不便宜。"
+    },
+    {
+      "key": "evt.choice_home_leave.opt0",
+      "text": "同意（本赛段不能安排他的行动）"
+    },
+    {
+      "key": "evt.choice_home_leave.opt1",
+      "text": "拒绝"
+    },
+    {
+      "key": "evt.choice_home_leave.title",
+      "text": "想请假回家"
+    },
+    {
+      "key": "evt.choice_home_leave.text",
+      "text": "{player} 说家里有事，想请假回家一趟。"
+    },
+    {
+      "key": "evt.choice_extra_stream.opt0",
+      "text": "接受"
+    },
+    {
+      "key": "evt.choice_extra_stream.opt1",
+      "text": "拒绝"
+    },
+    {
+      "key": "evt.choice_extra_stream.title",
+      "text": "赞助商要求加场直播"
+    },
+    {
+      "key": "evt.choice_extra_stream.text",
+      "text": "赞助商希望 {player} 临时加一场带货直播。"
+    },
+    {
+      "key": "evt.choice_equipment_upgrade.opt0",
+      "text": "买！"
+    },
+    {
+      "key": "evt.choice_equipment_upgrade.opt1",
+      "text": "再等等"
+    },
+    {
+      "key": "evt.choice_equipment_upgrade.title",
+      "text": "要不要换新设备"
+    },
+    {
+      "key": "evt.choice_equipment_upgrade.text",
+      "text": "队员们说训练室的设备太旧了，想全换新的。"
+    },
+    {
+      "key": "evt.choice_variety_show.opt0",
+      "text": "去"
+    },
+    {
+      "key": "evt.choice_variety_show.opt1",
+      "text": "不去"
+    },
+    {
+      "key": "evt.choice_variety_show.title",
+      "text": "综艺节目邀请"
+    },
+    {
+      "key": "evt.choice_variety_show.text",
+      "text": "一档综艺节目想请 {player} 去当嘉宾。"
+    },
+    {
+      "key": "evt.choice_teammate_conflict.opt0",
+      "text": "各打五十大板"
+    },
+    {
+      "key": "evt.choice_teammate_conflict.opt1",
+      "text": "让他们自己解决"
+    },
+    {
+      "key": "evt.choice_teammate_conflict.title",
+      "text": "找你评理"
+    },
+    {
+      "key": "evt.choice_teammate_conflict.text",
+      "text": "{player} 和 {partner} 闹了矛盾，一起来找你评理。"
+    }
+  ]
+}

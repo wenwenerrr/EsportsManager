@@ -15,14 +15,16 @@ namespace EsportsManager.UI
         [SerializeField] private TextAsset teamConfig;
         [SerializeField] private TextAsset segmentConfig;
         [SerializeField] private TextAsset matchConfig;
+        [SerializeField] private TextAsset eventConfig;
+        [SerializeField] private TextAsset eventText;
 
         private GameSession _session;
         private GameUi _ui;
 
         /// <summary>Assigns the config assets (used by the editor setup script).</summary>
-        public void SetConfigs(TextAsset player, TextAsset team, TextAsset segment, TextAsset match)
+        public void SetConfigs(TextAsset player, TextAsset team, TextAsset segment, TextAsset match, TextAsset events, TextAsset texts)
         {
-            playerConfig = player; teamConfig = team; segmentConfig = segment; matchConfig = match;
+            playerConfig = player; teamConfig = team; segmentConfig = segment; matchConfig = match; eventConfig = events; eventText = texts;
         }
 
         // Unattended screenshot runs launch the player without focus; macOS pauses an unfocused player unless this is set.
@@ -42,9 +44,24 @@ namespace EsportsManager.UI
             int seed = args.Seed ?? (debugRun ? GameSession.DefaultSeed : new System.Random().Next(1, int.MaxValue));
             string match = matchConfig != null ? matchConfig.text : null;
             if (match == null) Debug.LogWarning("GameBootstrap: no match_config assigned; re-run SceneSetup. Playing without matches.");
+            string events = eventConfig != null ? eventConfig.text : null;
+            if (events == null) Debug.LogWarning("GameBootstrap: no event_config assigned; re-run SceneSetup. Playing without random events.");
+            System.Func<int, GameSession> make = sd => GameSession.FromJson(playerConfig.text, teamConfig.text, segmentConfig.text, match, events, sd);
+            // Story 006 demos: deterministic seed search (from --seed, else the documented demo seed, upwards).
+            if (args.Demo == DemoState.Choice) seed = DemoSeeds.FindChoiceSeed(make, args.Seed ?? DemoSeeds.ChoiceDemoSeed);
+            else if (args.Demo == DemoState.Events) seed = DemoSeeds.FindEventsSeed(make, args.Seed ?? DemoSeeds.EventsDemoSeed);
             _session = args.ForceOffer || args.Demo == DemoState.Offer
-                ? GameSession.FromJsonWithOffer(playerConfig.text, teamConfig.text, segmentConfig.text, match, seed)
-                : GameSession.FromJson(playerConfig.text, teamConfig.text, segmentConfig.text, match, seed);
+                ? GameSession.FromJsonWithOffer(playerConfig.text, teamConfig.text, segmentConfig.text, match, events, seed)
+                : make(seed);
+            if (eventText != null)
+            {
+                _session.EventTexts = EsportsManager.Events.EventTextTable.FromJson(eventText.text);
+                if (_session.Events != null)
+                {
+                    var missing = _session.EventTexts.MissingKeys(_session.Events.Config);
+                    if (missing.Count > 0) Debug.LogWarning("GameBootstrap: event texts missing: " + string.Join(", ", missing));
+                }
+            }
             // Debug only: scripted segments (their events auto-play). Event demos keep the last segment for the UI below.
             int segments = args.EffectiveSegments;
             int scripted = args.IsEventDemo ? System.Math.Max(0, segments - 1) : segments;
@@ -85,7 +102,9 @@ namespace EsportsManager.UI
             _ui.ShowNewClub();
             _ui.Refresh();
             _ui.ConfirmClubName("");
-            if (args.Demo != DemoState.Offer) _ui.LaterOffers();
+            // Pop-ups stay only for the demos that show them (the offer demo shows offers, the choice demo the choice).
+            if (args.Demo == DemoState.Offer) _ui.LaterChoices();
+            else if (args.Demo != DemoState.Choice) _ui.ClosePopups();
             switch (args.Demo)
             {
                 case DemoState.Card: _ui.CardsOnly = true; _ui.MaxCards = 2; break;
@@ -98,6 +117,10 @@ namespace EsportsManager.UI
                     break;
                 case DemoState.Offer: _ui.OpenOffers(); break;
                 case DemoState.Summary: _session.ApplyScriptedPlan(); _ui.Resolve(); break;
+                case DemoState.Choice:
+                    if (!_ui.ChoicePopupOpen) Debug.LogWarning("GameBootstrap: no choice event in this segment (seed " + _session.Seed + ").");
+                    break;
+                case DemoState.Events: _session.ApplyScriptedPlan(); _ui.Resolve(); break;
                 case DemoState.EventPrep:
                 case DemoState.FinalsQual:
                 case DemoState.Regular:

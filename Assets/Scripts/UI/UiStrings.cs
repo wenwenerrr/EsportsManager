@@ -112,7 +112,58 @@ namespace EsportsManager.UI
         public const string NoTraining = "—";
         public const string PointsUnusedFormat = "使用行动点 {0}，浪费 {1}";
 
+        // ---- random events (Story 006): choice pop-up, leave, settlement cards
+        public const string ChoiceTitle = "需要你做决定";
+        public const string ChoiceCountFormat = "（{0}/{1}）";
+        public const string ChoiceDefaultTag = "（默认）";
+        public const string ChoiceSelectedTag = "（已选择）";
+        public const string ChoiceDefaultNote = "不做选择时，结算时按默认选项处理";
+        public const string ChoiceLater = "稍后决定";
+        public const string ChoiceAnsweredFormat = "已选择：{0}";
+        public const string ChoicesBadgeFormat = "待决定 {0}";
+        public const string ChoicesReview = "已做的决定";
+        public const string OnLeaveTag = "请假中";
+        public const string OnLeaveCardNote = "请假中，本赛段不能安排行动";
+        public const string EventsTitle = "本赛段事件";
+        public const string EventsCountFormat = "共 {0} 件";
+        public const string NoEvents = "本赛段风平浪静，没有发生意外事件";
+        public const string EventChoiceTakenFormat = "你的选择：{0}";
+        public const string EventIncome = "事件收入";
+        public const string EventExpenses = "事件支出";
+        public const string SponsorVoidedFormat = "第 {0} 次：被放鸽子，作废";
+        // effect sentences ({0} = signed value); prefixes name who is affected (per person / per pair)
+        public const string EffMood = "{0}心情 {1}";
+        public const string EffStress = "{0}压力 {1}";
+        public const string EffPlayerPopularity = "{0}人气 {1}";
+        public const string EffClubPopularity = "俱乐部人气 {0}";
+        public const string EffFamiliarity = "{0}默契 {1}";
+        public const string EffPotentialUp = "潜力上升";
+        public const string EffPotentialDown = "潜力下降";
+        public const string EffFunds = "资金 {0}";
+        public const string EffTrainMultiplier = "训练收益 ×{0}";
+        public const string EffTrainAdd = "本次训练项目 {0}";
+        public const string EffStreamMultiplier = "直播收入 ×{0}";
+        public const string EffStreamAdd = "直播收入 {0}";
+        public const string EffRestMultiplier = "休息减压 ×{0}";
+        public const string EffBusinessMultiplier = "商务分成 ×{0}";
+        public const string EffSponsorChance = "赞助成功率 {0}";
+        public const string EffVoidAction = "这次拉赞助作废";
+        public const string EffOnLeave = "请假一个赛段（不能安排行动）";
+        public const string EffNone = "没有其他影响";
+        public const string EffPrefixRoster = "全队";
+        public const string EffPrefixStarters = "首发";
+        public const string EffPrefixPair = "两人";
+        public const string EffPrefixWithStarters = "与其他首发";
+        public const string EffJoin = "、";
+        public const string MoneyWanFormat = "{0} 万";
+        public const string MoneyYuanFormat = "{0} 元";
+        public const string Plus = "+";
+        public const string Minus = "−";
+
         // ---- plan errors (PlanErrorCode -> text)
+        public const string ErrUnknownChoice = "这个事件已经过期了";
+        public const string ErrChoiceOption = "没有这个选项";
+        public const string ErrPlayerOnLeave = "{0} 本赛段请假回家了，不能安排行动";
         public const string ErrPlayerOverLimit = "{0} 本赛段已用满 {1} 个行动点（单人上限）";
         public const string ErrOverTotal = "全队行动点已用完（共 {0} 点）";
         public const string ErrSponsorOverLimit = "本赛段最多拉赞助 {0} 次";
@@ -340,6 +391,9 @@ namespace EsportsManager.UI
                 case PlanErrorCode.WrongEventPhase: return ErrWrongEventPhase;
                 case PlanErrorCode.LineupLocked: return ErrLineupLocked;
                 case PlanErrorCode.PlanNull: return ErrPlanNull;
+                case PlanErrorCode.UnknownChoice: return ErrUnknownChoice;
+                case PlanErrorCode.ChoiceOptionOutOfRange: return ErrChoiceOption;
+                case PlanErrorCode.PlayerOnLeave: return string.Format(ErrPlayerOnLeave, who);
                 case PlanErrorCode.NegativeSalary: return string.Format(ErrNegativeSalary, who);
                 case PlanErrorCode.UnknownAction: return string.Format(ErrUnknownAction, who);
                 case PlanErrorCode.BadSegmentsPerYear:
