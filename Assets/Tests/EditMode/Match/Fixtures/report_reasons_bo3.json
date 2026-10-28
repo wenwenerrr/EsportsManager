@@ -1,0 +1,71 @@
+{
+  "best_of": 3,
+  "a_won_series": true,
+  "expected_reasons": [
+    "luck",
+    "early",
+    "tactic"
+  ],
+  "expected_luck_game": 1,
+  "expected_even": false,
+  "expected_cycle": true,
+  "games": [
+    {
+      "a_won": true,
+      "p0": 0.55,
+      "cycle": [
+        1,
+        1,
+        1
+      ],
+      "values": [
+        2.0,
+        -0.5,
+        1.0,
+        0,
+        0,
+        0.5,
+        0,
+        0.4
+      ]
+    },
+    {
+      "a_won": false,
+      "p0": 0.62,
+      "cycle": [
+        1,
+        1,
+        1
+      ],
+      "values": [
+        1.5,
+        -1.0,
+        0.5,
+        0,
+        0,
+        0.5,
+        0,
+        -3.5
+      ]
+    },
+    {
+      "a_won": true,
+      "p0": 0.58,
+      "cycle": [
+        1,
+        1,
+        0.9
+      ],
+      "values": [
+        2.5,
+        0,
+        -0.5,
+        0,
+        -0.2,
+        0.5,
+        0,
+        0.2
+      ]
+    }
+  ]
+}

@@ -14,81 +14,13 @@ using NUnit.Framework;
 
 namespace EsportsManager.Tests.Matches
 {
-    /// <summary>Story 004: opponent form, familiarity / sponsorship feedback, lineup toggling (shipped configs for sessions).</summary>
+    /// <summary>Story 004: familiarity / sponsorship feedback, lineup toggling (shipped configs for sessions). Opponent form was removed in Story 011.</summary>
     public class MatchIntegrationTests
     {
         private const float Tol = 1e-3f;
         private static string Data(string f) => File.ReadAllText("Assets/Data/" + f);
         private static GameSession Make(int seed) => GameSession.FromJson(Data("player_config.json"), Data("team_config.json"),
             Data("segment_config.json"), Data("match_config.json"), seed);
-
-        // ------------------------------------------------------------ form (numbers.md 4.14 v3.3)
-
-        [Test]
-        public void Form_RandomWalk_StaysInBounds_CeilingGrowsWithPopularity()
-        {
-            var mc = MatchTestFactory.MakeConfig();
-            var pc = MatchTestFactory.MakePlayerConfig();
-            var tc = TeamTestFactory.MakeTeamConfig();
-            var lo = new OpponentClub("Lo", new Team(tc, pc, new StubRandomSource(0.5f)), MatchTactic.Invade, 0f);
-            var hi = new OpponentClub("Hi", new Team(tc, pc, new StubRandomSource(0.5f)), MatchTactic.Invade, 100f);
-            var league = new League(mc, "P", new[] { lo, hi });
-            var rng = new SeededRandomSource(7);
-            float loMax = float.MinValue, hiMax = float.MinValue, min = float.MaxValue;
-            for (int i = 0; i < 2000; i++)
-            {
-                league.AdvanceForm(rng);
-                Assert.That(lo.Form, Is.InRange(-4f, 4f));
-                Assert.That(hi.Form, Is.InRange(-4f, 12f));
-                loMax = Math.Max(loMax, lo.Form); hiMax = Math.Max(hiMax, hi.Form); min = Math.Min(min, Math.Min(lo.Form, hi.Form));
-            }
-            Assert.Greater(hiMax, 10f, "a popular club reaches a higher form");
-            Assert.LessOrEqual(loMax, 4f);
-            Assert.Less(min, -3f);
-            Assert.AreEqual(4f + 8f * 0.5f, mc.opponent.FormUpper(50f), Tol);
-        }
-
-        [Test]
-        public void Form_StartsAtZero_PopularityInConfigRange_FactoryDeterministic()
-        {
-            var pc = PlayerConfigLoader.FromJson(Data("player_config.json"));
-            var mc = MatchConfigLoader.FromJson(Data("match_config.json"));
-            var tc = TeamConfigLoader.FromJson(Data("team_config.json"));
-            League Build() => LeagueFactory.Build(mc, tc, pc, new PlayerGenerator(pc, new SeededRandomSource(5), 1000), 5, "P");
-            var a = Build(); var b = Build();
-            for (int i = 0; i < a.Opponents.Count; i++)
-            {
-                Assert.AreEqual(0f, a.Opponents[i].Form);
-                Assert.That(a.Opponents[i].Popularity, Is.InRange(mc.opponent.popMin, mc.opponent.popMax));
-                Assert.AreEqual(a.Opponents[i].Popularity, b.Opponents[i].Popularity);
-            }
-            Assert.Greater(a.Opponents.Select(o => o.Popularity).Distinct().Count(), 1);
-        }
-
-        [Test]
-        public void Form_AddsToOpponentSkill_AndReportListsOpponentForm()
-        {
-            var pc = MatchTestFactory.MakePlayerConfig();
-            var tc = TeamTestFactory.MakeTeamConfig();
-            var mc = MatchTestFactory.MakeConfig();
-            var mine = MatchTestFactory.MakeLineup(MatchTestFactory.MakePlayers(pc, 0));
-            var theirsPlayers = MatchTestFactory.MakePlayers(pc, 100);
-            var neutral = MatchTestFactory.MakeLineup(theirsPlayers);
-            var hot = new MatchLineup("X", neutral.StartersByLane, 0f, MatchTactic.Develop, false, 50f, 50f, 8f);
-            float baseSkill = MatchFormulas.SkillScore(tc, pc, neutral);
-            Assert.AreEqual(baseSkill + 8f, MatchFormulas.SkillScore(tc, pc, hot), Tol);
-
-            var r = MatchTestFactory.MakeSimulator(mc, pc, tc).Simulate(mine, hot, new SeededRandomSource(1));
-            Assert.AreEqual(baseSkill + 8f, r.SideB.Evaluation.Skill, Tol);
-            Assert.AreEqual(8f, r.SideB.Evaluation.Form, Tol);
-            var rep = MatchReport.Build(r, tc, mc, true);
-            var form = rep.Reasons.First(x => x.Factor == MatchFactor.OpponentForm);
-            Assert.AreEqual(-3f / 5f * 8f, form.Value, Tol); // opponent hot -> negative for the viewer
-            Assert.AreEqual(-4.8f, rep.PowerGap, Tol);
-            // no form -> no OpponentForm reason
-            var r0 = MatchTestFactory.MakeSimulator(mc, pc, tc).Simulate(mine, neutral, new SeededRandomSource(1));
-            Assert.IsFalse(MatchReport.Build(r0, tc, mc, true).Reasons.Any(x => x.Factor == MatchFactor.OpponentForm));
-        }
 
         // ------------------------------------------------------------ team feedback
 

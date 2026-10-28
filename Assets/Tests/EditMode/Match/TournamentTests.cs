@@ -382,7 +382,6 @@ namespace EsportsManager.Tests.Matches
                 s.BeginNext();
             }
             log.Add(string.Join("|", s.Team.Roster.Select(p => p.Mood.ToString("F4") + "/" + p.Stress.ToString("F4"))));
-            log.Add(string.Join("|", s.Tournament.League.Opponents.Select(o => o.Form.ToString("F4"))));
             return string.Join("\n", log);
         }
 

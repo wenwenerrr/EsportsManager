@@ -1,7 +1,5 @@
 {
-    "series": {
-        "opponent_count": 7
-    },
+    "series": { "opponent_count": 7 },
     "calendar": {
         "segments_per_year": 12,
         "events": [
@@ -22,44 +20,105 @@
         "split_prizes": [80000, 50000, 30000, 30000, 10000, 10000, 10000, 10000],
         "finals_prizes": [200000, 120000, 60000, 60000]
     },
-    "power": {
-        "weight_skill": 4,
-        "weight_chemistry": 0.7,
-        "weight_style": 1,
-        "style_weight_command": 1,
-        "style_weight_lane_match": 1,
-        "command_dimension_id": "command"
+    "phases": {
+        "command_dimension_id": "command",
+        "lanes": [
+            {
+                "lane": "top",
+                "early": ["kda"],
+                "mid": ["damage_taken_per_death", "engage", "teamfight_participation"],
+                "late": ["damage_share"],
+                "weight_early": 1,
+                "weight_mid": 1.2,
+                "weight_late": 1
+            },
+            {
+                "lane": "jungle",
+                "early": ["gold_per_min", "kda", "kill_contribution"],
+                "mid": ["teamfight_participation"],
+                "late": ["gold_conversion"],
+                "weight_early": 1.5,
+                "weight_mid": 1,
+                "weight_late": 1
+            },
+            {
+                "lane": "mid",
+                "early": ["kda"],
+                "mid": ["teamfight_participation", "cc_duration"],
+                "late": ["damage_share", "gold_conversion"],
+                "weight_early": 1.2,
+                "weight_mid": 1,
+                "weight_late": 1.2
+            },
+            {
+                "lane": "adc",
+                "early": ["kda"],
+                "mid": ["teamfight_participation"],
+                "late": ["farming", "gold_to_damage", "survival"],
+                "weight_early": 1,
+                "weight_mid": 1,
+                "weight_late": 1.6
+            },
+            {
+                "lane": "support",
+                "early": ["teamfight_participation"],
+                "mid": ["damage_taken_per_death", "cc_duration", "engage"],
+                "late": ["healing"],
+                "weight_early": 1,
+                "weight_mid": 1.3,
+                "weight_late": 1
+            }
+        ]
     },
-    "noise": {
-        "sigma0": 0.03,
-        "sigma1": 0.12
+    "effective": { "mood_floor": 0.95, "stress_factor": 0.025 },
+    "strength": {
+        "short_board_early": 0.15,
+        "short_board_mid": 0.5,
+        "short_board_late": 0.15,
+        "mid_chemistry": 1.0,
+        "star_factor": 0.3,
+        "star_threshold": 4,
+        "star_cap": 15,
+        "phase_weight_early": 1,
+        "phase_weight_mid": 1.1,
+        "phase_weight_late": 1
     },
-    "win_probability": {
-        "k": 8,
-        "p_min": 0.1,
-        "p_max": 0.9
+    "execution": { "e0": 0.3, "e1": 0.4, "e2": 0.3, "min": 0.3, "max": 1.0 },
+    "cycle": {
+        "strength": 0.22,
+        "weight_min": 0.4,
+        "relations": [
+            { "beats": "early", "weakens": "late" },
+            { "beats": "mid", "weakens": "early" },
+            { "beats": "late", "weakens": "mid" }
+        ]
     },
     "tactic": {
-        "counter_bonus": 4,
+        "fit_scale": 0.1,
+        "fit_cap": 1.0,
+        "counter": 0.5,
+        "budget": 3.0,
+        "focus": [
+            { "tactic": "invade", "phase": "early" },
+            { "tactic": "teamfight", "phase": "mid" },
+            { "tactic": "develop", "phase": "late" }
+        ],
         "counters": [
             { "tactic": "invade", "beats": "develop" },
             { "tactic": "develop", "beats": "teamfight" },
             { "tactic": "teamfight", "beats": "invade" }
         ]
     },
+    "noise": { "g0": 2, "g1": 6, "command_reduction": 0.3 },
+    "win_probability": { "k": 8, "p_floor": 0.15 },
+    "specialty": { "phase_flat_cap": 5, "star_scale_min": 0.5, "star_scale_max": 2, "sigma_scale_min": 0.7, "sigma_scale_max": 1.3 },
     "opponent": {
-        "fixed_mood": 80,
-        "fixed_stress": 50,
         "starter_pick_range": 3,
         "roster_extra_min": 0,
         "roster_extra_max": 2,
         "familiarity_min": 60,
         "familiarity_max": 80,
         "club_names": ["Aurora", "Blue Comet", "Crimson Tide", "Dragon Gate", "Eclipse", "Frost Wolves", "Golden Dawn", "Harbor Lights", "Iron Owls", "Jade Phoenix"],
-        "form_down": 4,
-        "form_up_base": 4,
-        "form_up_pop": 8,
-        "form_step": 2,
         "pop_min": 20,
         "pop_max": 80
     },
@@ -67,10 +126,9 @@
         "min_reasons": 2,
         "max_reasons": 3,
         "min_contribution": 0.5,
-        "even_threshold": 0.05
+        "even_threshold": 0.05,
+        "luck_threshold": 0.6,
+        "tactic_advice_min": 0.5
     },
-    "club": {
-        "default_name": "Rookie Stars",
-        "name_max_length": 16
-    }
+    "club": { "default_name": "Rookie Stars", "name_max_length": 16 }
 }

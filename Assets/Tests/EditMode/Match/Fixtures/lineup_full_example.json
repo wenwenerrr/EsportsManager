@@ -1,0 +1,158 @@
+{
+  "mood": 100,
+  "stress": 0,
+  "sides": [
+    {
+      "club": "A",
+      "chemistry": 70,
+      "players": [
+        {
+          "id": 1,
+          "lane": "top",
+          "trait_a": "decisive",
+          "trait_b": "idealistic",
+          "radar": [
+            60.0,
+            56.0,
+            60.0,
+            60.0,
+            66.0,
+            70.0
+          ]
+        },
+        {
+          "id": 2,
+          "lane": "jungle",
+          "trait_a": "decisive",
+          "trait_b": "idealistic",
+          "radar": [
+            70.0,
+            56.0,
+            62.0,
+            70.0,
+            70.0,
+            0.0
+          ]
+        },
+        {
+          "id": 3,
+          "lane": "mid",
+          "trait_a": "decisive",
+          "trait_b": "idealistic",
+          "radar": [
+            57.0,
+            60.0,
+            57.0,
+            66.0,
+            60.0,
+            0.0
+          ]
+        },
+        {
+          "id": 4,
+          "lane": "adc",
+          "trait_a": "hesitant",
+          "trait_b": "idealistic",
+          "radar": [
+            56.0,
+            56.0,
+            64.0,
+            58.0,
+            56.0,
+            0.0
+          ]
+        },
+        {
+          "id": 5,
+          "lane": "support",
+          "trait_a": "hesitant",
+          "trait_b": "idealistic",
+          "radar": [
+            66.0,
+            62.0,
+            62.0,
+            62.0,
+            57.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "club": "B",
+      "chemistry": 70,
+      "players": [
+        {
+          "id": 101,
+          "lane": "top",
+          "trait_a": "reserved",
+          "trait_b": "idealistic",
+          "radar": [
+            62.0,
+            70.0,
+            62.0,
+            62.0,
+            58.0,
+            70.0
+          ]
+        },
+        {
+          "id": 102,
+          "lane": "jungle",
+          "trait_a": "reserved",
+          "trait_b": "idealistic",
+          "radar": [
+            60.0,
+            68.0,
+            62.0,
+            60.0,
+            60.0,
+            0.0
+          ]
+        },
+        {
+          "id": 103,
+          "lane": "mid",
+          "trait_a": "reserved",
+          "trait_b": "idealistic",
+          "radar": [
+            70.0,
+            63.0,
+            70.0,
+            58.0,
+            63.0,
+            0.0
+          ]
+        },
+        {
+          "id": 104,
+          "lane": "adc",
+          "trait_a": "reserved",
+          "trait_b": "idealistic",
+          "radar": [
+            72.0,
+            72.0,
+            56.0,
+            60.0,
+            72.0,
+            0.0
+          ]
+        },
+        {
+          "id": 105,
+          "lane": "support",
+          "trait_a": "reserved",
+          "trait_b": "idealistic",
+          "radar": [
+            58.0,
+            62.0,
+            62.0,
+            62.0,
+            68.0,
+            0.0
+          ]
+        }
+      ]
+    }
+  ]
+}

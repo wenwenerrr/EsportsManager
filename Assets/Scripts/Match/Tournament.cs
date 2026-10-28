@@ -167,10 +167,9 @@ namespace EsportsManager.Matches
     /// Plays the calendar events (numbers.md 4.18 v3.4) on a DEDICATED random source. Pure C#.
     /// </summary>
     /// <remarks>
-    /// FIXED DRAW ORDER on the runner's source: (a) <see cref="AdvanceForm"/>, called by the session once after EVERY segment
-    /// resolve (one draw per opponent, club index order) - before the event of that segment starts; (b) regular season: rounds
+    /// FIXED DRAW ORDER on the runner's source (Story 011: no opponent form walk any more): (a) regular season: rounds
     /// 0..6 in order, inside a round the pairings in <see cref="League.PairingsOfRound"/> order (the player club's pairing is
-    /// always the first); (c) playoffs / finals: semi-final seed 1 v seed 4, semi-final seed 2 v seed 3, then the final. Each
+    /// always the first); (b) playoffs / finals: semi-final seed 1 v seed 4, semi-final seed 2 v seed 3, then the final. Each
     /// series draws as documented on <see cref="MatchSimulator"/>. Callers (the session's event effects) draw from the same source
     /// right after a stage's series; see <c>EventEffects</c>.
     /// TIE-BREAKS: regular season = <see cref="Standings"/> (series wins, game diff, games won, lower club index).
@@ -182,7 +181,7 @@ namespace EsportsManager.Matches
         private readonly TeamConfig _team;
         private readonly PlayerConfig _players;
 
-        /// <summary>Opponents, names, schedule, form.</summary>
+        /// <summary>Opponents, names, schedule.</summary>
         public League League { get; }
         /// <summary>The simulator.</summary>
         public MatchSimulator Simulator { get; }
@@ -201,9 +200,6 @@ namespace EsportsManager.Matches
             Random = rng ?? throw new ArgumentNullException(nameof(rng));
             Simulator = new MatchSimulator(match, team, players);
         }
-
-        /// <summary>Opponent form random walk for one segment (numbers.md 4.14).</summary>
-        public void AdvanceForm() => League.AdvanceForm(Random);
 
         /// <summary>
         /// Opens an event. A split gets an empty regular-season table. The finals compute the qualification table from
@@ -273,7 +269,7 @@ namespace EsportsManager.Matches
             if (player == null) throw new ArgumentNullException(nameof(player));
             if (ev.Type != EventType.Split || ev.RegularDone) throw new InvalidOperationException("This event has no regular season to play now.");
             RequireOpponents();
-            MatchFormulas.RequireFullLineup(_players, player);
+            MatchFormulas.RequireFullLineup(Simulator.Layout, player);
             int bo = _match.format.regularBestOf;
             for (int round = 0; round < League.RoundsPerCycle; round++)
                 foreach (var p in League.PairingsOfRound(round))
@@ -302,7 +298,7 @@ namespace EsportsManager.Matches
             if (ev.PlayerInBracket)
             {
                 if (player == null) throw new ArgumentNullException(nameof(player), "the player club is in the bracket.");
-                MatchFormulas.RequireFullLineup(_players, player);
+                MatchFormulas.RequireFullLineup(Simulator.Layout, player);
             }
             var f = _match.format;
             bool split = ev.Type == EventType.Split;
@@ -349,19 +345,19 @@ namespace EsportsManager.Matches
         private EventSeries Play(int a, int b, MatchLineup player, int bestOf, EventStage stage)
         {
             if (b == League.PlayerClub) { int t = a; a = b; b = t; }
-            var la = a == League.PlayerClub ? player : MatchLineup.FromOpponent(League.OpponentAt(a), _match);
-            var lb = MatchLineup.FromOpponent(League.OpponentAt(b), _match);
+            var la = a == League.PlayerClub ? player : MatchLineup.FromOpponent(League.OpponentAt(a));
+            var lb = MatchLineup.FromOpponent(League.OpponentAt(b));
             var result = Simulator.Simulate(la, lb, Random, bestOf);
             return new EventSeries
             {
                 Stage = stage, ClubA = a, ClubB = b, BestOf = bestOf, Result = result,
-                Report = a == League.PlayerClub ? MatchReport.Build(result, _team, _match, true) : null,
+                Report = a == League.PlayerClub ? MatchReport.Build(result, _match, true) : null,
             };
         }
 
         private void RequireOpponents()
         {
-            foreach (var o in League.Opponents) MatchFormulas.RequireFullLineup(_players, MatchLineup.FromOpponent(o, _match));
+            foreach (var o in League.Opponents) MatchFormulas.RequireFullLineup(Simulator.Layout, MatchLineup.FromOpponent(o));
         }
     }
 }

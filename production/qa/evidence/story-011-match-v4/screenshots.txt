@@ -1,0 +1,16 @@
+Story 011 (match model v4, design/gdd/match.md rev 4) - screenshot evidence, captured 2026-10-27 from Builds/Mac/EsportsManager.app (1512x950 windowed).
+
+prep-spring-seed20261023.png  (AC 41)
+  args: --scene SampleScene --demo event-prep --seed 20261023 --after 60
+  state: year 1, spring split prep (after segment 3), default lineup, tactic invade.
+  shows: "我方实力（当前首发与战术）" - early / mid / late strength, weakest lane + starter + phase rating per phase, execution.
+  no win-probability prediction, no "being researched" text. Opponent info (radar shapes, recent tactics) is Story 013.
+
+report-spring-seed20261023.png  (AC 42)
+  args: --scene SampleScene --demo report --seed 20261023 --after 60
+  state: year 1, spring split complete; the player's playoff series reports (semi-final 3:0 win, final 0:3 loss).
+  shows: 2-3 reasons per series, each one of the eight report components with its point value; notes for the
+  three-phase cycle (rule 5) and the even flag (rule 4). The "换成 X 本可 +Y" advice (rule 6) does not trigger in these
+  two series (the actual tactic was within 0.5 points of the best); it is covered by MatchReportTests.Build_PlayedSeries_TotalsSumAndTacticAdvice.
+
+Run logs: test-results/shot-prep.log, test-results/shot-report.log (not kept here).

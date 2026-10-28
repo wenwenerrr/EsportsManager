@@ -106,6 +106,24 @@ namespace EsportsManager.Session
         public string PlayerName;
     }
 
+    /// <summary>
+    /// Pre-match estimate of the player club (design/gdd/match.md "赛前预估", Story 011): exact phase strengths, execution and the
+    /// weakest lane of every phase for the current lineup and tactic. No opponent data and no win probability.
+    /// </summary>
+    public sealed class MatchPreviewData
+    {
+        /// <summary>S_E, S_M, S_L (index = (int)MatchPhase).</summary>
+        public float[] Strength = new float[3];
+        /// <summary>Execution 0.3-1.</summary>
+        public float Execution;
+        /// <summary>Lane display name of the weakest lane per phase.</summary>
+        public string[] WeakestLaneName = new string[3];
+        /// <summary>Starter name in that lane.</summary>
+        public string[] WeakestPlayerName = new string[3];
+        /// <summary>His phase rating r(i,k).</summary>
+        public float[] WeakestRating = new float[3];
+    }
+
     /// <summary>Current lineup and tactic (Story 004).</summary>
     public sealed class LineupData
     {
@@ -197,7 +215,7 @@ namespace EsportsManager.Session
         /// <summary>
         /// Generates the pool, takes the best main-lane player of every lane as starter plus the best remaining player
         /// as bench, and opens the first segment. With <paramref name="match"/> it also builds the league (Story 004) from the
-        /// SAME generator (ids never collide) with seed + 3, and plays events (and the opponent form walk) on a dedicated source seeded seed + 4, so the
+        /// SAME generator (ids never collide) with seed + 3, and plays events on a dedicated source seeded seed + 4, so the
         /// team (seed + 1) and runner (seed + 2) streams draw exactly as before.
         /// </summary>
         public GameSession(PlayerConfig players, TeamConfig team, SegmentConfig segment, int seed = DefaultSeed,
@@ -487,6 +505,28 @@ namespace EsportsManager.Session
         {
             if (Tournament == null || Team.Starters().Count == _players.lanes.Length) return default;
             return new PlanError { Code = PlanErrorCode.IncompleteLineup, Used = Team.Starters().Count, Limit = _players.lanes.Length };
+        }
+
+        /// <summary>
+        /// The pre-match estimate of the current lineup and tactic (same numbers as the first non-deciding game of a series);
+        /// null without a match config or while the lineup is incomplete.
+        /// </summary>
+        public MatchPreviewData GetMatchPreview()
+        {
+            if (Tournament == null || !LineupError().IsNone) return null;
+            var ev = Tournament.Simulator.Preview(MatchLineup.FromTeam(Team, CurrentTactic));
+            var d = new MatchPreviewData { Execution = (float)ev.Execution };
+            var layout = Tournament.Simulator.Layout;
+            for (int k = 0; k < 3; k++)
+            {
+                d.Strength[k] = (float)ev.Strength[k];
+                int lane = ev.WeakestLane[k];
+                string laneId = layout.LaneIds[lane];
+                d.WeakestLaneName[k] = _players.FindLane(laneId)?.displayName ?? laneId;
+                d.WeakestPlayerName[k] = Team.GetStarter(laneId)?.Name ?? "";
+                d.WeakestRating[k] = (float)ev.Input.Ratings[lane][k];
+            }
+            return d;
         }
 
         /// <summary>The club name rules (null without a league).</summary>

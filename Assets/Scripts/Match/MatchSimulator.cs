@@ -6,87 +6,136 @@ using EsportsManager.Teams;
 namespace EsportsManager.Matches
 {
     /// <summary>
-    /// Simulates one best-of-N series (numbers.md 4.9). Pure C#, no state besides the injected configs.
+    /// Simulates one best-of-N series with the v4 match model (design/gdd/match.md). Pure C#: the inputs (two locked lineups,
+    /// configs, the random source) are never modified.
     /// </summary>
     /// <remarks>
-    /// FIXED RANDOM DRAW ORDER (every game draws exactly 3 floats, even when sigma is 0, so the order never shifts):
-    /// per game, in play order: (1) epsilon of side A = NextFloat(-sigmaA, +sigmaA); (2) epsilon of side B = NextFloat(-sigmaB, +sigmaB);
-    /// (3) the game roll u = NextFloat(0, 1); side A wins the game when u &lt; p, p = <see cref="MatchFormulas.WinProbability"/> of the
-    /// two noisy powers. The series stops as soon as a side has bestOf / 2 + 1 games, so a series draws 3 x games played.
-    /// The decider (both sides one game from winning, also the single game of a best-of-1) multiplies each side's power by its team
-    /// decider coefficient (mean of the starters' "decider_performance": decisive 1.03, hesitant 0.97).
-    /// Same configs, lineups and random sequence give an identical result.
+    /// EVALUATION ORDER per game (match.md "求值顺序"): F1 effective values, F14 decider factor (deciding games only), F2 phase
+    /// ratings (command excluded from F14), F3 phase strengths (per-phase short board), F4 mid chemistry bonus, phase_flat, F5 execution, F6 phase gaps with stars, F7/F8 early end and
+    /// base (three-phase cycle, fixed denominator), F9/F10 fit and counter, F11 noise, F12/F13 G and p.
+    /// FIXED RANDOM DRAW ORDER: every game draws exactly 3 values u = NextFloat(0, 1), even when sigma is 0: (1) u_A, epsilon_A =
+    /// sigma_A x (2u_A - 1); (2) u_B, epsilon_B likewise; (3) the roll; side A wins when roll &lt; p (roll = p is a loss). The
+    /// series stops as soon as a side has bestOf / 2 + 1 games, so a series draws 3 x games played. The deciding game is the one
+    /// where both sides are one game from winning (the single game of a BO1 too). Same configs, lineups and random sequence give
+    /// an identical result (same build, same machine).
     /// </remarks>
     /// <example><code>var sim = new MatchSimulator(matchCfg, teamCfg, playerCfg);
-    /// MatchResult r = sim.Simulate(MatchLineup.FromTeam(team, MatchTactic.Invade), MatchLineup.FromOpponent(club, matchCfg), rng);</code></example>
+    /// MatchResult r = sim.Simulate(MatchLineup.FromTeam(team, MatchTactic.Invade), MatchLineup.FromOpponent(club), rng, 3);</code></example>
     public sealed class MatchSimulator
     {
         private readonly MatchConfig _match;
-        private readonly TeamConfig _team;
         private readonly PlayerConfig _players;
 
-        /// <summary>Creates a simulator; validates that the match config fits the player config (command dimension).</summary>
+        /// <summary>The resolved phase mapping.</summary>
+        public PhaseLayout Layout { get; }
+        /// <summary>The match config.</summary>
+        public MatchConfig Config => _match;
+
+        /// <summary>Creates a simulator; validates the match config and that it fits the player config.</summary>
+        /// <param name="team">Unused by the v4 model (kept so callers need not change); may be null.</param>
         public MatchSimulator(MatchConfig match, TeamConfig team, PlayerConfig players)
         {
             _match = match ?? throw new ArgumentNullException(nameof(match));
-            _team = team ?? throw new ArgumentNullException(nameof(team));
             _players = players ?? throw new ArgumentNullException(nameof(players));
             match.Validate();
-            match.ValidateAgainst(players);
+            Layout = new PhaseLayout(match, players);
         }
 
-        /// <summary>
-        /// Plays the series. Throws <see cref="InvalidOperationException"/> BEFORE drawing anything when a lineup lacks a starter
-        /// in some lane or the same player starts for both sides.
-        /// </summary>
+        /// <summary>A regular-season series (format.regular_best_of).</summary>
         public MatchResult Simulate(MatchLineup a, MatchLineup b, IRandomSource rng) => Simulate(a, b, rng, _match.format.regularBestOf);
 
         /// <summary>
-        /// Plays a best-of-<paramref name="bestOf"/> series (numbers.md 4.18: BO3 regular season, BO5 / BO7 playoffs).
-        /// Throws <see cref="ArgumentOutOfRangeException"/> for an even or non-positive length, before any draw.
+        /// Throws <see cref="InvalidLineupException"/> when a lineup lacks a starter, starts a player twice, or a player starts
+        /// for both sides; <see cref="ArgumentOutOfRangeException"/> when bestOf is not an odd number in 1..9. Nothing is drawn then.
+        /// </summary>
+        public void Validate(MatchLineup a, MatchLineup b, int bestOf)
+        {
+            if (!MatchConfig.IsLegalBestOf(bestOf))
+                throw new ArgumentOutOfRangeException(nameof(bestOf), "must be odd and in [1," + MatchConfig.MaxBestOf + "], got " + bestOf + ".");
+            if (a == null) throw new ArgumentNullException(nameof(a));
+            if (b == null) throw new ArgumentNullException(nameof(b));
+            MatchFormulas.RequireFullLineup(Layout, a);
+            MatchFormulas.RequireFullLineup(Layout, b);
+            foreach (var s in a.Starters.Values)
+                if (b.Starts(s.PlayerId)) throw new InvalidLineupException("Player " + s.PlayerId + " starts for both sides.", s.LaneId, s.PlayerId);
+        }
+
+        /// <summary>
+        /// Plays a best-of-<paramref name="bestOf"/> series. Validates first (see <see cref="Validate"/>); an invalid request
+        /// throws before any draw.
         /// </summary>
         public MatchResult Simulate(MatchLineup a, MatchLineup b, IRandomSource rng, int bestOf)
         {
-            if (bestOf < 1 || bestOf % 2 == 0) throw new ArgumentOutOfRangeException(nameof(bestOf), "must be odd and >= 1, got " + bestOf + ".");
-            if (a == null) throw new ArgumentNullException(nameof(a));
-            if (b == null) throw new ArgumentNullException(nameof(b));
             if (rng == null) throw new ArgumentNullException(nameof(rng));
-            MatchFormulas.RequireFullLineup(_players, a);
-            MatchFormulas.RequireFullLineup(_players, b);
-            foreach (var lane in _players.lanes)
-                foreach (var other in _players.lanes)
-                    if (a.StartersByLane[lane.id].Id == b.StartersByLane[other.id].Id)
-                        throw new InvalidOperationException("Player " + a.StartersByLane[lane.id].Id + " starts for both sides.");
+            Validate(a, b, bestOf);
 
-            var evalA = MatchFormulas.Evaluate(_match, _team, _players, a, b.Tactic);
-            var evalB = MatchFormulas.Evaluate(_match, _team, _players, b, a.Tactic);
+            var inA = MatchFormulas.BuildSide(_match, Layout, a, false);
+            var inB = MatchFormulas.BuildSide(_match, Layout, b, false);
+            SideInput decA = null, decB = null;
+            var evalA = MatchFormulas.EvaluateSide(_match, Layout, inA, a.Tactic);
+            var evalB = MatchFormulas.EvaluateSide(_match, Layout, inB, b.Tactic);
+
             int need = MatchConfig.GamesToWinOf(bestOf);
             int winsA = 0, winsB = 0;
             var games = new List<GameResult>();
             while (winsA < need && winsB < need)
             {
                 bool decider = winsA == need - 1 && winsB == need - 1;
-                float epsA = rng.NextFloat(-evalA.Sigma, evalA.Sigma);
-                float epsB = rng.NextFloat(-evalB.Sigma, evalB.Sigma);
-                float roll = rng.NextFloat(0f, 1f);
-                float pa = MatchFormulas.GamePower(evalA.Power, epsA, evalA.DeciderFactor, decider);
-                float pb = MatchFormulas.GamePower(evalB.Power, epsB, evalB.DeciderFactor, decider);
-                float p = MatchFormulas.WinProbability(_match, pa, pb);
+                SideInput ia = inA, ib = inB;
+                SideEvaluation ea = evalA, eb = evalB;
+                if (decider)
+                {
+                    decA = decA ?? MatchFormulas.BuildSide(_match, Layout, a, true);
+                    decB = decB ?? MatchFormulas.BuildSide(_match, Layout, b, true);
+                    ia = decA; ib = decB;
+                    ea = MatchFormulas.EvaluateSide(_match, Layout, ia, a.Tactic);
+                    eb = MatchFormulas.EvaluateSide(_match, Layout, ib, b.Tactic);
+                }
+                var game = MatchFormulas.EvaluateGame(_match, ea, eb);
+
+                // Tactic counterfactual (match.md "战术对照"): A's three tactics, B unchanged, recomputed from step 9.
+                var cf = new double[MatchTactics.All.Length];
+                foreach (var t in MatchTactics.All)
+                    cf[(int)t] = t == a.Tactic ? game.G0
+                        : MatchFormulas.EvaluateGame(_match, MatchFormulas.EvaluateSide(_match, Layout, ia, t), eb).G0;
+                // Specialty counterfactual (match.md "绝活对照"): each side's hooks set to neutral, the other side unchanged.
+                double noHooksA = a.Effects.Count == 0 ? game.G0
+                    : MatchFormulas.EvaluateGame(_match, MatchFormulas.EvaluateSide(_match, Layout, ia, a.Tactic, true), eb).G0;
+                double noHooksB = b.Effects.Count == 0 ? game.G0
+                    : MatchFormulas.EvaluateGame(_match, ea, MatchFormulas.EvaluateSide(_match, Layout, ib, b.Tactic, true)).G0;
+
+                double uA = rng.NextFloat(0f, 1f);
+                double uB = rng.NextFloat(0f, 1f);
+                double roll = rng.NextFloat(0f, 1f);
+                double epsA = MatchFormulas.Epsilon(ea.Sigma, uA);
+                double epsB = MatchFormulas.Epsilon(eb.Sigma, uB);
+                double g = game.G0 + epsA - epsB;
+                double p = MatchFormulas.WinProbability(_match.winProbability, g);
                 bool aWins = roll < p;
                 if (aWins) winsA++; else winsB++;
-                games.Add(new GameResult(aWins, p, decider));
+                games.Add(new GameResult(aWins, p, decider, game, uA, uB, roll, epsA, epsB, g, cf, noHooksA, noHooksB));
             }
-            return new MatchResult(Snapshot(a, evalA), Snapshot(b, evalB), games);
+            return new MatchResult(Snapshot(a, evalA), Snapshot(b, evalB), games, bestOf);
+        }
+
+        /// <summary>
+        /// Pre-match estimate of ONE side (match.md "赛前预估"): S_E / S_M / S_L, execution and the weakest lane of every phase for
+        /// <paramref name="lineup"/> with its own tactic, exactly as the first non-deciding game uses them. No opponent, no
+        /// win probability. Throws when the lineup is incomplete.
+        /// </summary>
+        public SideEvaluation Preview(MatchLineup lineup)
+        {
+            MatchFormulas.RequireFullLineup(Layout, lineup);
+            return MatchFormulas.EvaluateSide(_match, Layout, MatchFormulas.BuildSide(_match, Layout, lineup, false), lineup.Tactic);
         }
 
         private MatchSideSnapshot Snapshot(MatchLineup lineup, SideEvaluation eval)
         {
             var list = new List<MatchParticipant>();
-            foreach (var lane in _players.lanes)
+            foreach (var lane in Layout.LaneIds)
             {
-                var p = lineup.StartersByLane[lane.id];
-                float stress = lineup.UsesFixedState ? lineup.FixedStress : p.Stress;
-                list.Add(new MatchParticipant(lane.id, p.Id, MatchFormulas.EffectiveRating(_team, lineup, p, lane.id), stress));
+                var s = lineup.Starters[lane];
+                list.Add(new MatchParticipant(lane, s.PlayerId, s.Stress));
             }
             return new MatchSideSnapshot(lineup.ClubName, lineup.Tactic, list, eval);
         }

@@ -7,7 +7,8 @@ namespace EsportsManager.UI
 {
     /// <summary>
     /// Detailed series report component (Story 004): title with stage and opponent, score, both tactics, game-by-game results and
-    /// the 2-3 reasons as plain sentences (<see cref="ReasonText"/>). Used by the event result screen for the player's playoff /
+    /// the 2-3 reasons as plain sentences (<see cref="ReasonText"/>), then the cycle / early-end and even notes and the tactic
+    /// advice line (design/gdd/match.md "战报界面", Story 011). Used by the event result screen for the player's playoff /
     /// finals series.
     /// </summary>
     public static class ReportScreen
@@ -63,11 +64,24 @@ namespace EsportsManager.UI
             rt.style.marginTop = 10; panel.Add(rt);
             foreach (var reason in series.Report.Reasons)
             {
-                var text = Reason(ui, reason, res, lanes);
+                var text = reason.IsLuckGame ? Reason(ui, reason, res, lanes) : ReasonText.WithValue(Reason(ui, reason, res, lanes), reason.Value);
                 var l = UiKit.Lbl(UiStrings.ReasonBullet + text, 16, reason.Value >= 0f ? UiKit.Text : UiKit.Warn);
                 l.name = "reason";
                 l.style.whiteSpace = WhiteSpace.Normal; l.style.marginTop = 4;
                 panel.Add(l);
+            }
+            var notes = ReasonText.Notes(series.Report);
+            if (notes.Count > 0)
+            {
+                var nt = UiKit.Lbl(UiStrings.NotesTitle, 14, UiKit.Accent, true);
+                nt.style.marginTop = 10; panel.Add(nt);
+                foreach (var n in notes)
+                {
+                    var l = UiKit.Lbl(UiStrings.ReasonBullet + n, 15, UiKit.TextDim);
+                    l.name = "report-note";
+                    l.style.whiteSpace = WhiteSpace.Normal; l.style.marginTop = 3;
+                    panel.Add(l);
+                }
             }
             return panel;
         }

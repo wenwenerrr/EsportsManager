@@ -6,62 +6,118 @@ using EsportsManager.Teams;
 namespace EsportsManager.Matches
 {
     /// <summary>
-    /// One side of a series as the simulator sees it: club name, the starter of every lane, team chemistry, tactic,
-    /// and whether mood and stress are the players' own (player club) or fixed (opponent clubs, numbers.md 4.14).
-    /// A lineup is a value snapshot: it copies the lane map at creation, so later roster edits do not change it.
+    /// Value snapshot of one starter as the match reads him (design/gdd/match.md "Locked" state): the radar of the lane he plays,
+    /// mood, stress and the trait multipliers. Later changes to the <see cref="Player"/> never reach a snapshot.
+    /// </summary>
+    public sealed class StarterSnapshot
+    {
+        /// <summary>Lane he plays.</summary>
+        public readonly string LaneId;
+        /// <summary>Player.Id.</summary>
+        public readonly long PlayerId;
+        /// <summary>True when <see cref="LaneId"/> is his main lane (lane_f = 1).</summary>
+        public readonly bool OnMainLane;
+        /// <summary>The six dimension values of <see cref="LaneId"/> (a copy).</summary>
+        public readonly float[] Dimensions;
+        /// <summary>Mood 0-100.</summary>
+        public readonly float Mood;
+        /// <summary>Stress 0-100.</summary>
+        public readonly float Stress;
+        /// <summary>res: "stress_variance_impact" multiplier (resolute 0.95).</summary>
+        public readonly float Resolute;
+        /// <summary>asr: "command" multiplier (assertive 1.05).</summary>
+        public readonly float Assertive;
+        /// <summary>dec_i: "decider_performance" multiplier (decisive 1.03, hesitant 0.97).</summary>
+        public readonly float Decider;
+        /// <summary>"off_lane_discount" multiplier (clever 1.03).</summary>
+        public readonly float OffLaneMultiplier;
+
+        /// <summary>Copies the values of <paramref name="player"/> playing <paramref name="laneId"/>.</summary>
+        public StarterSnapshot(Player player, string laneId)
+        {
+            if (player == null) throw new ArgumentNullException(nameof(player));
+            LaneId = laneId;
+            PlayerId = player.Id;
+            OnMainLane = player.MainLane == laneId;
+            Dimensions = player.GetRadar(laneId);
+            Mood = player.Mood;
+            Stress = player.Stress;
+            Resolute = player.GetTraitMultiplier(PlayerEffectKeys.StressVarianceImpact);
+            Assertive = player.GetTraitMultiplier(PlayerEffectKeys.Command);
+            Decider = player.GetTraitMultiplier(PlayerEffectKeys.DeciderPerformance);
+            OffLaneMultiplier = player.GetTraitMultiplier(PlayerEffectKeys.OffLaneDiscount);
+        }
+    }
+
+    /// <summary>
+    /// One side of a series as the simulator sees it (design/gdd/match.md): club name, a value snapshot of the starter of every
+    /// lane, team chemistry, the tactic and the side's specialty hook table. Creating a lineup IS the lock: it copies everything,
+    /// so later roster, mood or stress changes do not change it. Both the player club and opponents use their players' own mood
+    /// and stress (no fixed values, no form).
     /// </summary>
     /// <example><code>var mine = MatchLineup.FromTeam(team, MatchTactic.Invade);
-    /// var theirs = MatchLineup.FromOpponent(club, matchConfig);</code></example>
+    /// var theirs = MatchLineup.FromOpponent(club);</code></example>
     public sealed class MatchLineup
     {
-        private readonly Dictionary<string, Player> _starters;
+        private readonly Dictionary<string, StarterSnapshot> _starters = new Dictionary<string, StarterSnapshot>();
+        private readonly List<SpecialtyEffect> _effects = new List<SpecialtyEffect>();
 
         /// <summary>Club name (display).</summary>
         public string ClubName { get; }
-        /// <summary>Lane id to starter (a copy).</summary>
-        public IReadOnlyDictionary<string, Player> StartersByLane => _starters;
-        /// <summary>Team chemistry 0-100 (numbers.md 4.8), computed from the club's pair familiarity when the lineup was made.</summary>
+        /// <summary>Lane id to starter snapshot.</summary>
+        public IReadOnlyDictionary<string, StarterSnapshot> Starters => _starters;
+        /// <summary>Team chemistry 0-100 (numbers.md 4.8) when the lineup was locked.</summary>
         public float Chemistry { get; }
         /// <summary>Chosen tactic.</summary>
         public MatchTactic Tactic { get; }
-        /// <summary>True when every starter is evaluated at <see cref="FixedMood"/> / <see cref="FixedStress"/>.</summary>
-        public bool UsesFixedState { get; }
-        /// <summary>Mood used when <see cref="UsesFixedState"/>.</summary>
-        public float FixedMood { get; }
-        /// <summary>Stress used when <see cref="UsesFixedState"/>.</summary>
-        public float FixedStress { get; }
-        /// <summary>Form offset added to every starter's effective rating (opponents, numbers.md 4.14 v3.3); 0 for the player club.</summary>
-        public float Form { get; }
+        /// <summary>The side's hook table (already filtered by the growth system).</summary>
+        public IReadOnlyList<SpecialtyEffect> Effects => _effects;
 
-        /// <summary>Creates a lineup from explicit values.</summary>
+        /// <summary>
+        /// Locks a lineup. A null player is skipped (the lane counts as empty and the simulator rejects the lineup).
+        /// <paramref name="hooks"/> is the side's already-filtered hook table (Story 012); null = no specialties.
+        /// </summary>
         public MatchLineup(string clubName, IReadOnlyDictionary<string, Player> startersByLane, float chemistry, MatchTactic tactic,
-            bool usesFixedState = false, float fixedMood = 50f, float fixedStress = 50f, float form = 0f)
+            IEnumerable<SpecialtyEffect> hooks = null)
         {
             if (startersByLane == null) throw new ArgumentNullException(nameof(startersByLane));
             ClubName = clubName ?? "";
-            _starters = new Dictionary<string, Player>(startersByLane);
             Chemistry = chemistry;
             Tactic = tactic;
-            UsesFixedState = usesFixedState;
-            FixedMood = fixedMood;
-            FixedStress = fixedStress;
-            Form = form;
+            foreach (var kv in startersByLane)
+                if (kv.Value != null) _starters[kv.Key] = new StarterSnapshot(kv.Value, kv.Key);
+            if (hooks != null) foreach (var e in hooks) if (e != null) _effects.Add(e);
+        }
+
+        /// <summary>The same lineup with another tactic (snapshots shared; they are immutable).</summary>
+        public MatchLineup WithTactic(MatchTactic tactic) => new MatchLineup(this, tactic);
+
+        private MatchLineup(MatchLineup src, MatchTactic tactic)
+        {
+            ClubName = src.ClubName; Chemistry = src.Chemistry; Tactic = tactic;
+            foreach (var kv in src._starters) _starters[kv.Key] = kv.Value;
+            _effects.AddRange(src._effects);
+        }
+
+        /// <summary>True when <paramref name="playerId"/> starts in this lineup.</summary>
+        public bool Starts(long playerId)
+        {
+            foreach (var s in _starters.Values) if (s.PlayerId == playerId) return true;
+            return false;
         }
 
         /// <summary>The player club: current starters, current chemistry, the players' own mood and stress.</summary>
-        public static MatchLineup FromTeam(Team team, MatchTactic tactic)
+        public static MatchLineup FromTeam(Team team, MatchTactic tactic, IEnumerable<SpecialtyEffect> hooks = null)
         {
             if (team == null) throw new ArgumentNullException(nameof(team));
-            return new MatchLineup(team.Name, team.StartersByLane(), team.Chemistry(), tactic);
+            return new MatchLineup(team.Name, team.StartersByLane(), team.Chemistry(), tactic, hooks);
         }
 
-        /// <summary>An opponent club: its starters and chemistry, fixed mood / stress from the config, its fixed tactic and current form.</summary>
-        public static MatchLineup FromOpponent(OpponentClub club, MatchConfig config)
+        /// <summary>An opponent club: its starters, chemistry and tactic; its players' own mood and stress (match.md, Story 011).</summary>
+        public static MatchLineup FromOpponent(OpponentClub club, IEnumerable<SpecialtyEffect> hooks = null)
         {
             if (club == null) throw new ArgumentNullException(nameof(club));
-            if (config == null) throw new ArgumentNullException(nameof(config));
-            return new MatchLineup(club.Name, club.Team.StartersByLane(), club.Team.Chemistry(), club.Tactic,
-                true, config.opponent.fixedMood, config.opponent.fixedStress, club.Form);
+            return new MatchLineup(club.Name, club.Team.StartersByLane(), club.Team.Chemistry(), club.Tactic, hooks);
         }
     }
 }

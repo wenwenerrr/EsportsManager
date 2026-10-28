@@ -179,6 +179,8 @@ namespace EsportsManager.UI
             }
             tac.Add(tr);
             var hint = EventLayout.Wrap(MainScreen.CounterHint(cfg), 13, UiKit.TextDim); hint.style.marginTop = 6; tac.Add(hint);
+            var focus = EventLayout.Wrap(FocusHint(cfg), 13, UiKit.TextDim); focus.name = "focus-hint"; focus.style.marginTop = 2; tac.Add(focus);
+            OurStrength(s, right);
 
             string warn = EventTexts.HighStressWarning(high);
             if (warn != null)
@@ -200,6 +202,44 @@ namespace EsportsManager.UI
             }
             EventLayout.NoVerticalShrink(body);
             EventLayout.MessageBar(ui, root);
+        }
+
+        /// <summary>"战术专注：入侵→前期 · 团战→中期 · 发育→后期" from the config focus table.</summary>
+        public static string FocusHint(MatchConfig cfg)
+        {
+            var parts = new List<string>();
+            if (cfg?.tactic?.focus != null)
+                foreach (var f in cfg.tactic.focus)
+                    parts.Add(string.Format(UiStrings.FocusFormat, UiStrings.TacticName(f.tactic), UiStrings.PhaseName(f.phase)));
+            return string.Format(UiStrings.FocusHintFormat, string.Join(UiStrings.CounterJoin, parts));
+        }
+
+        // Story 011: our exact phase strengths, execution and the weakest lane of each phase (no opponent numbers, no win chance).
+        private static void OurStrength(GameSession s, VisualElement parent)
+        {
+            var sec = EventLayout.Section(parent, UiStrings.OurStrengthTitle);
+            sec.name = "our-strength";
+            var d = s.GetMatchPreview();
+            if (d == null) { sec.Add(EventLayout.Wrap(UiStrings.PreviewUnavailable, 13, UiKit.TextDim)); return; }
+            foreach (var k in MatchPhases.All)
+            {
+                int i = (int)k;
+                var row = UiKit.Row(30);
+                row.name = "phase-" + MatchPhases.Key(k);
+                var pn = UiKit.Lbl(UiStrings.PhaseName(k), 15, UiKit.Text, true); pn.style.width = 44; pn.style.flexShrink = 0; row.Add(pn);
+                var v = UiKit.Lbl(string.Format(UiStrings.PhaseStrengthFormat, UiKit.F1(d.Strength[i])), 18, UiKit.Accent, true);
+                v.style.width = 64; v.style.flexShrink = 0; row.Add(v);
+                var w = UiKit.Ellipsis(UiKit.Lbl(string.Format(UiStrings.WeakestFormat, d.WeakestLaneName[i], d.WeakestPlayerName[i], UiKit.F1(d.WeakestRating[i])), 13, UiKit.Warn));
+                w.style.flexGrow = 1; w.style.flexShrink = 1; w.style.minWidth = 0; row.Add(w);
+                sec.Add(row);
+            }
+            var er = UiKit.Row(30);
+            er.name = "execution";
+            var el = UiKit.Lbl(UiStrings.ExecutionLabel, 15, UiKit.Text, true); el.style.width = 64; el.style.flexShrink = 0; er.Add(el);
+            var ev = UiKit.Lbl(d.Execution.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), 18, UiKit.Accent, true);
+            ev.style.width = 52; ev.style.flexShrink = 0; er.Add(ev);
+            var en = UiKit.Ellipsis(UiKit.Lbl(UiStrings.ExecutionNote, 12, UiKit.TextDim)); en.style.flexGrow = 1; en.style.flexShrink = 1; en.style.minWidth = 0; er.Add(en);
+            sec.Add(er);
         }
 
         // Starters in lane order first, then the bench in roster order.

@@ -81,41 +81,172 @@ namespace EsportsManager.Matches
         public long[] finalsPrizes;
     }
 
-    /// <summary>Overall power weights (numbers.md 4.9 steps 2 and 3).</summary>
-    public sealed class PowerConfig
+    /// <summary>The three phases of a game (design/gdd/match.md "阶段与维度").</summary>
+    public enum MatchPhase
     {
-        /// <summary>WS weight of the skill score (initial 3).</summary>
-        public float weightSkill;
-        /// <summary>WS weight of chemistry (initial 1).</summary>
-        public float weightChemistry;
-        /// <summary>WS weight of the style score (initial 1).</summary>
-        public float weightStyle;
-        /// <summary>WS weight of the commander score inside the style score.</summary>
-        public float styleWeightCommand;
-        /// <summary>WS weight of the lane-match score inside the style score.</summary>
-        public float styleWeightLaneMatch;
-        /// <summary>Id of the "command" dimension in every lane of the PlayerConfig.</summary>
+        /// <summary>Early game (laning), "early" in the config.</summary>
+        Early = 0,
+        /// <summary>Mid game (teamfights), "mid" in the config.</summary>
+        Mid = 1,
+        /// <summary>Late game (carries), "late" in the config.</summary>
+        Late = 2,
+    }
+
+    /// <summary>Config-key mapping of <see cref="MatchPhase"/>.</summary>
+    public static class MatchPhases
+    {
+        /// <summary>Number of phases (3).</summary>
+        public const int Count = 3;
+        /// <summary>All phases in order.</summary>
+        public static readonly MatchPhase[] All = { MatchPhase.Early, MatchPhase.Mid, MatchPhase.Late };
+
+        /// <summary>The config key ("early", "mid", "late").</summary>
+        public static string Key(MatchPhase phase)
+        {
+            switch (phase)
+            {
+                case MatchPhase.Early: return "early";
+                case MatchPhase.Mid: return "mid";
+                case MatchPhase.Late: return "late";
+                default: throw new ArgumentOutOfRangeException(nameof(phase), phase, "unknown phase.");
+            }
+        }
+
+        /// <summary>Parses a config key; false for an unknown key.</summary>
+        public static bool TryParse(string key, out MatchPhase phase)
+        {
+            foreach (var p in All) if (Key(p) == key) { phase = p; return true; }
+            phase = MatchPhase.Early;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// One lane of the dimension-to-phase mapping (match.md "阶段与维度", F2, F3): which of the lane's dimension ids feed each
+    /// phase, and the lane's weight Lw[k][lane] inside each phase.
+    /// </summary>
+    public sealed class LanePhaseDef
+    {
+        /// <summary>Lane id (PlayerConfig).</summary>
+        public string lane;
+        /// <summary>Dimension ids of the early phase (>= 1).</summary>
+        public string[] early;
+        /// <summary>Dimension ids of the mid phase (>= 1).</summary>
+        public string[] mid;
+        /// <summary>Dimension ids of the late phase (>= 1).</summary>
+        public string[] late;
+        /// <summary>Lw[E][lane] (> 0).</summary>
+        public double weightEarly;
+        /// <summary>Lw[M][lane] (> 0).</summary>
+        public double weightMid;
+        /// <summary>Lw[L][lane] (> 0).</summary>
+        public double weightLate;
+
+        /// <summary>Dimension ids of a phase.</summary>
+        public string[] Dims(MatchPhase phase) => phase == MatchPhase.Early ? early : phase == MatchPhase.Mid ? mid : late;
+
+        /// <summary>Lane weight of a phase.</summary>
+        public double Weight(MatchPhase phase) => phase == MatchPhase.Early ? weightEarly : phase == MatchPhase.Mid ? weightMid : weightLate;
+    }
+
+    /// <summary>Dimension-to-phase mapping (match.md "阶段与维度").</summary>
+    public sealed class PhaseMappingConfig
+    {
+        /// <summary>command_dimension_id: the command dimension of every lane; it belongs to no phase (F5).</summary>
         public string commandDimensionId;
+        /// <summary>One entry per lane.</summary>
+        public LanePhaseDef[] lanes;
+
+        /// <summary>The entry of a lane, or null.</summary>
+        public LanePhaseDef Find(string laneId)
+        {
+            if (lanes != null) foreach (var l in lanes) if (l != null && l.lane == laneId) return l;
+            return null;
+        }
     }
 
-    /// <summary>Per-game noise (numbers.md 4.9 step 4): sigma = sigma0 + sigma1 x mean stress/100 x resolute factor.</summary>
-    public sealed class NoiseConfig
+    /// <summary>F1 effective dimension value: mood_f = m0 + (1 - m0) x mood/100; stress_f = 1 - kappa_s x stress/100 x res.</summary>
+    public sealed class EffectiveConfig
     {
-        /// <summary>sigma0, in [0,1).</summary>
-        public float sigma0;
-        /// <summary>sigma1, in [0,1).</summary>
-        public float sigma1;
+        /// <summary>mood_floor m0 (0.95), in [0.85, 1]: mood_f at mood 0.</summary>
+        public double moodFloor;
+        /// <summary>stress_factor kappa_s (0.025), in [0, 0.1].</summary>
+        public double stressFactor;
     }
 
-    /// <summary>Win probability (numbers.md 4.9 step 5).</summary>
-    public sealed class WinProbabilityConfig
+    /// <summary>F3, F4, F6, F8 knobs.</summary>
+    public sealed class PhaseStrengthConfig
     {
-        /// <summary>k: logistic scale in power points, > 0 (initial 8).</summary>
-        public float k;
-        /// <summary>p_min (initial 0.10).</summary>
-        public float pMin;
-        /// <summary>p_max (initial 0.90).</summary>
-        public float pMax;
+        /// <summary>short_board_early lambda_E (0.15), in [0, 0.5].</summary>
+        public double shortBoardEarly;
+        /// <summary>short_board_mid lambda_M (0.5), in [0, 0.5]: teamfights look at the weakest player.</summary>
+        public double shortBoardMid;
+        /// <summary>short_board_late lambda_L (0.15), in [0, 0.5].</summary>
+        public double shortBoardLate;
+        /// <summary>mid_chemistry chi (1.0), in [0, 2]: S_M += chi x (chem - 50) / 10.</summary>
+        public double midChemistry;
+        /// <summary>star_factor eta (0.3), in [0, 0.4].</summary>
+        public double starFactor;
+        /// <summary>star_threshold st0 (4), in [0, 8].</summary>
+        public double starThreshold;
+        /// <summary>star_cap (15), in [5, 25].</summary>
+        public double starCap;
+        /// <summary>phase_weight_early B_E (1), > 0.</summary>
+        public double phaseWeightEarly;
+        /// <summary>phase_weight_mid B_M (1.1), > 0.</summary>
+        public double phaseWeightMid;
+        /// <summary>phase_weight_late B_L (1), > 0.</summary>
+        public double phaseWeightLate;
+
+        /// <summary>B_k of a phase.</summary>
+        public double PhaseWeight(MatchPhase phase) => phase == MatchPhase.Early ? phaseWeightEarly : phase == MatchPhase.Mid ? phaseWeightMid : phaseWeightLate;
+
+        /// <summary>lambda_k of a phase.</summary>
+        public double ShortBoard(MatchPhase phase) => phase == MatchPhase.Early ? shortBoardEarly : phase == MatchPhase.Mid ? shortBoardMid : shortBoardLate;
+    }
+
+    /// <summary>F5 execution: clamp(e0 + e1 x chem/100 + e2 x cmd/100 + exec_add, min, max).</summary>
+    public sealed class ExecutionConfig
+    {
+        /// <summary>e0 (0.3).</summary>
+        public double e0;
+        /// <summary>e1 chemistry share (0.4).</summary>
+        public double e1;
+        /// <summary>e2 command share (0.3). e0 + e1 + e2 must be 1 (+-0.001).</summary>
+        public double e2;
+        /// <summary>Lower clamp (0.3).</summary>
+        public double min;
+        /// <summary>Upper clamp (1.0).</summary>
+        public double max;
+    }
+
+    /// <summary>One relation of the three-phase cycle (F7): leading in <see cref="beats"/> weakens the other side's lead in <see cref="weakens"/>.</summary>
+    public sealed class CycleRelationDef
+    {
+        /// <summary>Phase X.</summary>
+        public MatchPhase beats;
+        /// <summary>Phase Y.</summary>
+        public MatchPhase weakens;
+    }
+
+    /// <summary>F7 three-phase cycle: f_Y = max(w_min, 1 - s x |dS_X| / 10) when dS_X x Delta_Y &lt; 0.</summary>
+    public sealed class CycleConfig
+    {
+        /// <summary>strength s (0.22), in [0, 0.9].</summary>
+        public double strength;
+        /// <summary>weight_min w_min (0.4), in (0, 1].</summary>
+        public double weightMin;
+        /// <summary>Relations; every phase is weakened by exactly one (E->L, M->E, L->M).</summary>
+        public CycleRelationDef[] relations;
+    }
+
+    /// <summary>The phase a tactic focuses on (F9).</summary>
+    public sealed class TacticFocusDef
+    {
+        /// <summary>The tactic.</summary>
+        public MatchTactic tactic;
+        /// <summary>Its phase.</summary>
+        public MatchPhase phase;
     }
 
     /// <summary>One counter relation: <see cref="tactic"/> beats <see cref="beats"/>.</summary>
@@ -127,67 +258,105 @@ namespace EsportsManager.Matches
         public MatchTactic beats;
     }
 
-    /// <summary>Tactic counter table (numbers.md 4.9 step 3).</summary>
+    /// <summary>F9 tactic fit and F10 counter.</summary>
     public sealed class TacticConfig
     {
-        /// <summary>Power points the countering side gains, >= 0. Only the counter side gets it, the other side is untouched.</summary>
-        public float counterBonus;
+        /// <summary>fit_scale a (0.1), >= 0.</summary>
+        public double fitScale;
+        /// <summary>fit_cap F (1.0) per side, >= 0.</summary>
+        public double fitCap;
+        /// <summary>counter C (0.5), >= 0: the countering side gets C x its execution.</summary>
+        public double counter;
+        /// <summary>budget (3.0): validation requires 2F + 2C &lt;= budget (own tactic choice moves G by at most this).</summary>
+        public double budget;
+        /// <summary>Focus phase of every tactic (exactly one entry per tactic).</summary>
+        public TacticFocusDef[] focus;
         /// <summary>Counter relations; a pair may not appear twice or in both directions.</summary>
         public TacticCounterDef[] counters;
+
+        /// <summary>The focus phase of a tactic.</summary>
+        public MatchPhase FocusOf(MatchTactic t)
+        {
+            foreach (var f in focus) if (f.tactic == t) return f.phase;
+            throw new InvalidOperationException("MatchConfig: tactic '" + MatchTactics.Key(t) + "' has no focus phase.");
+        }
+    }
+
+    /// <summary>F11 noise: sigma = (g0 + g1 x avgStress/100 x avgRes) x (1 - command_reduction x cmd/100) x sigma_scale.</summary>
+    public sealed class NoiseConfig
+    {
+        /// <summary>g0 (2 points), >= 0.</summary>
+        public double g0;
+        /// <summary>g1 (6 points), >= 0.</summary>
+        public double g1;
+        /// <summary>command_reduction c_cmd (0.3), in [0,1).</summary>
+        public double commandReduction;
+    }
+
+    /// <summary>F13 win probability.</summary>
+    public sealed class WinProbabilityConfig
+    {
+        /// <summary>k (8), > 0.</summary>
+        public double k;
+        /// <summary>p_floor (0.15), in [0.05, 0.25]; p is clamped to [p_floor, 1 - p_floor].</summary>
+        public double pFloor;
+    }
+
+    /// <summary>Aggregate clamps of the specialty hooks (match.md "绝活挂钩点").</summary>
+    public sealed class SpecialtyConfig
+    {
+        /// <summary>phase_flat_cap: the per-phase phase_flat total is clamped to [-cap, +cap] (5).</summary>
+        public double phaseFlatCap;
+        /// <summary>star_scale_min (0.5).</summary>
+        public double starScaleMin;
+        /// <summary>star_scale_max (2).</summary>
+        public double starScaleMax;
+        /// <summary>sigma_scale_min (0.7).</summary>
+        public double sigmaScaleMin;
+        /// <summary>sigma_scale_max (1.3).</summary>
+        public double sigmaScaleMax;
     }
 
     /// <summary>
-    /// How opponent clubs are generated and evaluated (numbers.md 4.14). Each opponent is generated from one fresh
-    /// player pool with the SAME generator and config as the player's own pool; the player's starting team takes the
-    /// best main-lane player of every lane, an opponent takes a random one of the top <see cref="starterPickRange"/>
-    /// of every lane. So an opponent is on average a little weaker than the player's best pick and has a spread.
+    /// How opponent clubs are generated (numbers.md 4.14). Each opponent is generated from one fresh player pool with the SAME
+    /// generator and config as the player's own pool; it takes a random one of the top <see cref="starterPickRange"/> main-lane
+    /// players of every lane. In matches opponents use their players' own mood and stress (match.md; no fixed values, no form).
     /// </summary>
     public sealed class OpponentConfig
     {
-        /// <summary>Mood used for every opponent starter in matches (numbers.md 4.14: 50), in [0,100].</summary>
-        public float fixedMood;
-        /// <summary>Stress used for every opponent starter in matches (50), in [0,100].</summary>
-        public float fixedStress;
-        /// <summary>Opponent picks a random main-lane player among the best N by lane score, N >= 1. 1 = same as the player's start.</summary>
+        /// <summary>Opponent picks a random main-lane player among the best N by lane score, N >= 1.</summary>
         public int starterPickRange;
         /// <summary>Bench players added to an opponent (roster 5 + this), in [0, 2].</summary>
         public int rosterExtraMin;
         /// <summary>See <see cref="rosterExtraMin"/>; in [rosterExtraMin, 2].</summary>
         public int rosterExtraMax;
-        /// <summary>Lower bound of the pair familiarity F of an opponent's starters (all pairs share one value per club), in [0,100].</summary>
+        /// <summary>Lower bound of the pair familiarity F of an opponent's starters, in [0,100].</summary>
         public float familiarityMin;
         /// <summary>Upper bound of the same, in [familiarityMin,100].</summary>
         public float familiarityMax;
-        /// <summary>Fictional club names, distinct and non-empty; at least opponent_count of them (the first N are used).</summary>
+        /// <summary>Fictional club names, distinct and non-empty; at least opponent_count of them.</summary>
         public string[] clubNames;
-        /// <summary>form_down (numbers.md 4.14 v3.3): lowest form = -formDown, >= 0 (initial 4).</summary>
-        public float formDown;
-        /// <summary>form_up_base: highest form = formUpBase + formUpPop x pop/100, >= 0 (initial 4).</summary>
-        public float formUpBase;
-        /// <summary>form_up_pop: extra form ceiling of a club at popularity 100, >= 0 (initial 8).</summary>
-        public float formUpPop;
-        /// <summary>form_step: per-segment random walk form += U(-formStep, +formStep), >= 0 (initial 2).</summary>
-        public float formStep;
         /// <summary>pop_min: lowest generated opponent club popularity, in [0,100].</summary>
         public float popMin;
         /// <summary>pop_max: highest generated opponent club popularity, in [popMin,100].</summary>
         public float popMax;
-
-        /// <summary>Upper form bound of a club with popularity <paramref name="pop"/>: formUpBase + formUpPop x pop/100.</summary>
-        public float FormUpper(float pop) => formUpBase + formUpPop * pop / 100f;
     }
 
-    /// <summary>Match report selection (Story 004).</summary>
+    /// <summary>Report reason selection (match.md "战报数据").</summary>
     public sealed class ReportConfig
     {
-        /// <summary>Fewest reasons a report lists, >= 1.</summary>
+        /// <summary>min_reasons (2), >= 1.</summary>
         public int minReasons;
-        /// <summary>Most reasons a report lists, in [minReasons, 5].</summary>
+        /// <summary>max_reasons (3), in [minReasons, 7].</summary>
         public int maxReasons;
-        /// <summary>Reasons beyond minReasons are only listed when their |contribution| (power points) reaches this, >= 0.</summary>
-        public float minContribution;
-        /// <summary>even_threshold: a reason whose |contribution| (power points) is below this is "even" (neither side helped), >= 0.</summary>
-        public float evenThreshold;
+        /// <summary>min_contribution (0.5 points): a factor in the winner's favour is listed only from this |sum| on.</summary>
+        public double minContribution;
+        /// <summary>even_threshold (0.05): the series is "even" when the mean p0 is within 0.5 +- this.</summary>
+        public double evenThreshold;
+        /// <summary>luck_threshold (0.6): a game's loser with his own p0 >= this lost by luck.</summary>
+        public double luckThreshold;
+        /// <summary>tactic_advice_min (0.5 points): show "换成 X 本可 +Y" when the best tactic's mean G0 is this much higher.</summary>
+        public double tacticAdviceMin;
     }
 
     /// <summary>The player club's name rules (Story 004: the player names the club at the start of a new game).</summary>
@@ -209,11 +378,11 @@ namespace EsportsManager.Matches
     }
 
     /// <summary>
-    /// All Story 004 tuning numbers, loaded from Assets/Data/match_config.json by <see cref="MatchConfigLoader"/>.
-    /// Meaning: design/numbers.md 4.9, 4.10, 4.14. Mood factor, kappa_s, lambda and the lane weights are NOT here:
-    /// they already live in <see cref="EsportsManager.Teams.TeamConfig"/> and are reused through TeamStrength so
-    /// there is one source of truth; the decisive/hesitant and assertive coefficients live in the PlayerConfig trait
-    /// effects ("decider_performance", "command").
+    /// All match tuning numbers (design/gdd/match.md Tuning Knobs), loaded from Assets/Data/match_config.json by
+    /// <see cref="MatchConfigLoader"/>. Calendar, formats and prizes (numbers.md 4.18) are unchanged by the v4 model.
+    /// The decisive / hesitant, assertive, resolute and clever coefficients live in the PlayerConfig trait effects
+    /// ("decider_performance", "command", "stress_variance_impact", "off_lane_discount"), the off-lane factor in
+    /// PlayerConfig.off_lane_discount, so there is one source of truth for them.
     /// </summary>
     public sealed class MatchConfig
     {
@@ -223,14 +392,24 @@ namespace EsportsManager.Matches
         public CalendarConfig calendar;
         /// <summary>Tournament formats, points, prizes (numbers.md 4.18).</summary>
         public FormatConfig format;
-        /// <summary>Power weights.</summary>
-        public PowerConfig power;
-        /// <summary>Per-game noise.</summary>
-        public NoiseConfig noise;
-        /// <summary>Win probability.</summary>
-        public WinProbabilityConfig winProbability;
-        /// <summary>Tactic counters.</summary>
+        /// <summary>Dimension-to-phase mapping and lane weights.</summary>
+        public PhaseMappingConfig phases;
+        /// <summary>F1 mood / stress factors.</summary>
+        public EffectiveConfig effective;
+        /// <summary>F3 / F4 / F6 / F8 knobs.</summary>
+        public PhaseStrengthConfig strength;
+        /// <summary>F5 execution.</summary>
+        public ExecutionConfig execution;
+        /// <summary>F7 three-phase cycle.</summary>
+        public CycleConfig cycle;
+        /// <summary>F9 / F10 tactics.</summary>
         public TacticConfig tactic;
+        /// <summary>F11 noise.</summary>
+        public NoiseConfig noise;
+        /// <summary>F13 win probability.</summary>
+        public WinProbabilityConfig winProbability;
+        /// <summary>Specialty hook clamps.</summary>
+        public SpecialtyConfig specialty;
         /// <summary>Opponent generation.</summary>
         public OpponentConfig opponent;
         /// <summary>Report selection.</summary>
@@ -238,11 +417,17 @@ namespace EsportsManager.Matches
         /// <summary>Player club name rules.</summary>
         public ClubConfig club;
 
+        /// <summary>Longest legal series (match.md: bestOf is an odd number in 1..9).</summary>
+        public const int MaxBestOf = 9;
+
         /// <summary>Games a side must win a regular-season series: regular_best_of / 2 + 1.</summary>
         public int GamesToWin => GamesToWinOf(format.regularBestOf);
 
         /// <summary>Games needed to take a best-of-<paramref name="bestOf"/> series: bestOf / 2 + 1.</summary>
         public static int GamesToWinOf(int bestOf) => bestOf / 2 + 1;
+
+        /// <summary>True when <paramref name="bestOf"/> is an odd number in [1, 9].</summary>
+        public static bool IsLegalBestOf(int bestOf) => bestOf >= 1 && bestOf <= MaxBestOf && bestOf % 2 == 1;
 
         /// <summary>Clubs in the league: opponents + the player club.</summary>
         public int ClubCount => series.opponentCount + 1;
@@ -255,51 +440,84 @@ namespace EsportsManager.Matches
             return false;
         }
 
-        /// <summary>Checks every range. Throws <see cref="InvalidOperationException"/> naming the field.</summary>
+        /// <summary>Checks every range and the shape of the phase mapping. Throws <see cref="InvalidOperationException"/> naming the key.</summary>
         public void Validate()
         {
-            if (series == null || calendar == null || format == null || power == null || noise == null || winProbability == null || tactic == null
+            if (series == null || calendar == null || format == null || phases == null || effective == null || strength == null
+                || execution == null || cycle == null || tactic == null || noise == null || winProbability == null || specialty == null
                 || opponent == null || report == null || club == null)
                 throw Fail("a config section is missing.");
 
             if (series.opponentCount < 1) throw Fail("series.opponentCount must be >= 1, got " + series.opponentCount + ".");
             ValidateCalendar();
             ValidateFormat();
+            ValidateMapping();
 
-            NonNegative("power.weightSkill", power.weightSkill);
-            NonNegative("power.weightChemistry", power.weightChemistry);
-            NonNegative("power.weightStyle", power.weightStyle);
-            if (!(power.weightSkill + power.weightChemistry + power.weightStyle > 0f)) throw Fail("power weights must have a positive total.");
-            NonNegative("power.styleWeightCommand", power.styleWeightCommand);
-            NonNegative("power.styleWeightLaneMatch", power.styleWeightLaneMatch);
-            if (!(power.styleWeightCommand + power.styleWeightLaneMatch > 0f)) throw Fail("power style weights must have a positive total.");
-            if (string.IsNullOrEmpty(power.commandDimensionId)) throw Fail("power.commandDimensionId must not be empty.");
+            Range("effective.moodFloor (m0)", effective.moodFloor, 0.85, 1);
+            Range("effective.stressFactor (kappa_s)", effective.stressFactor, 0, 0.1);
 
-            RandomRange("noise.sigma0", noise.sigma0);
-            RandomRange("noise.sigma1", noise.sigma1);
-            if (!(noise.sigma0 + noise.sigma1 < 1f)) throw Fail("noise.sigma0 + noise.sigma1 must be < 1 (power must stay positive).");
+            Range("strength.shortBoardEarly (lambda_E)", strength.shortBoardEarly, 0, 0.5);
+            Range("strength.shortBoardMid (lambda_M)", strength.shortBoardMid, 0, 0.5);
+            Range("strength.shortBoardLate (lambda_L)", strength.shortBoardLate, 0, 0.5);
+            Range("strength.midChemistry (chi)", strength.midChemistry, 0, 2);
+            Range("strength.starFactor (eta)", strength.starFactor, 0, 0.4);
+            Range("strength.starThreshold (st0)", strength.starThreshold, 0, 8);
+            Range("strength.starCap", strength.starCap, 5, 25);
+            Positive("strength.phaseWeightEarly", strength.phaseWeightEarly);
+            Positive("strength.phaseWeightMid", strength.phaseWeightMid);
+            Positive("strength.phaseWeightLate", strength.phaseWeightLate);
 
-            if (!(winProbability.k > 0f) || float.IsInfinity(winProbability.k)) throw Fail("winProbability.k must be finite and > 0, got " + winProbability.k + ".");
-            Range("winProbability.pMin", winProbability.pMin, 0f, 1f);
-            Range("winProbability.pMax", winProbability.pMax, 0f, 1f);
-            if (!(winProbability.pMin < winProbability.pMax)) throw Fail("winProbability.pMin must be < pMax.");
+            Range("execution.e0", execution.e0, 0, 1);
+            Range("execution.e1", execution.e1, 0, 1);
+            Range("execution.e2", execution.e2, 0, 1);
+            double esum = execution.e0 + execution.e1 + execution.e2;
+            if (!(Math.Abs(esum - 1.0) <= 0.001 + 1e-9)) throw Fail("execution.e0 + e1 + e2 must be 1 (+-0.001), got " + esum + ".");
+            Range("execution.min", execution.min, 0, 1);
+            Range("execution.max", execution.max, 0, 1);
+            if (!(execution.min <= execution.max)) throw Fail("execution.min must be <= execution.max.");
 
-            NonNegative("tactic.counterBonus", tactic.counterBonus);
-            if (tactic.counters == null) throw Fail("tactic.counters is missing.");
-            for (int i = 0; i < tactic.counters.Length; i++)
+            Range("cycle.strength (s)", cycle.strength, 0, 0.9);
+            if (!(cycle.weightMin > 0f && cycle.weightMin <= 1f))
+                throw Fail("cycle.weightMin (w_min) must be in (0,1], got " + cycle.weightMin + ".");
+            if (cycle.relations == null) throw Fail("cycle.relations is missing.");
+            foreach (var k in MatchPhases.All)
             {
-                var c = tactic.counters[i] ?? throw Fail("tactic.counters[" + i + "] is null.");
-                if (c.tactic == c.beats) throw Fail("tactic.counters[" + i + "] counters itself.");
-                for (int j = 0; j < i; j++)
+                int n = 0;
+                foreach (var r in cycle.relations)
                 {
-                    var d = tactic.counters[j];
-                    if (d.tactic == c.tactic && d.beats == c.beats) throw Fail("tactic.counters[" + i + "] duplicates entry " + j + ".");
-                    if (d.tactic == c.beats && d.beats == c.tactic) throw Fail("tactic.counters[" + i + "] contradicts entry " + j + " (both directions).");
+                    if (r == null) throw Fail("cycle.relations has a null entry.");
+                    if (r.weakens == k) n++;
                 }
+                if (n != 1) throw Fail("cycle.relations must weaken phase '" + MatchPhases.Key(k) + "' exactly once, got " + n + ".");
             }
+            foreach (var r in cycle.relations)
+                if (r.beats == r.weakens) throw Fail("cycle.relations: phase '" + MatchPhases.Key(r.beats) + "' cannot weaken itself.");
 
-            Range("opponent.fixedMood", opponent.fixedMood, 0f, 100f);
-            Range("opponent.fixedStress", opponent.fixedStress, 0f, 100f);
+            NonNegative("tactic.fitScale", tactic.fitScale);
+            NonNegative("tactic.fitCap", tactic.fitCap);
+            NonNegative("tactic.counter", tactic.counter);
+            NonNegative("tactic.budget", tactic.budget);
+            double spend = 2.0 * tactic.fitCap + 2.0 * tactic.counter;
+            if (spend > tactic.budget + 1e-9)
+                throw Fail("tactic budget: 2 x tactic.fitCap + 2 x tactic.counter must be <= tactic.budget (" + tactic.budget + "), got " + spend + ".");
+            ValidateTactics();
+
+            NonNegative("noise.g0", noise.g0);
+            NonNegative("noise.g1", noise.g1);
+            if (!(noise.commandReduction >= 0f && noise.commandReduction < 1f))
+                throw Fail("noise.commandReduction must be in [0,1), got " + noise.commandReduction + ".");
+
+            if (!(winProbability.k > 0f) || double.IsInfinity(winProbability.k)) throw Fail("winProbability.k must be finite and > 0, got " + winProbability.k + ".");
+            Range("winProbability.pFloor (p_floor)", winProbability.pFloor, 0.05, 0.25);
+
+            NonNegative("specialty.phaseFlatCap", specialty.phaseFlatCap);
+            Positive("specialty.starScaleMin", specialty.starScaleMin);
+            if (!(specialty.starScaleMax >= specialty.starScaleMin) || double.IsInfinity(specialty.starScaleMax)) throw Fail("specialty.starScaleMax must be >= starScaleMin.");
+            Positive("specialty.sigmaScaleMin", specialty.sigmaScaleMin);
+            if (!(specialty.sigmaScaleMax >= specialty.sigmaScaleMin) || double.IsInfinity(specialty.sigmaScaleMax)) throw Fail("specialty.sigmaScaleMax must be >= sigmaScaleMin.");
+
+            ValidateMonotonicity();
+
             if (opponent.starterPickRange < 1) throw Fail("opponent.starterPickRange must be >= 1, got " + opponent.starterPickRange + ".");
             if (opponent.rosterExtraMin < 0 || opponent.rosterExtraMin > 2) throw Fail("opponent.rosterExtraMin must be in [0,2], got " + opponent.rosterExtraMin + ".");
             if (opponent.rosterExtraMax < opponent.rosterExtraMin || opponent.rosterExtraMax > 2)
@@ -315,43 +533,125 @@ namespace EsportsManager.Matches
                 for (int j = 0; j < i; j++)
                     if (opponent.clubNames[j] == opponent.clubNames[i]) throw Fail("opponent.clubNames has a duplicate: " + opponent.clubNames[i] + ".");
             }
-
-            NonNegative("opponent.formDown", opponent.formDown);
-            NonNegative("opponent.formUpBase", opponent.formUpBase);
-            NonNegative("opponent.formUpPop", opponent.formUpPop);
-            NonNegative("opponent.formStep", opponent.formStep);
             Range("opponent.popMin", opponent.popMin, 0f, 100f);
             Range("opponent.popMax", opponent.popMax, 0f, 100f);
             if (opponent.popMin > opponent.popMax) throw Fail("opponent.popMin must be <= popMax.");
 
             if (report.minReasons < 1) throw Fail("report.minReasons must be >= 1, got " + report.minReasons + ".");
-            if (report.maxReasons < report.minReasons || report.maxReasons > 5)
-                throw Fail("report.maxReasons must be in [minReasons,5], got " + report.maxReasons + ".");
+            if (report.maxReasons < report.minReasons || report.maxReasons > 7)
+                throw Fail("report.maxReasons must be in [minReasons,7], got " + report.maxReasons + ".");
             NonNegative("report.minContribution", report.minContribution);
-            NonNegative("report.evenThreshold", report.evenThreshold);
+            Range("report.evenThreshold", report.evenThreshold, 0, 0.5);
+            Range("report.luckThreshold", report.luckThreshold, 0.5, 1);
+            NonNegative("report.tacticAdviceMin", report.tacticAdviceMin);
             if (club.nameMaxLength < 1 || club.nameMaxLength > 64) throw Fail("club.nameMaxLength must be in [1,64], got " + club.nameMaxLength + ".");
             if (string.IsNullOrWhiteSpace(club.defaultName) || club.defaultName.Trim() != club.defaultName || club.defaultName.Length > club.nameMaxLength)
                 throw Fail("club.defaultName must be non-empty, trimmed and at most nameMaxLength characters.");
         }
 
         /// <summary>
-        /// Checks the parts that depend on the player config: every lane has a dimension with id
-        /// <c>power.commandDimensionId</c>. Throws <see cref="InvalidOperationException"/>.
+        /// Checks the parts that depend on the player config (match.md Edge Cases): the mapping has exactly the PlayerConfig lanes;
+        /// every lane has the command dimension; every mapped id is a dimension of its lane; every non-command dimension is mapped.
+        /// Errors name the lane id and dimension id. Throws <see cref="InvalidOperationException"/>.
         /// </summary>
         public void ValidateAgainst(PlayerConfig players)
         {
             if (players == null) throw new ArgumentNullException(nameof(players));
+            string cmd = phases.commandDimensionId;
             foreach (var lane in players.lanes)
-                if (CommandIndex(lane) < 0)
-                    throw Fail("power.commandDimensionId '" + power.commandDimensionId + "' is not a dimension of lane '" + lane.id + "'.");
+            {
+                var map = phases.Find(lane.id) ?? throw Fail("phases.lanes has no entry for lane '" + lane.id + "'.");
+                bool hasCmd = false;
+                foreach (var d in lane.dimensions) if (d.id == cmd) hasCmd = true;
+                if (!hasCmd) throw Fail("phases.commandDimensionId '" + cmd + "' is not a dimension of lane '" + lane.id + "'.");
+                foreach (var phase in MatchPhases.All)
+                    foreach (var id in map.Dims(phase))
+                    {
+                        bool known = false;
+                        foreach (var d in lane.dimensions) if (d.id == id) known = true;
+                        if (!known) throw Fail("phases lane '" + lane.id + "' maps unknown dimension '" + id + "'.");
+                    }
+                foreach (var d in lane.dimensions)
+                {
+                    if (d.id == cmd) continue;
+                    bool mapped = false;
+                    foreach (var phase in MatchPhases.All) if (Array.IndexOf(map.Dims(phase), d.id) >= 0) mapped = true;
+                    if (!mapped) throw Fail("phases lane '" + lane.id + "' does not map dimension '" + d.id + "' to any phase.");
+                }
+            }
+            foreach (var l in phases.lanes)
+                if (players.FindLane(l.lane) == null) throw Fail("phases.lanes names unknown lane '" + l.lane + "' (not in the PlayerConfig).");
         }
 
-        /// <summary>Index of the command dimension in a lane, or -1.</summary>
-        public int CommandIndex(LaneDef lane)
+        private void ValidateMapping()
         {
-            for (int i = 0; i < lane.dimensions.Length; i++)
-                if (lane.dimensions[i].id == power.commandDimensionId) return i;
-            return -1;
+            if (string.IsNullOrEmpty(phases.commandDimensionId)) throw Fail("phases.commandDimensionId must not be empty.");
+            if (phases.lanes == null || phases.lanes.Length == 0) throw Fail("phases.lanes must not be empty.");
+            for (int i = 0; i < phases.lanes.Length; i++)
+            {
+                var l = phases.lanes[i] ?? throw Fail("phases.lanes[" + i + "] is null.");
+                if (string.IsNullOrEmpty(l.lane)) throw Fail("phases.lanes[" + i + "].lane must not be empty.");
+                for (int j = 0; j < i; j++) if (phases.lanes[j].lane == l.lane) throw Fail("phases.lanes lists lane '" + l.lane + "' twice.");
+                var seen = new System.Collections.Generic.Dictionary<string, MatchPhase>();
+                foreach (var phase in MatchPhases.All)
+                {
+                    var dims = l.Dims(phase);
+                    if (dims == null || dims.Length == 0)
+                        throw Fail("phases lane '" + l.lane + "' has no dimension in phase '" + MatchPhases.Key(phase) + "'.");
+                    foreach (var id in dims)
+                    {
+                        if (string.IsNullOrEmpty(id)) throw Fail("phases lane '" + l.lane + "' has an empty dimension id.");
+                        if (id == phases.commandDimensionId)
+                            throw Fail("phases lane '" + l.lane + "' maps the command dimension '" + id + "'; command belongs to no phase.");
+                        if (seen.TryGetValue(id, out var other))
+                            throw Fail("phases lane '" + l.lane + "' maps dimension '" + id + "' to two phases ('" + MatchPhases.Key(other)
+                                + "' and '" + MatchPhases.Key(phase) + "') or twice.");
+                        seen[id] = phase;
+                    }
+                    Positive("phases lane '" + l.lane + "' weight_" + MatchPhases.Key(phase), l.Weight(phase));
+                }
+            }
+        }
+
+        // match.md "绝活挂钩点": eta x star_scale_max / 5 < min_l(Lw[k][l] / sum Lw[k]) x (1 - lambda_k) for the star phases, so
+        // raising any one lane never lowers the own phase gap.
+        private void ValidateMonotonicity()
+        {
+            if (phases?.lanes == null || phases.lanes.Length == 0) return;
+            foreach (var k in new[] { MatchPhase.Early, MatchPhase.Late })
+            {
+                double sum = 0.0, min = double.MaxValue;
+                foreach (var l in phases.lanes) { sum += l.Weight(k); if (l.Weight(k) < min) min = l.Weight(k); }
+                double rhs = min / sum * (1.0 - strength.ShortBoard(k));
+                double lhs = strength.starFactor * specialty.starScaleMax / 5.0;
+                if (!(lhs < rhs))
+                    throw Fail("monotonicity: strength.starFactor x specialty.starScaleMax / 5 (" + lhs.ToString("0.####")
+                        + ") must be < min lane weight share x (1 - lambda) of phase '" + MatchPhases.Key(k) + "' (" + rhs.ToString("0.####") + ").");
+            }
+        }
+
+        private void ValidateTactics()
+        {
+            if (tactic.focus == null) throw Fail("tactic.focus is missing.");
+            foreach (var t in MatchTactics.All)
+            {
+                int n = 0;
+                foreach (var f in tactic.focus) if (f != null && f.tactic == t) n++;
+                if (n != 1) throw Fail("tactic.focus must list tactic '" + MatchTactics.Key(t) + "' exactly once, got " + n + ".");
+            }
+            if (tactic.focus.Length != MatchTactics.All.Length) throw Fail("tactic.focus must have one entry per tactic.");
+            if (tactic.counters == null) throw Fail("tactic.counters is missing.");
+            for (int i = 0; i < tactic.counters.Length; i++)
+            {
+                var c = tactic.counters[i] ?? throw Fail("tactic.counters[" + i + "] is null.");
+                if (c.tactic == c.beats) throw Fail("tactic.counters[" + i + "] counters itself.");
+                for (int j = 0; j < i; j++)
+                {
+                    var d = tactic.counters[j];
+                    if (d.tactic == c.tactic && d.beats == c.beats) throw Fail("tactic.counters[" + i + "] duplicates entry " + j + ".");
+                    if (d.tactic == c.beats && d.beats == c.tactic) throw Fail("tactic.counters[" + i + "] contradicts entry " + j + " (both directions).");
+                }
+            }
         }
 
         private void ValidateCalendar()
@@ -413,7 +713,7 @@ namespace EsportsManager.Matches
 
         private static void BestOf(string name, int v)
         {
-            if (v < 1 || v % 2 == 0) throw Fail(name + " must be odd and >= 1, got " + v + ".");
+            if (!IsLegalBestOf(v)) throw Fail(name + " must be odd and in [1," + MaxBestOf + "], got " + v + ".");
         }
 
         private static InvalidOperationException Fail(string msg) => new InvalidOperationException("MatchConfig: " + msg);
@@ -428,9 +728,24 @@ namespace EsportsManager.Matches
             if (!(v >= lo && v <= hi)) throw Fail(name + " must be in [" + lo + "," + hi + "], got " + v + ".");
         }
 
-        private static void RandomRange(string name, float v)
+        private static void Positive(string name, double v)
         {
-            if (!(v >= 0f && v < 1f)) throw Fail(name + " must be in [0,1), got " + v + ".");
+            if (!(v > 0.0) || double.IsInfinity(v)) throw Fail(name + " must be finite and > 0, got " + v + ".");
+        }
+
+        private static void NonNegative(string name, double v)
+        {
+            if (!(v >= 0.0) || double.IsInfinity(v)) throw Fail(name + " must be finite and >= 0, got " + v + ".");
+        }
+
+        private static void Range(string name, double v, double lo, double hi)
+        {
+            if (!(v >= lo - 1e-12 && v <= hi + 1e-12)) throw Fail(name + " must be in [" + lo + "," + hi + "], got " + v + ".");
+        }
+
+        private static void Positive(string name, float v)
+        {
+            if (!(v > 0f) || float.IsInfinity(v)) throw Fail(name + " must be finite and > 0, got " + v + ".");
         }
     }
 }

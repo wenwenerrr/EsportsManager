@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using EsportsManager.Players;
 
 namespace EsportsManager.Matches
 {
@@ -109,23 +108,6 @@ namespace EsportsManager.Matches
             foreach (var p in PairingsOfRound(round))
                 if (p.ClubA == PlayerClub) return p.ClubB;
             return -1;
-        }
-
-        /// <summary>
-        /// Opponent form random walk (numbers.md 4.14 v3.3), once per segment after it is resolved: for every opponent in club
-        /// index order exactly ONE draw form += NextFloat(-form_step, +form_step), then clamp to [-form_down, FormUpper(pop)].
-        /// The player club has no form.
-        /// </summary>
-        public void AdvanceForm(IRandomSource rng)
-        {
-            if (rng == null) throw new ArgumentNullException(nameof(rng));
-            var oc = _config.opponent;
-            foreach (var club in _opponents)
-            {
-                float f = club.Form + rng.NextFloat(-oc.formStep, oc.formStep);
-                float hi = oc.FormUpper(club.Popularity);
-                club.Form = f < -oc.formDown ? -oc.formDown : (f > hi ? hi : f);
-            }
         }
     }
 }

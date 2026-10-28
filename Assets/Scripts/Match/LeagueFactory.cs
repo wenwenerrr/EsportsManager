@@ -19,7 +19,7 @@ namespace EsportsManager.Matches
     /// last index down: for i = last..1, j = NextInt(0, i + 1); (2) per opponent in index order: tactic NextInt(0, 3),
     /// familiarity NextFloat(min, max), then for each lane in PlayerConfig order NextInt(0, min(range, candidates)), then the bench
     /// size NextInt(extraMin, extraMax + 1); (3) per opponent in index order: club popularity NextFloat(pop_min, pop_max).
-    /// Form starts at 0 for every club. The player pool draws come from the generator's own source, one pool per opponent.
+    /// The player pool draws come from the generator's own source, one pool per opponent.
     /// </remarks>
     /// <example><code>var league = LeagueFactory.Build(matchCfg, teamCfg, playerCfg, generator, seed, "Demo");</code></example>
     public static class LeagueFactory

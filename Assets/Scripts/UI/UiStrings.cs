@@ -228,31 +228,66 @@ namespace EsportsManager.UI
         public const string ReasonsTitle = "主要原因";
         public const string ReasonBullet = "· ";
 
-        // ---- report reasons (MatchFactor + sign -> sentence); {0} = player name, {1} = lane, {2} = our tactic, {3} = their tactic
+        // ---- report reasons (Story 011, design/gdd/match.md): MatchFactor + sign -> sentence; {0} = "name（lane）", {1} = our tactic, {2} = their tactic
         public const string SubjectFormat = "{0}（{1}）";
-        public const string ReasonSkillUs = "我方选手个人技术整体更强";
-        public const string ReasonSkillUsSubjectAhead = "我方选手个人技术整体更强，{0}优势最明显";
-        public const string ReasonSkillUsSubjectBehind = "我方选手个人技术整体更强，但{0}不如对面同位置选手";
-        public const string ReasonSkillThem = "对方选手个人技术整体更强";
-        public const string ReasonSkillThemSubjectBehind = "对方选手个人技术整体更强，{0}差距最大";
-        public const string ReasonSkillThemSubjectAhead = "对方选手个人技术整体更强，只有{0}占了上风";
-        public const string ReasonSkillEven = "双方个人技术不相上下";
-        public const string ReasonChemistryUs = "我方队员配合更默契";
-        public const string ReasonChemistryThem = "我方默契不足，配合不如对方";
-        public const string ReasonChemistryEven = "双方默契不相上下";
-        public const string ReasonStyleUs = "我方指挥更出色，选手都打在擅长的位置";
-        public const string ReasonStyleThem = "对方指挥更出色，选手位置安排更合适";
-        public const string ReasonStyleEven = "双方指挥和位置安排不相上下";
-        public const string ReasonTacticUs = "我方战术“{0}”克制了对方的“{1}”";
-        public const string ReasonTacticThem = "我方战术“{0}”被对方的“{1}”克制";
-        public const string ReasonTacticEven = "双方战术互不克制";
-        public const string ReasonStressUs = "对方发挥起伏更大，我方打得更稳";
-        public const string ReasonStressThem = "我方队员压力偏高，发挥忽好忽坏";
-        public const string ReasonStressThemSubject = "{0}压力过高，发挥忽好忽坏";
-        public const string ReasonStressEven = "双方发挥都很稳定";
-        public const string ReasonFormHot = "对手近期状态火热";
-        public const string ReasonFormSlump = "对手近期状态低迷";
-        public const string ReasonFormEven = "对手近期状态平稳";
+        public const string ReasonValueFormat = "（{0} 分）";
+        public const string ReasonEarlyUs = "前期对线我方更强";
+        public const string ReasonEarlyUsSubject = "前期对线我方更强，{0}优势最大";
+        public const string ReasonEarlyThem = "前期对线对方更强";
+        public const string ReasonEarlyThemSubject = "前期对线对方更强，{0}吃亏最多";
+        public const string ReasonEarlyEven = "双方前期不相上下";
+        public const string ReasonMidUs = "中期团战我方更强（团战能力和默契）";
+        public const string ReasonMidUsSubject = "中期团战我方更强，{0}发挥最突出";
+        public const string ReasonMidThem = "中期团战对方更强（团战能力和默契）";
+        public const string ReasonMidThemSubject = "中期团战对方更强，{0}差距最大";
+        public const string ReasonMidEven = "双方中期团战不相上下";
+        public const string ReasonLateUs = "后期我方核心输出更强";
+        public const string ReasonLateUsSubject = "后期我方核心输出更强，{0}最关键";
+        public const string ReasonLateThem = "后期对方核心输出更强";
+        public const string ReasonLateThemSubject = "后期对方核心输出更强，{0}差距最大";
+        public const string ReasonLateEven = "双方后期不相上下";
+        public const string ReasonStarUs = "我方有明星选手打出了单人优势";
+        public const string ReasonStarUsSubject = "我方{0}是场上明星，单人优势远超全队平均";
+        public const string ReasonStarThem = "对方有明星选手打出了单人优势";
+        public const string ReasonStarThemSubject = "对方明星选手在这一路压制了我方{0}";
+        public const string ReasonStarEven = "双方都没有明显的明星选手";
+        public const string ReasonCycleUs = "阶段克制对我方有利：对方的优势阶段被我方的强项压住了";
+        public const string ReasonCycleThem = "阶段克制对对方有利：我方的优势阶段被对方的强项压住了";
+        public const string ReasonCycleEven = "阶段克制对双方影响差不多";
+        public const string ReasonTacticUs = "战术选择更合适（我方“{1}”对对方“{2}”）";
+        public const string ReasonTacticThem = "战术选择吃亏（我方“{1}”对对方“{2}”）";
+        public const string ReasonTacticEven = "双方战术选择差不多";
+        public const string ReasonSpecialtyUs = "我方选手的绝活起了作用";
+        public const string ReasonSpecialtyThem = "对方选手的绝活起了作用";
+        public const string ReasonSpecialtyEven = "绝活对比赛影响不大";
+        public const string ReasonLuckUs = "我方临场发挥更好";
+        public const string ReasonLuckThem = "对方临场发挥更好，我方状态起伏";
+        public const string ReasonLuckEven = "双方临场发挥都很正常";
+        public const string LuckUnluckyFormat = "运气：第 {0} 局我方本更有把握（{1}%），却输了";
+        public const string LuckLuckyFormat = "运气：第 {0} 局对方本更有把握（{1}%），我方运气好拿下";
+        // report notes (even, cycle, tactic advice)
+        public const string NotesTitle = "比赛走势";
+        public const string EvenFormat = "两队势均力敌（我方平均把握 {0}%），胜负差在细节";
+        public const string CycleEarlyEndUs = "我方前期领先，把比赛提前结束，对方的后期优势没完全兑现";
+        public const string CycleEarlyEndThem = "对方前期领先，提前结束了比赛，我方的后期优势没完全兑现";
+        public const string CycleTeamfightUs = "我方团战更强，一波团战抹平了对方的前期优势";
+        public const string CycleTeamfightThem = "对方团战更强，一波团战抹平了我方的前期优势";
+        public const string CycleLateUs = "我方后期更强，拖到后期避开了对方擅长的团战";
+        public const string CycleLateThem = "对方后期更强，拖到后期避开了我方擅长的团战";
+        public const string TacticBetterFormat = "换成“{0}”本可 +{1} 分（每局约 +{2}%）";
+
+        // ---- pre-match estimate (Story 011)
+        public const string OurStrengthTitle = "我方实力（当前首发与战术）";
+        public const string PhaseEarly = "前期";
+        public const string PhaseMid = "中期";
+        public const string PhaseLate = "后期";
+        public const string PhaseStrengthFormat = "{0}";
+        public const string WeakestFormat = "短板：{0} {1}（{2}）";
+        public const string ExecutionLabel = "执行力";
+        public const string ExecutionNote = "由默契和指挥决定，影响战术发挥";
+        public const string FocusHintFormat = "战术专注：{0}。选择自己领先的阶段有小幅加成";
+        public const string FocusFormat = "{0}→{1}";
+        public const string PreviewUnavailable = "首发补齐后显示我方实力";
 
         // ---- calendar & events (Story 004 stage C2, numbers.md 4.18)
         public const string YearFormat = "第 {0} 年";
@@ -355,7 +390,11 @@ namespace EsportsManager.UI
         /// <summary>string.Format with the invariant culture (numbers never change with the OS locale).</summary>
         public static string F(string format, params object[] args) => string.Format(System.Globalization.CultureInfo.InvariantCulture, format, args);
 
-        /// <summary>Chinese name of a tactic.</summary>
+        /// <summary>Chinese name of a phase.</summary>
+        public static string PhaseName(MatchPhase k)
+            => k == MatchPhase.Early ? PhaseEarly : k == MatchPhase.Mid ? PhaseMid : PhaseLate;
+
+        /// <summary>Display name of a tactic.</summary>
         public static string TacticName(MatchTactic t)
         {
             switch (t)

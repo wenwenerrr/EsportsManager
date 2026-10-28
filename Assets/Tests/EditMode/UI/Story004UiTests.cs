@@ -73,13 +73,11 @@ namespace EsportsManager.Tests.UI
         {
             var subj = new ReasonSubject("Ace", "Mid");
             foreach (var f in Factors)
-            {
                 foreach (bool has in new[] { false, true })
-                foreach (bool ahead in new[] { false, true })
                 {
-                    string pos = ReasonText.For(new MatchReason(f, 3f, has, 1, ahead), subj, MatchTactic.Invade, MatchTactic.Develop);
-                    string neg = ReasonText.For(new MatchReason(f, -3f, has, 1, ahead), subj, MatchTactic.Invade, MatchTactic.Develop);
-                    string even = ReasonText.For(new MatchReason(f, 0.01f, has, 1, ahead, true), subj, MatchTactic.Invade, MatchTactic.Develop);
+                    string pos = ReasonText.For(new MatchReason(f, 3f, has, 1, true), subj, MatchTactic.Invade, MatchTactic.Develop);
+                    string neg = ReasonText.For(new MatchReason(f, -3f, has, 1, false), subj, MatchTactic.Invade, MatchTactic.Develop);
+                    string even = ReasonText.For(new MatchReason(f, 0.01f, has, 1), subj, MatchTactic.Invade, MatchTactic.Develop);
                     Assert.IsFalse(string.IsNullOrWhiteSpace(even), f + " even");
                     Assert.AreNotEqual(pos, even, f + " even must differ from a clear advantage");
                     Assert.IsFalse(string.IsNullOrWhiteSpace(pos), f + " +");
@@ -87,42 +85,32 @@ namespace EsportsManager.Tests.UI
                     Assert.AreNotEqual(pos, neg, f + " sign must change the sentence");
                     Assert.IsFalse(pos.Contains("{") || neg.Contains("{"), f + " unformatted placeholder");
                 }
-            }
         }
 
         [Test]
-        public void ReasonText_OpponentForm_NegativeIsHot_PositiveIsSlump()
-        {
-            Assert.AreEqual(UiStrings.ReasonFormHot, ReasonText.For(new MatchReason(MatchFactor.OpponentForm, -2f, false, 0), default, MatchTactic.Invade, MatchTactic.Invade));
-            Assert.AreEqual(UiStrings.ReasonFormSlump, ReasonText.For(new MatchReason(MatchFactor.OpponentForm, 2f, false, 0), default, MatchTactic.Invade, MatchTactic.Invade));
-        }
-
-        [Test]
-        public void ReasonText_Subject_NameAndLaneAppear()
+        public void ReasonText_Subject_NameAndLaneAppear_TacticNamesAppear()
         {
             var subj = new ReasonSubject("Ace", "Mid");
-            string stress = ReasonText.For(new MatchReason(MatchFactor.StressVolatility, -2f, true, 7), subj, MatchTactic.Invade, MatchTactic.Invade);
-            StringAssert.Contains("Ace", stress); StringAssert.Contains("Mid", stress);
-            string skill = ReasonText.For(new MatchReason(MatchFactor.Skill, -2f, true, 7), subj, MatchTactic.Invade, MatchTactic.Invade);
-            StringAssert.Contains("Ace", skill);
-            string tactic = ReasonText.For(new MatchReason(MatchFactor.Tactic, -4f, false, 0), default, MatchTactic.Invade, MatchTactic.Teamfight);
+            string early = ReasonText.For(new MatchReason(MatchFactor.Early, -2f, true, 7, false, "mid"), subj, MatchTactic.Invade, MatchTactic.Invade);
+            StringAssert.Contains("Ace", early); StringAssert.Contains("Mid", early);
+            string tactic = ReasonText.For(new MatchReason(MatchFactor.Tactic, -1.5f), default, MatchTactic.Invade, MatchTactic.Teamfight);
             StringAssert.Contains(UiStrings.TacticInvade, tactic); StringAssert.Contains(UiStrings.TacticTeamfight, tactic);
         }
 
         [Test]
-        public void ReasonText_Skill_AheadBehindAndEvenBranches()
+        public void ReasonText_LuckReason_NamesGameAndChance()
         {
-            var subj = new ReasonSubject("Ace", "Mid");
-            string Who() => string.Format(UiStrings.SubjectFormat, "Ace", "Mid");
-            string T(float v, bool ahead, bool even = false) =>
-                ReasonText.For(new MatchReason(MatchFactor.Skill, v, true, 1, ahead, even), subj, MatchTactic.Invade, MatchTactic.Invade);
-            Assert.AreEqual(string.Format(UiStrings.ReasonSkillUsSubjectAhead, Who()), T(2f, true));
-            Assert.AreEqual(string.Format(UiStrings.ReasonSkillUsSubjectBehind, Who()), T(2f, false));
-            Assert.AreEqual(string.Format(UiStrings.ReasonSkillThemSubjectBehind, Who()), T(-2f, false));
-            Assert.AreEqual(string.Format(UiStrings.ReasonSkillThemSubjectAhead, Who()), T(-2f, true));
-            Assert.AreEqual(UiStrings.ReasonSkillEven, T(0.01f, true, true));
-            Assert.AreEqual(UiStrings.ReasonSkillUs, ReasonText.For(new MatchReason(MatchFactor.Skill, 2f, false, 0), default, MatchTactic.Invade, MatchTactic.Invade));
-            Assert.AreEqual(UiStrings.ReasonTacticEven, ReasonText.For(new MatchReason(MatchFactor.Tactic, 0f, false, 0, false, true), default, MatchTactic.Invade, MatchTactic.Invade));
+            string t = ReasonText.For(MatchReason.Luck(1, 0.62f, true, -3.5f), default, MatchTactic.Invade, MatchTactic.Develop);
+            Assert.AreEqual(string.Format(UiStrings.LuckUnluckyFormat, 2, "62"), t);
+            string l = ReasonText.For(MatchReason.Luck(0, 0.7f, false, 2f), default, MatchTactic.Invade, MatchTactic.Develop);
+            Assert.AreEqual(string.Format(UiStrings.LuckLuckyFormat, 1, "70"), l);
+        }
+
+        [Test]
+        public void ReasonText_WithValue_AppendsSignedPoints()
+        {
+            StringAssert.EndsWith(string.Format(UiStrings.ReasonValueFormat, "+2.3"), ReasonText.WithValue("x", 2.31f));
+            StringAssert.EndsWith(string.Format(UiStrings.ReasonValueFormat, "-1.0"), ReasonText.WithValue("x", -1f));
         }
 
         [Test]

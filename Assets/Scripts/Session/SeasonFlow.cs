@@ -118,13 +118,12 @@ namespace EsportsManager.Session
         }
 
         /// <summary>
-        /// Called after every segment resolve: opponent form walk (one draw per opponent), then, when the calendar has an event
+        /// Called after every segment resolve: when the calendar has an event
         /// after this segment, open it (phase Prepare); otherwise roll the year over after its last segment.
         /// </summary>
         public void OnSegmentResolved()
         {
             if (Phase != EventPhase.None) throw new InvalidOperationException("An event is in progress.");
-            Tournament.AdvanceForm();
             SegmentsDoneInYear++;
             var def = _match.calendar.EventAfter(SegmentsDoneInYear);
             if (def != null)

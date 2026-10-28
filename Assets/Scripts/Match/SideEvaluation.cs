@@ -1,39 +1,62 @@
+using System;
+using System.Collections.Generic;
+
 namespace EsportsManager.Matches
 {
     /// <summary>
-    /// Everything numbers.md 4.9 computes for one side before the first game (no randomness).
-    /// <see cref="Power"/> is the overall power P including the tactic counter bonus; the per-game noise is applied by the simulator.
+    /// One side reduced to what the formulas need from evaluation step 3 on (design/gdd/match.md): the phase ratings
+    /// r(lane, k) (F2, already including the decider coefficient in a deciding game), chemistry, the command score (F5),
+    /// the stress / resolute averages (F11) and the starters' specialty effects. Lanes are in <see cref="PhaseLayout"/> order.
+    /// Tests build it directly for the worked-example fixture.
     /// </summary>
-    public readonly struct SideEvaluation
+    public sealed class SideInput
     {
-        /// <summary>Skill score (step 1): weighted effective rating minus short-board penalty.</summary>
-        public readonly float Skill;
+        /// <summary>[lane][phase] phase ratings r(i,k), 0-100.</summary>
+        public double[][] Ratings;
         /// <summary>Team chemistry 0-100.</summary>
-        public readonly float Chemistry;
-        /// <summary>Style score 0-100 (step 2).</summary>
-        public readonly float Style;
-        /// <summary>Power points gained by countering the opponent's tactic (step 3), 0 when not countering.</summary>
-        public readonly float TacticBonus;
-        /// <summary>P = WS(skill, chemistry, style) + tactic bonus.</summary>
-        public readonly float Power;
-        /// <summary>Mean stress of the five starters (the fixed value for opponents).</summary>
-        public readonly float AverageStress;
-        /// <summary>Team resolute factor: mean of the starters' "stress_variance_impact" multipliers (decision 2026-10-19).</summary>
-        public readonly float ResoluteFactor;
-        /// <summary>Team decider coefficient: mean of the starters' "decider_performance" multipliers.</summary>
-        public readonly float DeciderFactor;
-        /// <summary>Per-game noise half-width sigma (step 4).</summary>
-        public readonly float Sigma;
-        /// <summary>Form offset included in <see cref="Skill"/> (opponents, numbers.md 4.14 v3.3; 0 for the player club).</summary>
-        public readonly float Form;
+        public double Chemistry;
+        /// <summary>Command score cmd 0-100 (F5).</summary>
+        public double Command;
+        /// <summary>Mean stress of the starters 0-100.</summary>
+        public double AverageStress;
+        /// <summary>Mean resolute factor of the starters (0.95-1).</summary>
+        public double AverageResolute = 1.0;
+        /// <summary>Specialty effects of the starters (may be empty).</summary>
+        public IReadOnlyList<SpecialtyEffect> Effects = Array.Empty<SpecialtyEffect>();
 
-        /// <summary>Creates an evaluation.</summary>
-        public SideEvaluation(float skill, float chemistry, float style, float tacticBonus, float power,
-            float averageStress, float resoluteFactor, float deciderFactor, float sigma, float form = 0f)
-        {
-            Form = form;
-            Skill = skill; Chemistry = chemistry; Style = style; TacticBonus = tacticBonus; Power = power;
-            AverageStress = averageStress; ResoluteFactor = resoluteFactor; DeciderFactor = deciderFactor; Sigma = sigma;
-        }
+        /// <summary>Phase rating of a lane.</summary>
+        public double Rating(int lane, MatchPhase k) => Ratings[lane][(int)k];
+    }
+
+    /// <summary>
+    /// Everything a side gets on its own for one tactic (evaluation steps 3-7 and its sigma): phase strengths S_k after the mid
+    /// chemistry bonus and phase_flat, execution, sigma, the star scales, and the weakest lane of every phase. This is also the
+    /// pre-match estimate the prep screen shows (match.md "赛前预估"; same values as the first non-deciding game).
+    /// </summary>
+    public sealed class SideEvaluation
+    {
+        /// <summary>S_E, S_M, S_L (index = (int)MatchPhase).</summary>
+        public double[] Strength = new double[MatchPhases.Count];
+        /// <summary>Lane-weighted mean WS_k before the short-board penalty.</summary>
+        public double[] WeightedMean = new double[MatchPhases.Count];
+        /// <summary>Lane index with the lowest r(i,k) per phase (first one on ties).</summary>
+        public int[] WeakestLane = new int[MatchPhases.Count];
+        /// <summary>Mid chemistry bonus added to S_M (F4).</summary>
+        public double MidChemistryBonus;
+        /// <summary>Execution 0.3-1 (F5).</summary>
+        public double Execution;
+        /// <summary>Command score used.</summary>
+        public double Command;
+        /// <summary>Noise half-width sigma (F11).</summary>
+        public double Sigma;
+        /// <summary>Aggregated hooks for the tactic.</summary>
+        public HookTotals Hooks;
+        /// <summary>The tactic this evaluation is for.</summary>
+        public MatchTactic Tactic;
+        /// <summary>The input it was computed from.</summary>
+        public SideInput Input;
+
+        /// <summary>S_k of a phase.</summary>
+        public double S(MatchPhase k) => Strength[(int)k];
     }
 }
