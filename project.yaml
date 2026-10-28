@@ -14,6 +14,18 @@ modes:
   rigor: minimal
   automation: guided
 
+# Per-system design tier (2026-10-20, user decision): the high-risk simulation
+# systems need a full GDD in design/gdd/<key>.md; everything else (UI, avatars,
+# text) stays on the project tier (minimal, game brief only). Keys = GDD stems.
+workflow_overrides:
+  system_overrides:
+    match: full        # 比赛：阶段实力、战术、对位、胜负
+    league: full       # 联赛 AI：AI 俱乐部决策、情报、预热
+    growth: full       # 成长：训练、专精、绝活、年龄
+    talent: full       # 人才：选手生成、潜力、青训供应
+    economy: full      # 经济：收入、工资、工资指数、赞助、商务
+    transfer: full     # 转会：拍卖、选拔、挖角、甩卖
+
 # NOTE: this template ships with no `modes:` block, and the six knobs below must
 # never be added to one.
 #

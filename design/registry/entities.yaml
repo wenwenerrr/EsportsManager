@@ -47,7 +47,7 @@
 #   Each entry: name, status, source, referenced_by[], attributes{}, added, revised
 
 version: 1
-last_updated: ""
+last_updated: "2026-10-22"
 
 # ─── ENTITIES ────────────────────────────────────────────────────────────────
 # Named game-world objects: enemies, NPCs, characters, factions, bosses.
@@ -116,7 +116,40 @@ items: []
 #   output_range[min, max], added
 # Optional: expression (the actual formula), notes
 
-formulas: []
+formulas:
+  - name: match_stage_strength
+    status: active
+    source: design/gdd/match.md
+    referenced_by:
+      - design/gdd/match.md
+    variables: [phase_rating_per_lane, lane_weight, short_board_lambda, chemistry]
+    output_range: [0, 100]
+    expression: "S_k = WS_k - lambda * (WS_k - min_rating); S_M *= c_M + (1 - c_M) * chemistry/100; then own phase_flat hook"
+    notes: "Per phase E/M/L. growth GDD must use the same phase mapping."
+    added: 2026-10-22
+    revised: ""
+  - name: match_execution
+    status: active
+    source: design/gdd/match.md
+    referenced_by:
+      - design/gdd/match.md
+    variables: [chemistry, command, exec_add]
+    output_range: [0.3, 1.0]
+    expression: "exec = clamp(e0 + e1*chemistry/100 + e2*command/100 + exec_add, 0.3, 1.0) (0.3/0.4/0.3)"
+    notes: "Scales the tactic fit and counter terms (match.md F5). Command = max effective command dimension x assertive."
+    added: 2026-10-22
+    revised: 2026-10-22
+  - name: match_win_probability
+    status: active
+    source: design/gdd/match.md
+    referenced_by:
+      - design/gdd/match.md
+    variables: [G, k, p_floor]
+    output_range: [0.15, 0.85]
+    expression: "p = clamp(1/(1+exp(-G/k)), p_floor, 1 - p_floor)"
+    notes: "Single game. p range changed from 0.10-0.90 (numbers.md 4.9) on 2026-10-22 by user decision; p_min/p_max merged into p_floor after design review 2026-10-22."
+    added: 2026-10-22
+    revised: 2026-10-22
 
 # Example:
 #
@@ -149,7 +182,61 @@ formulas: []
 #
 # Required fields: name, status, source, referenced_by, value, unit, added
 
-constants: []
+constants:
+  - name: match_p_min
+    status: deprecated   # replaced by match_p_floor (design review 2026-10-22: one symmetric knob)
+    source: design/gdd/match.md
+    referenced_by:
+      - design/gdd/match.md
+    value: 0.15
+    unit: probability
+    added: 2026-10-22
+    revised: 2026-10-22
+  - name: match_p_max
+    status: deprecated   # replaced by match_p_floor (upper bound = 1 - p_floor)
+    source: design/gdd/match.md
+    referenced_by:
+      - design/gdd/match.md
+    value: 0.85
+    unit: probability
+    added: 2026-10-22
+    revised: 2026-10-22
+  - name: match_p_floor
+    status: active
+    source: design/gdd/match.md
+    referenced_by:
+      - design/gdd/match.md
+    value: 0.15
+    unit: probability (single-game p clamped to [p_floor, 1 - p_floor])
+    added: 2026-10-22
+    revised: ""
+  - name: match_tactic_budget
+    status: active
+    source: design/gdd/match.md
+    referenced_by:
+      - design/gdd/match.md
+    value: 3.0
+    unit: G points (max own-tactic swing, 2F + 2C)
+    added: 2026-10-22
+    revised: ""
+  - name: match_stages
+    status: active
+    source: design/gdd/match.md
+    referenced_by:
+      - design/gdd/match.md
+    value: [early, mid, late]
+    unit: phase ids (E/M/L)
+    added: 2026-10-22
+    revised: ""
+  - name: match_tactics
+    status: active
+    source: design/gdd/match.md
+    referenced_by:
+      - design/gdd/match.md
+    value: [invade, teamfight, develop]
+    unit: tactic ids
+    added: 2026-10-22
+    revised: ""
 
 # Example:
 #
