@@ -62,46 +62,17 @@ namespace EsportsManager.Tests.Matches
         private static TeamConfig RealTeam() => TeamConfigLoader.FromJson(File.ReadAllText("Assets/Data/team_config.json"));
         private static MatchConfig RealMatch() => MatchConfigLoader.FromJson(File.ReadAllText("Assets/Data/match_config.json"));
 
-        private static League BuildLeague(int seed, MatchConfig mc = null, PlayerConfig pc = null, long firstId = 1000)
+        private static League BuildLeague(int clubs)
         {
-            pc = pc ?? RealPlayers();
-            return LeagueFactory.Build(mc ?? RealMatch(), RealTeam(), pc, new PlayerGenerator(pc, new SeededRandomSource(seed), firstId), seed, "Demo");
-        }
-
-        [Test]
-        public void League_HasOpponentCountClubs_WithDistinctIdsAndRosters5To7()
-        {
-            var league = BuildLeague(Seed);
-            Assert.AreEqual(8, league.ClubCount);
-            var ids = new HashSet<long>();
-            var names = new HashSet<string>();
-            foreach (var club in league.Opponents)
-            {
-                Assert.IsTrue(names.Add(club.Name));
-                Assert.That(club.Team.Roster.Count, Is.InRange(5, 7));
-                Assert.AreEqual(5, club.Team.Starters().Count);
-                Assert.Greater(club.Team.Chemistry(), 0f);
-                foreach (var p in club.Team.Roster) Assert.IsTrue(ids.Add(p.Id), "duplicate id " + p.Id);
-            }
-        }
-
-        [Test]
-        public void League_SameSeed_SameScheduleAndRosters()
-        {
-            var a = BuildLeague(Seed);
-            var b = BuildLeague(Seed);
-            for (int r = 0; r < a.RoundsPerCycle; r++) Assert.AreEqual(a.PlayerOpponentOfRound(r), b.PlayerOpponentOfRound(r));
-            for (int i = 0; i < a.Opponents.Count; i++)
-            {
-                Assert.AreEqual(a.Opponents[i].Tactic, b.Opponents[i].Tactic);
-                CollectionAssert.AreEqual(a.Opponents[i].Team.Roster.Select(p => p.Id), b.Opponents[i].Team.Roster.Select(p => p.Id));
-            }
+            var names = Enumerable.Range(0, clubs).Select(i => "C" + i).ToList();
+            var order = Enumerable.Range(1, clubs % 2 == 0 ? clubs - 1 : clubs).Reverse().ToList();
+            return new League(names, clubs % 2 == 0 ? order : order.Where(c => c < clubs).ToList()) { PlayerClub = 0 };
         }
 
         [Test]
         public void Schedule_EveryRoundEveryClubOnce_PlayerMeetsEachOpponentOncePerCycle()
         {
-            var league = BuildLeague(Seed);
+            var league = BuildLeague(8);
             var met = new int[league.ClubCount];
             for (int r = 0; r < league.RoundsPerCycle; r++)
             {
@@ -116,13 +87,21 @@ namespace EsportsManager.Tests.Matches
         }
 
         [Test]
+        public void Schedule_PlayerClubAnyIndex_MeetsEveryOtherClubOnce()
+        {
+            var league = BuildLeague(8);
+            league.PlayerClub = 5;
+            var met = new int[8];
+            for (int r = 0; r < league.RoundsPerCycle; r++) met[league.PlayerOpponentOfRound(r)]++;
+            for (int c = 0; c < 8; c++) Assert.AreEqual(c == 5 ? 0 : 1, met[c], "club " + c);
+            league.PlayerClub = League.NoClub;
+            Assert.AreEqual(-1, league.PlayerOpponentOfRound(0));
+        }
+
+        [Test]
         public void Schedule_OddClubCount_OneByePerRound()
         {
-            var mc = RealMatch();
-            mc.series.opponentCount = 6;
-            mc.format.finalsPoints = new[] { 10, 7, 5, 5, 3, 2, 1 };
-            mc.format.splitPrizes = new long[] { 80000, 50000, 30000, 30000, 10000, 10000, 10000 };
-            var league = BuildLeague(Seed, mc);
+            var league = BuildLeague(7);
             Assert.AreEqual(7, league.RoundsPerCycle);
             int byes = 0;
             var met = new int[league.ClubCount];
@@ -137,29 +116,9 @@ namespace EsportsManager.Tests.Matches
         }
 
         [Test]
-        public void Opponents_AreComparableToPlayerStartingTeam()
+        public void Schedule_BadRotation_Throws()
         {
-            // Player start as GameSession builds it: best main-lane player per lane of one pool, own mood / stress.
-            var pc = RealPlayers();
-            var tc = RealTeam();
-            var mc = RealMatch();
-            double playerSkill = 0, oppSkill = 0;
-            const int seeds = 10;
-            var sim = new MatchSimulator(mc, tc, pc);
-            double Mean(MatchLineup l) { var e = sim.Preview(l); return (e.Strength[0] + e.Strength[1] + e.Strength[2]) / 3.0; }
-            for (int s = 0; s < seeds; s++)
-            {
-                var pool = new PlayerGenerator(pc, new SeededRandomSource(s)).GeneratePool();
-                var map = new Dictionary<string, Player>();
-                foreach (var lane in pc.lanes)
-                    map[lane.id] = pool.Where(p => p.MainLane == lane.id).OrderByDescending(p => p.GetLaneScore(lane.id)).First();
-                playerSkill += Mean(new MatchLineup("P", map, 50f, MatchTactic.Develop));
-                var league = BuildLeague(s, mc, pc);
-                foreach (var club in league.Opponents) oppSkill += Mean(MatchLineup.FromOpponent(club)) / league.Opponents.Count;
-            }
-            double ratio = oppSkill / playerSkill;
-            TestContext.WriteLine("player phase strength " + playerSkill / seeds + ", opponent " + oppSkill / seeds + ", ratio " + ratio);
-            Assert.That(ratio, Is.InRange(0.75, 1.05));
+            Assert.Throws<ArgumentException>(() => new League(new[] { "a", "b", "c", "d" }, new[] { 1, 1, 2 }));
         }
     }
 }

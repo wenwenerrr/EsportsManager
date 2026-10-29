@@ -47,7 +47,36 @@ namespace EsportsManager.UI
             Change(team, UiStrings.Funds, UiKit.Yuan(r.FundsBefore), UiKit.Yuan(r.FundsAfter), UiKit.YuanDelta(r.FundsAfter - r.FundsBefore), r.FundsAfter - r.FundsBefore);
             Change(team, UiStrings.Popularity, UiKit.F1(r.PopularityBefore), UiKit.F1(r.PopularityAfter), UiKit.Delta(r.PopularityAfter - r.PopularityBefore), r.PopularityAfter - r.PopularityBefore);
             Change(team, UiStrings.Chemistry, UiKit.F1(r.ChemistryBefore), UiKit.F1(r.ChemistryAfter), UiKit.Delta(r.ChemistryAfter - r.ChemistryBefore), r.ChemistryAfter - r.ChemistryBefore);
-            Change(team, UiStrings.Strength, UiKit.F1(r.StrengthBefore), UiKit.F1(r.StrengthAfter), UiKit.Delta(r.StrengthAfter - r.StrengthBefore), r.StrengthAfter - r.StrengthBefore);
+            // 实力 as three phase values (user decision 2026-10-28; match pre-match estimate incl. specialty hooks).
+            for (int k = 0; k < 3; k++)
+            {
+                var b = r.PhaseStrengthBefore; var a = r.PhaseStrengthAfter;
+                string label = UiStrings.Strength + UiStrings.GrowthPhaseName(k);
+                if (b == null || a == null) Change(team, label, UiStrings.NoValue, a != null ? UiKit.F1(a[k]) : UiStrings.NoValue, "", 0f);
+                else Change(team, label, UiKit.F1(b[k]), UiKit.F1(a[k]), UiKit.Delta(a[k] - b[k]), a[k] - b[k]);
+            }
+
+            // Specialty changes (growth.md "Game Feel": gaining one is its own, highlighted line).
+            var spc = Section(left, UiStrings.SpecialtyChanges);
+            spc.name = "specialty-changes";
+            int changes = 0;
+            foreach (var p in sum.Players)
+            {
+                foreach (var id in p.SpecialtiesGained)
+                {
+                    var l = UiKit.Lbl(string.Format(UiStrings.SpecialtyGainedFormat, s.PlayerName(p.PlayerId), s.SpecialtyName(id)), 15, UiKit.Background, true);
+                    l.name = "specialty-gained";
+                    l.style.backgroundColor = UiKit.Good; l.style.paddingLeft = l.style.paddingRight = 6; l.style.paddingTop = l.style.paddingBottom = 3;
+                    l.style.marginBottom = 3; l.style.borderTopLeftRadius = l.style.borderTopRightRadius = l.style.borderBottomLeftRadius = l.style.borderBottomRightRadius = 3;
+                    spc.Add(l); changes++;
+                }
+                foreach (var id in p.SpecialtiesLost)
+                {
+                    var l = UiKit.Lbl(string.Format(UiStrings.SpecialtyLostFormat, s.PlayerName(p.PlayerId), s.SpecialtyName(id)), 13, UiKit.Bad, true);
+                    l.name = "specialty-lost"; spc.Add(l); changes++;
+                }
+            }
+            if (changes == 0) spc.Add(UiKit.Lbl(UiStrings.NoSpecialtyChange, 13, UiKit.TextDim));
 
             var money = Section(left, UiStrings.MoneyLines);
             Line(money, UiStrings.LivestreamIncome, UiKit.Yuan(sum.LivestreamIncome), UiKit.Text);
@@ -220,17 +249,15 @@ namespace EsportsManager.UI
             string training = UiStrings.NoTraining;
             if (p.Training.Count > 0)
             {
-                var names = s.DimensionNames(p.PlayerId);
+                var counts = new int[4];
+                foreach (var t in p.Training) counts[(int)t.Target]++;
                 var parts = new List<string>();
+                for (int k = 0; k < 4; k++)
+                    if (counts[k] > 0) parts.Add(string.Format(UiStrings.TrainSummaryFormat, UiStrings.TargetName((EsportsManager.Growth.TrainingTarget)k), counts[k]));
                 float total = 0f;
-                var perDim = new float[names.Length];
-                foreach (var t in p.Training)
-                {
-                    parts.Add(string.Format(UiStrings.TrainingTargetFormat, t.DimensionIndex < names.Length ? names[t.DimensionIndex] : "?", UiKit.Delta(t.Gain)));
-                    if (t.Gains != null) for (int i = 0; i < t.Gains.Length && i < perDim.Length; i++) perDim[i] += t.Gains[i];
-                }
-                foreach (var g in perDim) total += g;
-                training = string.Join(UiStrings.PartSeparator, parts) + UiStrings.PartSeparator + string.Format(UiStrings.TrainingTotalFormat, UiKit.Delta(total));
+                if (p.ValuesBefore != null && p.ValuesAfter != null)
+                    for (int i = 0; i < p.ValuesAfter.Length; i++) total += p.ValuesAfter[i] - p.ValuesBefore[i];
+                training = string.Join(UiStrings.PartSeparator, parts) + UiStrings.PartSeparator + string.Format(UiStrings.TrainDimsTotalFormat, UiKit.Delta(total));
             }
             var colors = new[] { UiKit.Text, UiKit.Text, UiKit.DeltaColor(p.MoodDelta), UiKit.DeltaColor(p.StressDelta, true),
                 UiKit.DeltaColor(p.PopularityDelta), UiKit.Good };

@@ -26,7 +26,7 @@ namespace EsportsManager.Segments
             var cfg = new SegmentConfig
             {
                 actionPoints = new ActionPointConfig { perSegment = dto.action_points.per_segment, maxPerPlayer = dto.action_points.max_per_player },
-                training = new SegmentTrainingConfig { intensity = dto.training.intensity, targetBonus = dto.training.target_bonus },
+                training = new SegmentTrainingConfig { intensity = dto.training.intensity },
                 stream = new StreamConfig { cap = dto.stream.cap },
                 business = new BusinessConfig
                 {
@@ -63,7 +63,7 @@ namespace EsportsManager.Segments
 
         // Wire format: field names ARE the JSON keys.
         [Serializable] private class ActionPointsDto { public int per_segment; public int max_per_player; }
-        [Serializable] private class TrainingDto { public float intensity; public float target_bonus; }
+        [Serializable] private class TrainingDto { public float intensity; }
         [Serializable] private class StreamDto { public float cap; }
         [Serializable] private class BusinessDto
         {

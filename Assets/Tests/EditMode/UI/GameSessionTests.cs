@@ -61,7 +61,7 @@ namespace EsportsManager.Tests.UI
             var id = s.Team.Roster[0].Id;
             int max = s.State.MaxPerPlayer;
             for (int i = 0; i < max; i++) Assert.IsTrue(s.TryAddRest(id, out _));
-            Assert.IsFalse(s.TryAddTrain(id, 0, out var e));
+            Assert.IsFalse(s.TryAddStream(id, out var e));
             Assert.AreEqual(PlanErrorCode.PlayerOverLimit, e.Code);
             Assert.AreEqual(max, s.Plan.PointsUsed);
             Assert.IsTrue(s.UndoLast(id));

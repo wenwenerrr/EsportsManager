@@ -1,4 +1,5 @@
 using System;
+using EsportsManager.Growth;
 using EsportsManager.Players;
 using EsportsManager.Segments;
 using EsportsManager.Teams;
@@ -24,7 +25,7 @@ namespace EsportsManager.Tests.Segments
         [Test]
         public void Plan_UsesExactlyAvailablePoints_Resolves()
         {
-            var plan = new SegmentPlan().Train(1, 0).Train(1, 0).Stream(2).Stream(2).Rest(3).Rest(3);
+            var plan = new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early).Stream(2).Stream(2).Rest(3).Rest(3);
             var s = _fx.Run(plan);
             Assert.AreEqual(6, s.PointsUsed);
             Assert.AreEqual(0, s.PointsUnused);
@@ -33,7 +34,7 @@ namespace EsportsManager.Tests.Segments
         [Test]
         public void Plan_OverTotalPoints_ThrowsInvalidOperation()
         {
-            var plan = new SegmentPlan().Train(1, 0).Train(1, 0).Train(2, 0).Train(2, 0).Train(3, 0).Train(3, 0).Train(4, 0);
+            var plan = new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(4, TrainingTarget.Early);
             _fx.Runner.BeginSegment();
             var ex = Assert.Throws<InvalidOperationException>(() => _fx.Runner.Resolve(plan, Ctx()));
             StringAssert.Contains("7", ex.Message);
@@ -42,7 +43,7 @@ namespace EsportsManager.Tests.Segments
         [Test]
         public void Plan_PlayerOverPerPlayerLimit_ThrowsInvalidOperation()
         {
-            var plan = new SegmentPlan().Train(1, 0).Stream(1).Rest(1);
+            var plan = new SegmentPlan().Train(1, TrainingTarget.Early).Stream(1).Rest(1);
             _fx.Runner.BeginSegment();
             var ex = Assert.Throws<InvalidOperationException>(() => _fx.Runner.Resolve(plan, Ctx()));
             StringAssert.Contains("Player 1", ex.Message);
@@ -52,15 +53,31 @@ namespace EsportsManager.Tests.Segments
         public void Plan_UnknownPlayer_ThrowsArgument()
         {
             _fx.Runner.BeginSegment();
-            Assert.Throws<ArgumentException>(() => _fx.Runner.Resolve(new SegmentPlan().Train(999, 0), Ctx()));
+            Assert.Throws<ArgumentException>(() => _fx.Runner.Resolve(new SegmentPlan().Train(999, TrainingTarget.Early), Ctx()));
         }
 
         [Test]
-        public void Plan_DimensionIndexOutOfRange_ThrowsArgument()
+        public void Plan_FocusNotInPhase_UnknownTarget_ThrowArgument()
         {
             _fx.Runner.BeginSegment();
-            Assert.Throws<ArgumentException>(() => _fx.Runner.Resolve(new SegmentPlan().Train(1, 6), Ctx()));
-            Assert.Throws<ArgumentException>(() => _fx.Runner.Resolve(new SegmentPlan().Train(1, -1), Ctx()));
+            Assert.Throws<ArgumentException>(() => _fx.Runner.Resolve(new SegmentPlan().Train(1, TrainingTarget.Early, 1), Ctx()));
+            Assert.Throws<ArgumentException>(() => _fx.Runner.Resolve(new SegmentPlan().Train(1, TrainingTarget.Command, 5), Ctx()));
+            Assert.Throws<ArgumentException>(() => _fx.Runner.Resolve(new SegmentPlan().Train(1, (TrainingTarget)9), Ctx()));
+            Assert.IsFalse(_fx.Runner.TryValidate(new SegmentPlan().Train(1, TrainingTarget.Mid, 3), Ctx(), out var e));
+            Assert.AreEqual(PlanErrorCode.DimensionOutOfRange, e.Code);
+            Assert.AreEqual(3, e.DimensionIndex);
+            Assert.IsTrue(_fx.Runner.TryValidate(new SegmentPlan().Train(1, TrainingTarget.Mid, 2), Ctx(), out _));
+        }
+
+        [Test]
+        public void Plan_TrainingWithoutGrowthSystem_IsRefused()
+        {
+            var fx = new Fixture();
+            fx.Runner = new SegmentRunner(fx.Cfg, fx.Players, fx.Team, fx.Rng);
+            fx.Runner.BeginSegment();
+            Assert.IsFalse(fx.Runner.TryValidate(new SegmentPlan().Train(1, TrainingTarget.Early), Ctx(), out var e));
+            Assert.AreEqual(PlanErrorCode.TrainingUnavailable, e.Code);
+            Assert.Throws<InvalidOperationException>(() => fx.Runner.Resolve(new SegmentPlan().Train(1, TrainingTarget.Early), Ctx()));
         }
 
         [Test]
@@ -123,9 +140,9 @@ namespace EsportsManager.Tests.Segments
             fx.Runner.BeginSegment();
             int drawsAfterBegin = rng.Draws;
             // valid first half, invalid second half (unknown player): must not train player 1
-            var bad = new SegmentPlan().Train(1, 0).Stream(2).Sponsor().Train(999, 0);
+            var bad = new SegmentPlan().Train(1, TrainingTarget.Early).Stream(2).Sponsor().Train(999, TrainingTarget.Early);
             Assert.Throws<ArgumentException>(() => fx.Runner.Resolve(bad, Ctx(true)));
-            var tooMany = new SegmentPlan().Train(1, 0).Train(1, 0).Train(2, 0).Train(2, 0).Train(3, 0).Train(3, 0).Sponsor();
+            var tooMany = new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(3, TrainingTarget.Early).Sponsor();
             Assert.Throws<InvalidOperationException>(() => fx.Runner.Resolve(tooMany, Ctx(true)));
             Assert.AreEqual(snapshot, Snapshot(fx));
             Assert.AreEqual(drawsAfterBegin, rng.Draws, "a failed validation must not consume random numbers");
@@ -133,7 +150,7 @@ namespace EsportsManager.Tests.Segments
             Assert.AreEqual(0, fx.Runner.GetState().ActiveContracts.Count);
             Assert.AreEqual(0, fx.Team.RecentResults.Count);
             // the corrected plan still works
-            Assert.DoesNotThrow(() => fx.Runner.Resolve(new SegmentPlan().Train(1, 0), Ctx(true)));
+            Assert.DoesNotThrow(() => fx.Runner.Resolve(new SegmentPlan().Train(1, TrainingTarget.Early), Ctx(true)));
         }
 
         private static string Snapshot(Fixture fx)
@@ -149,94 +166,88 @@ namespace EsportsManager.Tests.Segments
         [Test]
         public void UnusedPoints_AreLostAndDoNotCarryOver()
         {
-            var s1 = _fx.Run(new SegmentPlan().Train(1, 0));
+            var s1 = _fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(5, s1.PointsUnused);
             Assert.AreEqual(6, _fx.Runner.GetState().ActionPoints);
             Assert.AreEqual(6, _fx.Runner.PointsRemaining(new SegmentPlan()));
             _fx.Runner.BeginSegment();
-            var seven = new SegmentPlan().Train(1, 0).Train(1, 0).Train(2, 0).Train(2, 0).Train(3, 0).Train(3, 0).Train(4, 0);
+            var seven = new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(4, TrainingTarget.Early);
             Assert.Throws<InvalidOperationException>(() => _fx.Runner.Resolve(seven, Ctx()));
         }
 
         [Test]
         public void PointsRemaining_CountsAllPointKinds()
         {
-            var plan = new SegmentPlan().Train(1, 0).Stream(2).Rest(3).Sponsor().AcceptOffer(0);
+            var plan = new SegmentPlan().Train(1, TrainingTarget.Early).Stream(2).Rest(3).Sponsor().AcceptOffer(0);
             Assert.AreEqual(5, plan.PointsUsed);
             Assert.AreEqual(1, _fx.Runner.PointsRemaining(plan));
         }
 
-        // ---------------- AC2 training
+        // ---------------- AC2 training (Story 012: design/gdd/growth.md rev 3 through the runner)
+        // Fixture starter: 22 y (age_f 1), neutral traits, mood 50 (mood_t 1.0), stress 0, potential 80 (cap 90), all dims 50
+        // (head 1), focus 0.2 / 0.2 / 0.2 (spec 1.12): b = 2 x 1.12 = 2.24. Test phase map: early {0}, mid {1,2}, late {3,4}, cmd 5.
+        private const float B = 2.24f;
 
         [Test]
-        public void Train_OnePoint_RaisesAllSixDimensions_TargetTimesBonus()
+        public void Train_OnePointEarly_PhaseGetsB_OthersGetOtherShare()
         {
             var p = S(0);
-            float baseGain = p.TrainingGain("top", 2, 1f);
-            Assert.AreEqual(0.75f, baseGain, Tol); // 2 x 1 x (1 - 50/80) x 1 x 1.0 x 1
-            var s = _fx.Run(new SegmentPlan().Train(1, 2));
-            Assert.AreEqual(50f + baseGain * 1.5f, p.GetDimension("top", 2), Tol);
-            for (int d = 0; d < 6; d++)
-                if (d != 2) Assert.AreEqual(50f + baseGain, p.GetDimension("top", d), Tol, "dimension " + d);
+            var s = _fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early));
+            Assert.AreEqual(50f + B, p.GetDimension("top", 0), Tol);
+            for (int d = 1; d < 6; d++) Assert.AreEqual(50f + 0.1f * B, p.GetDimension("top", d), Tol, "dimension " + d);
             Assert.AreEqual(50f, p.GetDimension("mid", 0), Tol, "off lanes are not trained");
             var t = Of(s, p).Training[0];
-            Assert.AreEqual(2, t.DimensionIndex);
-            Assert.AreEqual(baseGain * 1.5f, t.Gain, Tol);
-            Assert.AreEqual(p.GetDimension("top", 2), t.NewValue, Tol);
+            Assert.AreEqual(TrainingTarget.Early, t.Target);
+            Assert.AreEqual(-1, t.FocusDimension);
+            Assert.AreEqual(1f, t.Noise);
+            Assert.AreEqual(B, t.Base, Tol);
             Assert.AreEqual(6, t.Gains.Length);
-            Assert.AreEqual(baseGain, t.Gains[0], Tol);
+            Assert.AreEqual(50f, Of(s, p).ValuesBefore[0], Tol);
+            Assert.AreEqual(p.GetDimension("top", 0), Of(s, p).ValuesAfter[0], Tol);
         }
 
         [Test]
-        public void Train_TwoPointsSameDimension_IsIntensityTwo()
+        public void Train_FocusDimension_RedistributesInsidePhase_PhaseMeanUnchanged()
         {
             var p = S(0);
-            float expected = p.TrainingGain("top", 0, 2f);
-            Assert.AreEqual(1.5f, expected, Tol);
-            var s = _fx.Run(new SegmentPlan().Train(1, 0).Train(1, 0));
-            Assert.AreEqual(50f + expected * 1.5f, p.GetDimension("top", 0), Tol);
-            Assert.AreEqual(50f + expected, p.GetDimension("top", 3), Tol);
-            Assert.AreEqual(1, Of(s, p).Training.Count);
-            Assert.AreEqual(2, Of(s, p).Training[0].Points);
+            _fx.Run(new SegmentPlan().Train(1, TrainingTarget.Mid, 1));
+            Assert.AreEqual(50f + 1.25f * B, p.GetDimension("top", 1), Tol); // 1 + 0.5 x 1/2
+            Assert.AreEqual(50f + 0.75f * B, p.GetDimension("top", 2), Tol); // 1 - 0.5/2
+            Assert.AreEqual(50f + 0.1f * B, p.GetDimension("top", 0), Tol);
         }
 
         [Test]
-        public void Train_TwoPointsDifferentTargets_BothPassesUseSegmentStartValues()
-        {
-            // gain(x) = T_base 2 x max(1 - x/80, 0.15) for this neutral 22-year-old with stress 0
-            float G = 2f * (1f - 50f / 80f);
-            var p = S(0);
-            _fx.Run(new SegmentPlan().Train(1, 0).Train(1, 1));
-            Assert.AreEqual(50f + G * 1.5f + G, p.GetDimension("top", 0), Tol);
-            Assert.AreEqual(50f + G + G * 1.5f, p.GetDimension("top", 1), Tol);
-            Assert.AreEqual(50f + 2f * G, p.GetDimension("top", 2), Tol);
-        }
-
-        [Test]
-        public void Train_DifferentTargets_OrderDoesNotMatter()
+        public void Train_TwoPhases_OrderIndependent_FocusFromCounts()
         {
             var a = new Fixture(); var b = new Fixture();
-            a.Starters[0].SetDimension("top", 0, 70f); b.Starters[0].SetDimension("top", 0, 70f);
-            a.Run(new SegmentPlan().Train(1, 0).Train(1, 3));
-            b.Run(new SegmentPlan().Train(1, 3).Train(1, 0));
+            var sa = a.Run(new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Mid));
+            b.Run(new SegmentPlan().Train(1, TrainingTarget.Mid).Train(1, TrainingTarget.Early));
             CollectionAssert.AreEqual(a.Starters[0].GetRadar("top"), b.Starters[0].GetRadar("top"));
+            for (int k = 0; k < 3; k++) Assert.AreEqual(a.Starters[0].GetFocus(k), b.Starters[0].GetFocus(k), 1e-6f);
+            Assert.AreEqual(0.290f, a.Starters[0].GetFocus(0), 0.005f);
+            Assert.AreEqual(0.290f, a.Starters[0].GetFocus(1), 0.005f);
+            Assert.AreEqual(0.140f, a.Starters[0].GetFocus(2), 0.005f);
+            // both points use segment-start values (spec 1.12 each), not the focus after the first point
+            Assert.AreEqual(50f + B + 0.1f * B, a.Starters[0].GetDimension("top", 0), Tol);
+            CollectionAssert.AreEqual(new[] { 0.2f, 0.2f, 0.2f }, Of(sa, a.Starters[0]).FocusBefore);
         }
 
         [Test]
-        public void Train_NearHundred_ClampsAtHundred()
+        public void Train_AboveCeiling_DoesNotChange_NearCeilingClampsToCap()
         {
             var p = S(0);
-            p.SetDimension("top", 0, 99.9f);
-            var s = _fx.Run(new SegmentPlan().Train(1, 0));
-            Assert.AreEqual(100f, p.GetDimension("top", 0));
-            Assert.AreEqual(0.45f, Of(s, p).Training[0].Gain, Tol); // soft cap floor 0.15 x T_base 2 x target_bonus 1.5
+            p.SetDimension("top", 0, 95f);   // above cap 90 (e.g. potential lowered by an event)
+            p.SetDimension("top", 3, 89.9f); // head 0.004
+            _fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Late, 3));
+            Assert.AreEqual(95f, p.GetDimension("top", 0), Tol);
+            Assert.LessOrEqual(p.GetDimension("top", 3), 90f);
         }
 
         [Test]
         public void Train_RaisesStressAndObservation()
         {
             var p = S(0);
-            var s = _fx.Run(new SegmentPlan().Train(1, 0));
+            var s = _fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(6f, p.Stress, Tol); // s_train x intensity 1 x R(1)
             Assert.AreEqual(3f + 5f, p.Observation, Tol); // o_train + o_seg
             Assert.AreEqual(6f, Of(s, p).StressDelta, Tol);
@@ -245,17 +256,18 @@ namespace EsportsManager.Tests.Segments
         [Test]
         public void Train_TwoPoints_DoublesStress()
         {
-            _fx.Run(new SegmentPlan().Train(1, 0).Train(1, 0));
+            _fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early));
             Assert.AreEqual(12f, S(0).Stress, Tol);
             Assert.AreEqual(6f + 5f, S(0).Observation, Tol);
         }
 
         [Test]
-        public void Train_UntrainedRosterPlayer_GetsOnlySegmentObservation()
+        public void Train_UntrainedRosterPlayer_GetsOnlySegmentObservation_FocusUnchanged()
         {
-            _fx.Run(new SegmentPlan().Train(1, 0));
+            _fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(5f, S(1).Observation, Tol);
             Assert.AreEqual(0f, S(1).Stress, Tol);
+            Assert.AreEqual(0.2f, S(1).GetFocus(0), 1e-6f);
         }
 
         [Test]
@@ -263,10 +275,9 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             var p = fx.Starters[0];
-            p.Stress = 40f;
-            float expected = p.TrainingGain("top", 0, 1f) * 1.5f; // (1 - 0.5 x 0.4) factor, target bonus
-            fx.Run(new SegmentPlan().Train(1, 0));
-            Assert.AreEqual(50f + expected, p.GetDimension("top", 0), Tol);
+            p.Stress = 70f; // stress_t = 1 - 2.3 x 20/100 = 0.54
+            fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early));
+            Assert.AreEqual(50f + B * 0.54f, p.GetDimension("top", 0), Tol);
         }
 
         [Test]
@@ -274,12 +285,53 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             fx.Cfg.training.intensity = 2f;
-            fx.Runner = new SegmentRunner(fx.Cfg, fx.Players, fx.Team, fx.Rng);
+            fx.Runner = new SegmentRunner(fx.Cfg, fx.Players, fx.Team, fx.Rng, null, fx.Growth);
             var p = fx.Starters[0];
-            float expected = p.TrainingGain("top", 0, 2f) * 1.5f;
-            fx.Run(new SegmentPlan().Train(1, 0));
-            Assert.AreEqual(50f + expected, p.GetDimension("top", 0), Tol);
+            fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early));
+            Assert.AreEqual(50f + 2f * B, p.GetDimension("top", 0), Tol);
             Assert.AreEqual(12f, p.Stress, Tol); // stress follows the intensity too
+        }
+
+        [Test]
+        public void Train_NoiseFromInjectedSource_OneDrawPerPoint()
+        {
+            var fx = new Fixture();
+            var noise = new ScriptedRandomSource(1f); // U(0.85, 1.15) at fraction 1 = 1.15
+            fx.Runner = new SegmentRunner(fx.Cfg, fx.Players, fx.Team, fx.Rng, null, fx.Growth, noise);
+            var s = fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early).Train(2, TrainingTarget.Late).Stream(3));
+            Assert.AreEqual(2, noise.Draws);
+            Assert.AreEqual(50f + 1.15f * B, fx.Starters[0].GetDimension("top", 0), Tol);
+            Assert.AreEqual(1.15f, Of(s, fx.Starters[0]).Training[0].Noise, 1e-6f);
+        }
+
+        [Test]
+        public void SegmentEnd_SpecialtyGained_ReportedInSummary_AndHookBuilt()
+        {
+            var p = S(0);
+            p.SetDimension("top", 0, 75f);
+            p.SetFocus(0, 0.4f);
+            // b = 2 x 1.24 = 2.48, head (90-75)/25 = 0.6: +1.488 per point -> 77.98; focus 0.4 -> 0.580
+            var s = _fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early));
+            Assert.AreEqual(77.976f, p.GetDimension("top", 0), 0.005f);
+            Assert.AreEqual(0.580f, p.GetFocus(0), 0.005f);
+            CollectionAssert.AreEqual(new[] { SegmentTestFactory.TopEarlySpecialty }, Of(s, p).SpecialtiesGained);
+            Assert.IsTrue(p.HasSpecialty(SegmentTestFactory.TopEarlySpecialty));
+            Assert.AreEqual(1, _fx.Growth.BuildHooks(_fx.Team.StartersByLane()).Count);
+        }
+
+        [Test]
+        public void Preview_TrainingGainsMatchResolveAtNoiseOne_AndRangeIsPlusMinusNoise()
+        {
+            _fx.Runner.BeginSegment();
+            var plan = new SegmentPlan().Train(1, TrainingTarget.Early);
+            var pv = _fx.Runner.Preview(plan, Ctx());
+            var pp = pv.Players[0];
+            Assert.AreEqual(B, pp.TrainingGains[0], Tol);
+            Assert.AreEqual(B * 0.85f, pp.TrainingGainsLow[0], Tol);
+            Assert.AreEqual(B * 1.15f, pp.TrainingGainsHigh[0], Tol);
+            Assert.AreEqual(0.2f * 0.837f + 0.163f, pp.FocusAfter[0], 1e-4f);
+            _fx.Runner.Resolve(plan, Ctx());
+            Assert.AreEqual(50f + pp.TrainingGains[0], S(0).GetDimension("top", 0), Tol);
         }
 
         // ---------------- AC3 stream
@@ -328,7 +380,7 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             fx.Cfg.stress.stream = 0f;
-            fx.Runner = new SegmentRunner(fx.Cfg, fx.Players, fx.Team, fx.Rng);
+            fx.Runner = new SegmentRunner(fx.Cfg, fx.Players, fx.Team, fx.Rng, null, fx.Growth);
             fx.Starters[0].Stress = 20f;
             fx.Run(new SegmentPlan().Stream(1).Stream(1));
             Assert.AreEqual(20f, fx.Starters[0].Stress, 1e-3f);
@@ -377,7 +429,7 @@ namespace EsportsManager.Tests.Segments
             // train +6, stream -3 on top of 30
             var fx = new Fixture();
             fx.Starters[0].Stress = 30f;
-            fx.Run(new SegmentPlan().Train(1, 0).Stream(1));
+            fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early).Stream(1));
             Assert.AreEqual(30f + 6f - 3f, fx.Starters[0].Stress, Tol);
         }
 
@@ -395,7 +447,7 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             var lazy = fx.AddBench(100, "mid", "lazy", NeutralB);
-            fx.Run(new SegmentPlan().Train(100, 0));
+            fx.Run(new SegmentPlan().Train(100, TrainingTarget.Early));
             Assert.AreEqual(3f, lazy.Stress, Tol);
         }
 
@@ -403,7 +455,7 @@ namespace EsportsManager.Tests.Segments
         public void Stress_RandomFactorFromRandomSource_IsApplied()
         {
             var fx = new Fixture(new StubRandomSource(1f)); // R(0.1) = 1.1, R(0.15) = 1.15
-            fx.Run(new SegmentPlan().Train(1, 0));
+            fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(6.6f, fx.Starters[0].Stress, Tol);
         }
 
@@ -412,10 +464,10 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             fx.Cfg.stress.recovery = 4f;
-            fx.Runner = new SegmentRunner(fx.Cfg, fx.Players, fx.Team, fx.Rng);
+            fx.Runner = new SegmentRunner(fx.Cfg, fx.Players, fx.Team, fx.Rng, null, fx.Growth);
             var bench = fx.AddBench(100, stress: 10f);
             fx.Starters[1].Stress = 2f;
-            fx.Run(new SegmentPlan().Train(1, 0));
+            fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(6f - 4f, fx.Starters[0].Stress, Tol);
             Assert.AreEqual(6f, bench.Stress, Tol);
             Assert.AreEqual(0f, fx.Starters[1].Stress, "clamped at 0");
@@ -426,7 +478,7 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             fx.Starters[0].Stress = 99f;
-            fx.Run(new SegmentPlan().Train(1, 0).Train(1, 0));
+            fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early));
             Assert.AreEqual(100f, fx.Starters[0].Stress);
         }
 

@@ -62,7 +62,7 @@ namespace EsportsManager.UI
         {
             var bar = UiKit.Row(64);
             bar.style.marginBottom = 6; bar.style.flexShrink = 0;
-            bar.Add(StatBlock(UiStrings.Strength, UiKit.F1(t.Strength), UiKit.Scale(t.Strength), 84));
+            bar.Add(PhaseStrengthBlock(t.PhaseStrength));
             bar.Add(StatBlock(UiStrings.Popularity, UiKit.F1(t.Popularity), UiKit.Scale(t.Popularity), 84));
             bar.Add(StatBlock(UiStrings.Funds, UiKit.Yuan(t.Funds), t.Funds < 0 ? UiKit.Bad : UiKit.Good, 175));
             bar.Add(StatBlock(UiStrings.Chemistry, UiKit.F1(t.Chemistry), UiKit.Scale(t.Chemistry), 84));
@@ -140,11 +140,43 @@ namespace EsportsManager.UI
             return string.Join(UiStrings.CounterJoin, parts);
         }
 
+        /// <summary>
+        /// "实力" as three phase values (前期 / 团战 / 后期) from the match's pre-match estimate (user decision 2026-10-28; the old
+        /// single TeamStrength number is not shown). "—" while unavailable (incomplete lineup / no league).
+        /// </summary>
+        private static VisualElement PhaseStrengthBlock(float[] strength)
+        {
+            var b = UiKit.Block(UiKit.Panel);
+            b.name = "phase-strength";
+            b.style.flexBasis = 200; b.style.flexGrow = 1.2f; b.style.minWidth = 185; b.style.flexShrink = 1; b.style.overflow = Overflow.Hidden;
+            b.style.height = Length.Percent(100); b.style.marginRight = 6;
+            b.style.justifyContent = Justify.Center; UiKit.Pad(b, 8);
+            b.Add(UiKit.Ellipsis(UiKit.Lbl(UiStrings.Strength, 12, UiKit.TextDim)));
+            // Stacked cells (label above value) so all three numbers stay readable on narrow windows.
+            var row = UiKit.Row(34);
+            for (int k = 0; k < 3; k++)
+            {
+                var cell = new VisualElement();
+                cell.style.flexDirection = FlexDirection.Column; cell.style.alignItems = Align.FlexStart; cell.style.flexGrow = 1; cell.style.flexBasis = 0;
+                cell.style.minWidth = 0;
+                var l = UiKit.Lbl(UiStrings.GrowthPhaseName(k), 11, UiKit.TextDim); l.style.flexShrink = 0;
+                cell.Add(l);
+                float v = strength != null ? strength[k] : 0f;
+                var val = UiKit.Lbl(strength != null ? UiKit.F1(v) : UiStrings.NoValue, 18, strength != null ? UiKit.Scale(v) : UiKit.TextDim, true);
+                val.style.flexShrink = 0;
+                val.name = "phase-strength-" + k;
+                cell.Add(val);
+                row.Add(cell);
+            }
+            b.Add(row);
+            return b;
+        }
+
         private static VisualElement StatBlock(string label, string value, Color valueColor, float width)
         {
             var b = UiKit.Block(UiKit.Panel);
             // Flexible: width is only the preferred basis; blocks grow / shrink with the window.
-            b.style.flexBasis = width; b.style.flexGrow = width > 150 ? 1.6f : 1; b.style.minWidth = width > 150 ? 150 : 0; b.style.flexShrink = 1; b.style.overflow = Overflow.Hidden;
+            b.style.flexBasis = width; b.style.flexGrow = width > 150 ? 1.6f : 1; b.style.minWidth = width > 150 ? 150 : 72; b.style.flexShrink = 1; b.style.overflow = Overflow.Hidden;
             b.style.height = Length.Percent(100); b.style.marginRight = 6;
             b.style.justifyContent = Justify.Center; UiKit.Pad(b, 8);
             b.Add(UiKit.Ellipsis(UiKit.Lbl(label, 12, UiKit.TextDim)));
@@ -157,7 +189,7 @@ namespace EsportsManager.UI
             var card = UiKit.Block(UiKit.Panel, 6);
             card.name = "card-" + c.Id;
             card.style.flexGrow = 1; card.style.flexBasis = Length.Percent(ui.CardsOnly ? 45f : 30f);
-            card.style.height = 286;
+            card.style.height = 330;
             card.style.flexShrink = 0;
             card.style.marginRight = 6; card.style.marginBottom = 6;
             UiKit.Pad(card, 8);
@@ -208,15 +240,25 @@ namespace EsportsManager.UI
                 c.ContractYearsLeft <= 1 ? UiKit.Warn : UiKit.Text));
             card.Add(r4);
 
-            var dims = new VisualElement();
-            dims.style.flexDirection = FlexDirection.Row; dims.style.flexWrap = Wrap.Wrap; dims.style.marginTop = 4;
-            for (int i = 0; i < c.DimensionNames.Length; i++)
+            // Growth (Story 012): one row per phase with its focus bar and dimensions, the command row, then specialties.
+            var growth = new VisualElement();
+            growth.name = "growth-" + c.Id;
+            growth.style.marginTop = 4;
+            bool hasPhases = c.CommandIndex >= 0;
+            if (hasPhases)
             {
-                float gain = pp != null && pp.TrainingGains != null && i < pp.TrainingGains.Length ? pp.TrainingGains[i] : 0f;
-                int dim = i; long id = c.Id;
-                dims.Add(DimBar(c.DimensionNames[i], c.DimensionValues[i], gain, () => ui.Train(id, dim)));
+                for (int k = 0; k < 3; k++) growth.Add(PhaseRow(c, pp, k));
+                growth.Add(CommandRow(c, pp));
             }
-            card.Add(dims);
+            else
+            {
+                var dims = new VisualElement();
+                dims.style.flexDirection = FlexDirection.Row; dims.style.flexWrap = Wrap.Wrap;
+                for (int i = 0; i < c.DimensionNames.Length; i++) dims.Add(DimChip(c, pp, i));
+                growth.Add(dims);
+            }
+            growth.Add(SpecialtyRow(c));
+            card.Add(growth);
 
             // Assignment area
             var a1 = UiKit.Row(22);
@@ -231,6 +273,9 @@ namespace EsportsManager.UI
             var a2 = UiKit.Row(28);
             long pid = c.Id;
             // On leave (Story 006 choice): no action point may go to him; the buttons are disabled and the reason shown.
+            var tb = UiKit.Btn(UiStrings.TrainButton, () => ui.OpenTraining(pid), UiKit.Warn, !onLeave && hasPhases);
+            tb.name = "train-" + c.Id; tb.style.color = UiKit.Background;
+            a2.Add(tb);
             a2.Add(UiKit.Btn(UiStrings.Stream, () => ui.Stream(pid), UiKit.Accent, !onLeave));
             a2.Add(UiKit.Btn(UiStrings.Rest, () => ui.Rest(pid), UiKit.Good, !onLeave));
             a2.Add(UiKit.Btn(UiStrings.Undo, () => ui.Undo(pid), UiKit.PanelLight, used > 0));
@@ -282,30 +327,126 @@ namespace EsportsManager.UI
             return chip;
         }
 
-        private static VisualElement DimBar(string name, float value, float gain, System.Action onClick)
+        private const float PhaseLabelWidth = 34, FocusBarWidth = 48;
+
+        // One phase: name, focus bar (0-1 with its value), then the phase's dimensions.
+        private static VisualElement PhaseRow(PlayerCardData c, PlayerPreview pp, int k)
         {
+            var row = UiKit.Row(24);
+            row.name = "phase-row-" + c.Id + "-" + k;
+            row.style.marginBottom = 2;
+            var l = UiKit.Lbl(UiStrings.GrowthPhaseName(k), 12, UiKit.Text, true); l.style.width = PhaseLabelWidth; l.style.flexShrink = 0;
+            row.Add(l);
+            row.Add(FocusBar(c.Focus[k], c.Id, k));
+            foreach (int d in c.PhaseDimensions[k]) row.Add(DimChip(c, pp, d));
+            return row;
+        }
+
+        private static VisualElement CommandRow(PlayerCardData c, PlayerPreview pp)
+        {
+            var row = UiKit.Row(24);
+            row.style.marginBottom = 2;
+            var l = UiKit.Lbl(UiStrings.TargetCommand, 12, UiKit.Text, true); l.style.width = PhaseLabelWidth; l.style.flexShrink = 0;
+            row.Add(l);
+            var pad = new VisualElement(); pad.style.width = FocusBarWidth; pad.style.flexShrink = 0; pad.style.marginRight = 4;
+            row.Add(pad);
+            row.Add(DimChip(c, pp, c.CommandIndex));
+            return row;
+        }
+
+        /// <summary>Focus bar: three-segment colour by depth, fill = focus, value with two decimals.</summary>
+        private static VisualElement FocusBar(float focus, long id, int k)
+        {
+            var bar = UiKit.Block(UiKit.PanelLight, 3);
+            bar.name = "focus-" + id + "-" + k;
+            bar.style.width = FocusBarWidth; bar.style.height = 18; bar.style.flexShrink = 0; bar.style.marginRight = 4;
+            bar.style.overflow = Overflow.Hidden; bar.style.justifyContent = Justify.Center;
+            var fill = new VisualElement();
+            fill.style.position = Position.Absolute; fill.style.left = 0; fill.style.top = 0; fill.style.bottom = 0;
+            fill.style.width = Length.Percent(Mathf.Clamp01(focus) * 100f);
+            fill.style.backgroundColor = focus >= 0.55f ? UiKit.Good : focus >= 0.3f ? UiKit.Accent : UiKit.TextDim;
+            bar.Add(fill);
+            var v = UiKit.Lbl(focus.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), 11, UiKit.Text, true);
+            v.style.textShadow = new TextShadow { offset = new Vector2(1, 1), color = new Color(0, 0, 0, 0.8f) };
+            v.style.unityTextAlign = TextAnchor.MiddleCenter;
+            bar.Add(v);
+            return bar;
+        }
+
+        /// <summary>A dimension: name, value, planned gain (noise 1) and the "近上限" marker (never the potential).</summary>
+        private static VisualElement DimChip(PlayerCardData c, PlayerPreview pp, int i)
+        {
+            float value = c.DimensionValues[i];
+            float gain = pp != null && pp.TrainingGains != null && i < pp.TrainingGains.Length ? pp.TrainingGains[i] : 0f;
+            bool near = c.NearCap != null && i < c.NearCap.Length && c.NearCap[i];
             var cell = UiKit.Block(UiKit.PanelLight, 3);
-            cell.style.width = Length.Percent(49); cell.style.height = 22; cell.style.marginBottom = 3;
-            cell.style.marginRight = Length.Percent(1);
-            cell.style.flexDirection = FlexDirection.Row; cell.style.alignItems = Align.Center;
-            cell.style.overflow = Overflow.Hidden;
-            cell.AddManipulator(new Clickable(onClick));
+            cell.name = "dim-" + c.Id + "-" + i;
+            cell.style.flexGrow = 1; cell.style.flexBasis = 0; cell.style.minWidth = 0; cell.style.height = 22; cell.style.marginRight = 3;
+            cell.style.flexDirection = FlexDirection.Row; cell.style.alignItems = Align.Center; cell.style.overflow = Overflow.Hidden;
             var fill = new VisualElement();
             fill.style.position = Position.Absolute; fill.style.left = 0; fill.style.top = 0; fill.style.bottom = 0;
             fill.style.width = Length.Percent(Mathf.Clamp(value, 0f, 100f));
             var fc = UiKit.Scale(value); fc.a = 0.35f; fill.style.backgroundColor = fc;
             cell.Add(fill);
-            var l = UiKit.Lbl(name, 12, UiKit.Text); l.style.marginLeft = 6; cell.Add(l);
+            var l = UiKit.Ellipsis(UiKit.Lbl(c.DimensionNames[i], 11, UiKit.Text)); l.style.marginLeft = 4; l.style.flexShrink = 1; l.style.minWidth = 0;
+            cell.Add(l);
             cell.Add(UiKit.Spacer());
+            if (near)
+            {
+                var n = UiKit.Lbl(UiStrings.NearCapTag, 9, UiKit.Warn, true);
+                n.name = "near-cap-" + c.Id + "-" + i; n.style.marginRight = 2; n.style.flexShrink = 0;
+                cell.Add(n);
+            }
             if (gain > 0.005f)
             {
-                var g = UiKit.Lbl(UiKit.Delta(gain), 12, UiKit.Good, true);
-                g.style.backgroundColor = UiKit.LabelPill; g.style.paddingLeft = g.style.paddingRight = 3;
-                g.style.borderTopLeftRadius = g.style.borderTopRightRadius = g.style.borderBottomLeftRadius = g.style.borderBottomRightRadius = 3;
-                g.style.marginRight = 6; cell.Add(g);
+                var g = UiKit.Lbl(UiKit.Delta(gain), 10, UiKit.Good, true);
+                g.style.backgroundColor = UiKit.LabelPill; g.style.paddingLeft = g.style.paddingRight = 2; g.style.flexShrink = 0;
+                g.style.marginRight = 2; cell.Add(g);
             }
-            var v = UiKit.Lbl(UiKit.Int(value), 13, UiKit.Text, true); v.style.marginRight = 6; cell.Add(v);
+            var v = UiKit.Lbl(UiKit.Int(value), 12, UiKit.Text, true); v.style.marginRight = 4; v.style.flexShrink = 0; cell.Add(v);
             return cell;
+        }
+
+        /// <summary>Owned specialty tags, else the closest specialty's "离绝活还差" (dimension gap and focus gap).</summary>
+        private static VisualElement SpecialtyRow(PlayerCardData c)
+        {
+            var row = UiKit.Row(20);
+            row.name = "specialty-" + c.Id;
+            row.style.marginTop = 1;
+            var t = UiKit.Lbl(UiStrings.SpecialtyTitle, 11, UiKit.TextDim); t.style.marginRight = 4; t.style.flexShrink = 0;
+            row.Add(t);
+            if (c.SpecialtyNames.Length > 0)
+                foreach (var n in c.SpecialtyNames)
+                {
+                    var tag = Tag(n, UiKit.Good);
+                    tag.name = "specialty-tag-" + c.Id;
+                    tag.style.marginLeft = 0; tag.style.marginRight = 4;
+                    ((Label)tag[0]).style.color = UiKit.Background; ((Label)tag[0]).style.unityFontStyleAndWeight = FontStyle.Bold;
+                    row.Add(tag);
+                }
+            var next = ClosestUnowned(c);
+            if (next != null)
+            {
+                string gap = UiStrings.SpecialtyGap(next.Name, next.DimensionName, next.DimensionGap, next.Phase, next.FocusGap);
+                var g = UiKit.Ellipsis(UiKit.Lbl(gap, 11, UiKit.TextDim));
+                g.name = "specialty-gap-" + c.Id; g.style.flexShrink = 1; g.style.minWidth = 0;
+                row.Add(g);
+            }
+            else if (c.SpecialtyNames.Length == 0) row.Add(UiKit.Lbl(UiStrings.SpecialtyNone, 11, UiKit.TextDim));
+            return row;
+        }
+
+        // The unowned specialty of his lane with the smallest combined gap (dimension points + focus x 100), or null.
+        private static SpecialtyProgressData ClosestUnowned(PlayerCardData c)
+        {
+            SpecialtyProgressData best = null; float bestScore = float.MaxValue;
+            foreach (var sp in c.SpecialtyProgress)
+            {
+                if (sp.Owned) continue;
+                float score = sp.DimensionGap + sp.FocusGap * 100f;
+                if (score < bestScore) { bestScore = score; best = sp; }
+            }
+            return best;
         }
 
         private static VisualElement BuildBottomBar(GameUi ui, SegmentPreview pv)

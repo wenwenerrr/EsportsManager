@@ -125,13 +125,65 @@ namespace EsportsManager.Players
 
         [Serializable] private class TrainingDto
         {
-            /// <summary>T_base, dimension points per training at intensity 1.</summary>
+            /// <summary>T_base (growth.md F1), base amount of one training point.</summary>
             public float base_gain = NoFloat;
-            /// <summary>k_s, stress penalty factor in [0, 1].</summary>
-            public float stress_factor = NoFloat;
-            /// <summary>rho, the soft-cap floor of the headroom factor max(1 - dim/potential, rho), in [0, 1].</summary>
-            public float soft_cap_floor = NoFloat;
             public AgeCoefficientDto[] age_bands = null;
+            /// <summary>cap = min(100, potential + cap_margin) (growth.md F2).</summary>
+            public float cap_margin = NoFloat;
+            /// <summary>head_d = clamp((cap - d) / span, 0, 1).</summary>
+            public float span = NoFloat;
+            /// <summary>Focus dimension's in-phase redistribution share (bonus).</summary>
+            public float focus_bonus = NoFloat;
+            /// <summary>s_other, weight of dimensions outside the trained phase.</summary>
+            public float other_share = NoFloat;
+            /// <summary>mood_t at mood 0 / 100.</summary>
+            public float mood_factor_min = NoFloat;
+            public float mood_factor_max = NoFloat;
+            /// <summary>stress_t = max(0, 1 - k_th x max(0, stress - threshold)/100): threshold and k_th.</summary>
+            public float stress_threshold = NoFloat;
+            public float stress_slope = NoFloat;
+            /// <summary>mu and phi of growth.md F3.</summary>
+            public float specialization_rate = NoFloat;
+            public float specialization_gain = NoFloat;
+            /// <summary>Training noise half-width (0.15 = +-15%).</summary>
+            public float noise = NoFloat;
+            /// <summary>UI "接近上限" when cap - d is below this.</summary>
+            public float near_cap_margin = NoFloat;
+            /// <summary>talent.md initial focus: best phase / other phases.</summary>
+            public float initial_focus_high = NoFloat;
+            public float initial_focus_low = NoFloat;
+        }
+
+        [Serializable] private class SpecialtyEffectDto
+        {
+            /// <summary>phase_flat / star_scale / exec_add / sigma_scale.</summary>
+            public string hook = null;
+            /// <summary>early / mid / late / none.</summary>
+            public string phase = null;
+            /// <summary>Added value or multiplier (match.md hook semantics).</summary>
+            public float value = NoFloat;
+        }
+
+        [Serializable] private class SpecialtyDefDto
+        {
+            public string id = null;
+            public string display_name = null;
+            /// <summary>Lane id, or "any".</summary>
+            public string lane = null;
+            /// <summary>early / mid / late, or "none" for an any-lane specialty.</summary>
+            public string phase = null;
+            public string dimension = null;
+            public SpecialtyEffectDto[] effects = null;
+        }
+
+        [Serializable] private class SpecialtyDto
+        {
+            /// <summary>growth.md F4 thresholds: gain at value >= unlock and focus >= unlock_focus; lose below lose / lose_focus.</summary>
+            public float unlock_value = NoFloat;
+            public float lose_value = NoFloat;
+            public float unlock_focus = NoFloat;
+            public float lose_focus = NoFloat;
+            public SpecialtyDefDto[] specialties = null;
         }
 
         [Serializable] private class AgingDto
@@ -209,6 +261,7 @@ namespace EsportsManager.Players
             public EffectDto[] trait_effects = null;
             public PairDto[] trait_pairs = null;
             public TrainingDto training = null;
+            public SpecialtyDto specialty = null;
             public AgingDto aging = null;
             public PotentialDto potential = null;
             public SalaryDto salary = null;
@@ -270,6 +323,7 @@ namespace EsportsManager.Players
                     value = ReqF(e.value, p + ".value"),
                 }),
                 training = MapTraining(ReqObj(d.training, "training")),
+                specialty = MapSpecialty(ReqObj(d.specialty, "specialty")),
                 aging = MapAging(ReqObj(d.aging, "aging")),
                 potential = MapPotential(ReqObj(d.potential, "potential")),
                 salary = MapSalary(ReqObj(d.salary, "salary")),
@@ -320,16 +374,55 @@ namespace EsportsManager.Players
 
         private static TrainingConfig MapTraining(TrainingDto t)
         {
+            const string k = "training.";
             return new TrainingConfig
             {
-                baseGain = ReqF(t.base_gain, "training.base_gain"),
-                stressFactor = ReqF(t.stress_factor, "training.stress_factor"),
-                softCapFloor = ReqF(t.soft_cap_floor, "training.soft_cap_floor"),
-                ageBands = MapArray(t.age_bands, "training.age_bands", (b, p) => new AgeCoefficientBand
+                baseGain = ReqF(t.base_gain, k + "base_gain"),
+                ageBands = MapArray(t.age_bands, k + "age_bands", (b, p) => new AgeCoefficientBand
                 {
                     minAge = ReqI(b.min_age, p + ".min_age"),
                     maxAge = ReqI(b.max_age, p + ".max_age"),
                     coefficient = ReqF(b.coefficient, p + ".coefficient"),
+                }),
+                capMargin = ReqF(t.cap_margin, k + "cap_margin"),
+                span = ReqF(t.span, k + "span"),
+                focusBonus = ReqF(t.focus_bonus, k + "focus_bonus"),
+                otherShare = ReqF(t.other_share, k + "other_share"),
+                moodFactorMin = ReqF(t.mood_factor_min, k + "mood_factor_min"),
+                moodFactorMax = ReqF(t.mood_factor_max, k + "mood_factor_max"),
+                stressThreshold = ReqF(t.stress_threshold, k + "stress_threshold"),
+                stressSlope = ReqF(t.stress_slope, k + "stress_slope"),
+                specializationRate = ReqF(t.specialization_rate, k + "specialization_rate"),
+                specializationGain = ReqF(t.specialization_gain, k + "specialization_gain"),
+                noise = ReqF(t.noise, k + "noise"),
+                nearCapMargin = ReqF(t.near_cap_margin, k + "near_cap_margin"),
+                initialFocusHigh = ReqF(t.initial_focus_high, k + "initial_focus_high"),
+                initialFocusLow = ReqF(t.initial_focus_low, k + "initial_focus_low"),
+            };
+        }
+
+        private static SpecialtyTable MapSpecialty(SpecialtyDto s)
+        {
+            const string k = "specialty.";
+            return new SpecialtyTable
+            {
+                unlockValue = ReqF(s.unlock_value, k + "unlock_value"),
+                loseValue = ReqF(s.lose_value, k + "lose_value"),
+                unlockFocus = ReqF(s.unlock_focus, k + "unlock_focus"),
+                loseFocus = ReqF(s.lose_focus, k + "lose_focus"),
+                specialties = MapArray(s.specialties, k + "specialties", (d, p) => new SpecialtyDef
+                {
+                    id = ReqS(d.id, p + ".id"),
+                    displayName = ReqS(d.display_name, p + ".display_name"),
+                    lane = ReqS(d.lane, p + ".lane"),
+                    phase = ReqS(d.phase, p + ".phase"),
+                    dimension = ReqS(d.dimension, p + ".dimension"),
+                    effects = MapArray(d.effects, p + ".effects", (e, q) => new SpecialtyEffectDef
+                    {
+                        hook = ReqS(e.hook, q + ".hook"),
+                        phase = ReqS(e.phase, q + ".phase"),
+                        value = ReqF(e.value, q + ".value"),
+                    }),
                 }),
             };
         }

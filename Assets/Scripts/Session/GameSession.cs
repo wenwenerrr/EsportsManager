@@ -1,6 +1,8 @@
 using EsportsManager.Events;
 using System;
 using System.Collections.Generic;
+using EsportsManager.Growth;
+using EsportsManager.Leagues;
 using EsportsManager.Matches;
 using EsportsManager.Players;
 using EsportsManager.Segments;
@@ -49,6 +51,48 @@ namespace EsportsManager.Session
         public float Rating;
         /// <summary>True when his stress is above mood.high_stress_threshold (the same test the mood formula uses).</summary>
         public bool HighStress;
+        /// <summary>Phase focus early / mid / late, 0-1 (growth.md 专精条).</summary>
+        public float[] Focus = new float[3];
+        /// <summary>Main-lane dimension indexes of each phase ([phase][]); empty arrays without the growth system.</summary>
+        public int[][] PhaseDimensions = { new int[0], new int[0], new int[0] };
+        /// <summary>Main-lane index of the command dimension (-1 without the growth system).</summary>
+        public int CommandIndex = -1;
+        /// <summary>Per main-lane dimension: "接近上限" (ceiling - value below near_cap_margin). The potential is never exposed.</summary>
+        public bool[] NearCap = new bool[0];
+        /// <summary>Display names of the owned specialties.</summary>
+        public string[] SpecialtyNames = new string[0];
+        /// <summary>Distance to every specialty of his main lane ("离绝活还差"), config order.</summary>
+        public List<SpecialtyProgressData> SpecialtyProgress = new List<SpecialtyProgressData>();
+    }
+
+    /// <summary>One "离绝活还差" line of a player card (growth.md UI): gaps only, never the potential.</summary>
+    public sealed class SpecialtyProgressData
+    {
+        /// <summary>Specialty id.</summary>
+        public string Id;
+        /// <summary>Specialty display name.</summary>
+        public string Name;
+        /// <summary>Phase 0-2, or -1 for an any-lane specialty (focus not needed).</summary>
+        public int Phase;
+        /// <summary>Main-lane dimension index and its display name.</summary>
+        public int DimensionIndex;
+        /// <summary>Dimension display name.</summary>
+        public string DimensionName;
+        /// <summary>max(0, 76 - d).</summary>
+        public float DimensionGap;
+        /// <summary>max(0, 0.55 - focus) (0 for an any-lane specialty).</summary>
+        public float FocusGap;
+        /// <summary>True when owned ("已解锁").</summary>
+        public bool Owned;
+    }
+
+    /// <summary>Training pop-up estimate of ONE more point (growth.md "训练预估": a +-noise range, no event modifiers).</summary>
+    public sealed class TrainingPointPreview
+    {
+        /// <summary>Gain per main-lane dimension at the lowest / highest noise.</summary>
+        public float[] Low, High;
+        /// <summary>Dimension indexes of the target.</summary>
+        public int[] TargetDimensions;
     }
 
     /// <summary>Header numbers of the main screen.</summary>
@@ -56,8 +100,11 @@ namespace EsportsManager.Session
     {
         /// <summary>Team name.</summary>
         public string Name;
-        /// <summary>Team strength (the triangle's first corner).</summary>
-        public float Strength;
+        /// <summary>
+        /// Phase strengths S_E / S_M / S_L of the current lineup, tactic and specialty hooks (the match's pre-match estimate;
+        /// user decision 2026-10-28 replaces the old single TeamStrength number). Null without a league or with an incomplete lineup.
+        /// </summary>
+        public float[] PhaseStrength;
         /// <summary>Club popularity 0-100 (second corner).</summary>
         public float Popularity;
         /// <summary>Funds, yuan; may be negative (third corner).</summary>
@@ -89,8 +136,8 @@ namespace EsportsManager.Session
         public float PopularityBefore, PopularityAfter;
         /// <summary>Team chemistry before / after.</summary>
         public float ChemistryBefore, ChemistryAfter;
-        /// <summary>Team strength before / after.</summary>
-        public float StrengthBefore, StrengthAfter;
+        /// <summary>Phase strengths (pre-match estimate) before / after; null when unavailable (no league, incomplete lineup).</summary>
+        public float[] PhaseStrengthBefore, PhaseStrengthAfter;
     }
 
     /// <summary>One lineup slot for the lineup screen (no text besides config names).</summary>
@@ -159,16 +206,23 @@ namespace EsportsManager.Session
         private int _segmentsPlayed;
         private readonly HashSet<int> _declined = new HashSet<int>();
 
-        /// <summary>The team.</summary>
-        public Team Team { get; }
-        /// <summary>The runner (state, validation, preview, resolve).</summary>
-        public SegmentRunner Runner { get; }
+        /// <summary>The player's team (null while the job offers are pending).</summary>
+        public Team Team { get; private set; }
+        /// <summary>The player club's runner (state, validation, preview, resolve); null while the job offers are pending.</summary>
+        public SegmentRunner Runner { get; private set; }
+        /// <summary>The whole league (Story 013), or null for a session without a match config.</summary>
+        public LeagueWorld World { get; }
+        /// <summary>The player club (null without a league or while the offers are pending).</summary>
+        public Club PlayerClub => World?.PlayerClub;
+        /// <summary>True after the warm-up while the player has not picked one of the three offers yet.</summary>
+        public bool ChoosingOffer => World != null && World.PlayerClubId < 0;
         /// <summary>The draft plan the UI edits.</summary>
         public SegmentPlan Plan { get; private set; } = new SegmentPlan();
         /// <summary>The seed this session was built with.</summary>
         public int Seed { get; }
-        /// <summary>Players of the generated pool who are NOT on the roster (free agents), for later stories.</summary>
-        public IReadOnlyList<Player> FreeAgents { get; }
+        /// <summary>Free agents (the league's pool with a league; otherwise the generated pool minus the roster).</summary>
+        public IReadOnlyList<Player> FreeAgents => World != null ? (IReadOnlyList<Player>)World.FreeAgents : _free;
+        private readonly List<Player> _free = new List<Player>();
 
         /// <summary>Builds a session from the three config JSON texts WITHOUT a league (no matches; Story 003/009 behaviour).</summary>
         public static GameSession FromJson(string playerJson, string teamJson, string segmentJson,
@@ -178,55 +232,72 @@ namespace EsportsManager.Session
                 SegmentConfigLoader.FromJson(segmentJson), seed, startingFunds);
         }
 
-        /// <summary>Builds a session WITH the league (Story 004) from the four config JSON texts.</summary>
-        public static GameSession FromJson(string playerJson, string teamJson, string segmentJson, string matchJson,
+        /// <summary>
+        /// Builds a session WITH the league (Story 013: warm-up year, then the MID offer is taken automatically under the default
+        /// name). <paramref name="matchJson"/> null = no league (then <paramref name="leagueJson"/> is ignored).
+        /// </summary>
+        public static GameSession FromJson(string playerJson, string teamJson, string segmentJson, string matchJson, string leagueJson,
             int seed = DefaultSeed, long startingFunds = DefaultFunds)
-        {
-            return new GameSession(PlayerConfigLoader.FromJson(playerJson), TeamConfigLoader.FromJson(teamJson),
-                SegmentConfigLoader.FromJson(segmentJson), seed, startingFunds,
-                matchJson == null ? null : MatchConfigLoader.FromJson(matchJson));
-        }
+            => FromJson(playerJson, teamJson, segmentJson, matchJson, null, leagueJson, seed, startingFunds);
 
         /// <summary>
         /// Builds a session with the league AND random events (Story 006). <paramref name="eventJson"/> null = no events.
+        /// <paramref name="autoTakeOffer"/> false leaves the three job offers pending (the new-game screen); true takes the mid offer.
         /// </summary>
         public static GameSession FromJson(string playerJson, string teamJson, string segmentJson, string matchJson, string eventJson,
-            int seed = DefaultSeed, long startingFunds = DefaultFunds)
+            string leagueJson, int seed = DefaultSeed, long startingFunds = DefaultFunds, bool autoTakeOffer = true)
         {
             var players = PlayerConfigLoader.FromJson(playerJson);
             return new GameSession(players, TeamConfigLoader.FromJson(teamJson), SegmentConfigLoader.FromJson(segmentJson), seed, startingFunds,
                 matchJson == null ? null : MatchConfigLoader.FromJson(matchJson),
-                eventJson == null ? null : EventConfigLoader.FromJson(eventJson, players));
+                eventJson == null ? null : EventConfigLoader.FromJson(eventJson, players),
+                matchJson == null || leagueJson == null ? null : LeagueConfigLoader.FromJson(leagueJson), autoTakeOffer);
         }
 
         /// <summary>Event text table for the UI (set by the bootstrap; null in tests that do not need texts).</summary>
         public EventTextTable EventTexts { get; set; }
 
         /// <summary>The random event engine (Story 006), or null when the session has no event config.</summary>
-        public EventEngine Events { get; }
+        public EventEngine Events { get; private set; }
 
         /// <summary>The tournament runner (league, opponents, simulator), or null for a session without matches.</summary>
-        public TournamentRunner Tournament { get; }
+        public TournamentRunner Tournament { get; private set; }
         /// <summary>Calendar + event state machine (numbers.md 4.18), or null for a session without matches.</summary>
-        public SeasonFlow Season { get; }
+        public SeasonFlow Season { get; private set; }
         /// <summary>The match config, or null.</summary>
         public MatchConfig MatchConfig => Tournament?.Config;
+        /// <summary>The growth system (Story 012), or null for a session without a match config (it needs the phase mapping).</summary>
+        public GrowthSystem Growth { get; private set; }
 
         /// <summary>
-        /// Generates the pool, takes the best main-lane player of every lane as starter plus the best remaining player
-        /// as bench, and opens the first segment. With <paramref name="match"/> it also builds the league (Story 004) from the
-        /// SAME generator (ids never collide) with seed + 3, and plays events on a dedicated source seeded seed + 4, so the
-        /// team (seed + 1) and runner (seed + 2) streams draw exactly as before.
+        /// WITHOUT a match config: generates the pool, takes the best main-lane player of every lane as starter plus the best
+        /// remaining player as bench, and opens the first segment (Story 003 / 009 behaviour; no league, no training).
+        /// WITH a match config (Story 013): builds the whole league (<see cref="LeagueWorld"/>, keyed random numbers from
+        /// <paramref name="seed"/>), runs the warm-up year and makes the three job offers; <paramref name="autoTakeOffer"/> then takes
+        /// the mid offer under the default name and opens segment 1 of year 1 (<paramref name="startingFunds"/> is ignored: the
+        /// club's own funds plus the takeover top-up apply).
         /// </summary>
         public GameSession(PlayerConfig players, TeamConfig team, SegmentConfig segment, int seed = DefaultSeed,
-            long startingFunds = DefaultFunds, MatchConfig match = null, EventConfig events = null)
+            long startingFunds = DefaultFunds, MatchConfig match = null, EventConfig events = null, LeagueConfig league = null,
+            bool autoTakeOffer = true)
         {
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _segment = segment ?? throw new ArgumentNullException(nameof(segment));
             Seed = seed;
+            if (match != null)
+            {
+                if (league == null) throw new ArgumentNullException(nameof(league), "A session with matches needs the league config.");
+                World = new LeagueWorld(players, team, segment, match, events, league, seed);
+                Tournament = World.Tournament;
+                Season = World.Season;
+                Growth = World.Growth;
+                World.RunWarmUp();
+                if (autoTakeOffer) TakeOffer(1, "");
+                return;
+            }
             var generator = new PlayerGenerator(players, new SeededRandomSource(seed));
             var pool = generator.GeneratePool();
-            Team = new Team(team, players, new SeededRandomSource(seed + 1), startingFunds, match != null ? match.club.defaultName : "Demo");
+            Team = new Team(team, players, new SeededRandomSource(seed + 1), startingFunds, "Demo");
             var used = new HashSet<long>();
             foreach (var lane in players.lanes)
             {
@@ -242,19 +313,32 @@ namespace EsportsManager.Session
             foreach (var p in pool)
                 if (!used.Contains(p.Id) && (bench == null || p.GetLaneScore(p.MainLane) > bench.GetLaneScore(bench.MainLane))) bench = p;
             if (bench != null) { Team.AddPlayer(bench); used.Add(bench.Id); }
-            var free = new List<Player>();
-            foreach (var p in pool) if (!used.Contains(p.Id)) free.Add(p);
-            FreeAgents = free;
-            if (match != null)
-            {
-                var league = LeagueFactory.Build(match, team, players, generator, seed + 3, Team.Name);
-                Tournament = new TournamentRunner(league, match, team, players, new SeededRandomSource(seed + 4));
-                Season = new SeasonFlow(match, segment, players, Tournament, Team);
-            }
-            // Story 006: events draw on their own source (seed + 5) so the other streams are unchanged.
+            foreach (var p in pool) if (!used.Contains(p.Id)) _free.Add(p);
             if (events != null) Events = new EventEngine(events, players, new SeededRandomSource(seed + 5));
-            Runner = new SegmentRunner(segment, players, Team, new SeededRandomSource(seed + 2), Events);
+            Runner = new SegmentRunner(segment, players, Team, new SeededRandomSource(seed + 2), Events, null, new SeededRandomSource(seed + 6));
             Runner.BeginSegment();
+        }
+
+        /// <summary>The three job offers after the warm-up (empty once one was taken or without a league).</summary>
+        public IReadOnlyList<JobOffer> Offers => World != null ? (IReadOnlyList<JobOffer>)World.Offers : new JobOffer[0];
+
+        /// <summary>
+        /// Takes offer <paramref name="index"/> (0 strong, 1 mid, 2 weak) and names the club (normalised like <see cref="SetClubName"/>;
+        /// empty = keep the club's name), then opens segment 1 of year 1. Throws when no offer is pending.
+        /// </summary>
+        public Club TakeOffer(int index, string name)
+        {
+            if (!ChoosingOffer) throw new InvalidOperationException("No job offer is pending.");
+            if (index < 0 || index >= World.Offers.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            var offer = World.Offers[index];
+            string old = World.Clubs[offer.ClubId].Name;
+            var c = World.TakeOver(offer, old);
+            Team = c.Team;
+            Runner = c.Runner;
+            Events = c.Events;
+            if (!string.IsNullOrWhiteSpace(name)) SetClubName(name);
+            World.BeginSegment();
+            return c;
         }
 
         /// <summary>Current runner snapshot (offers, contracts, last summary).</summary>
@@ -275,20 +359,16 @@ namespace EsportsManager.Session
         /// <paramref name="seed"/> (debug --force-offer / --demo offer). Returns the last tried session if none has one.
         /// </summary>
         public static GameSession FromJsonWithOffer(string playerJson, string teamJson, string segmentJson, int seed, int maxTries = 500)
-            => FromJsonWithOffer(playerJson, teamJson, segmentJson, null, seed, maxTries);
+            => FromJsonWithOffer(playerJson, teamJson, segmentJson, null, null, null, seed, maxTries);
 
-        /// <summary>Same as the overload above, with the league when <paramref name="matchJson"/> is not null.</summary>
-        public static GameSession FromJsonWithOffer(string playerJson, string teamJson, string segmentJson, string matchJson, int seed, int maxTries = 500)
-            => FromJsonWithOffer(playerJson, teamJson, segmentJson, matchJson, null, seed, maxTries);
-
-        /// <summary>Same, with random events when <paramref name="eventJson"/> is not null.</summary>
+        /// <summary>Same as the overload above, with the league (and random events when <paramref name="eventJson"/> is not null).</summary>
         public static GameSession FromJsonWithOffer(string playerJson, string teamJson, string segmentJson, string matchJson, string eventJson,
-            int seed, int maxTries = 500)
+            string leagueJson, int seed, int maxTries = 500)
         {
             GameSession s = null;
             for (int i = 0; i < maxTries; i++)
             {
-                s = FromJson(playerJson, teamJson, segmentJson, matchJson, eventJson, seed + i * 7);
+                s = FromJson(playerJson, teamJson, segmentJson, matchJson, eventJson, leagueJson, seed + i * 7);
                 if (s.Runner.GetState().PendingOffers.Count > 0) return s;
             }
             return s;
@@ -312,13 +392,12 @@ namespace EsportsManager.Session
             var r = new SegmentResult
             {
                 SegmentNumber = _segmentsPlayed + 1, FundsBefore = Team.Funds, PopularityBefore = Team.ClubPopularity,
-                ChemistryBefore = Team.Chemistry(), StrengthBefore = Team.Strength(),
+                ChemistryBefore = Team.Chemistry(), PhaseStrengthBefore = PhaseStrengths(),
             };
-            r.Summary = Runner.Resolve(Plan, BuildContext());
+            r.Summary = World != null ? World.ResolveSegment(Plan) : Runner.Resolve(Plan, BuildContext());
             r.FundsAfter = Team.Funds; r.PopularityAfter = Team.ClubPopularity;
-            r.ChemistryAfter = Team.Chemistry(); r.StrengthAfter = Team.Strength();
+            r.ChemistryAfter = Team.Chemistry(); r.PhaseStrengthAfter = PhaseStrengths();
             _segmentsPlayed++;
-            Season?.OnSegmentResolved();
             Plan = new SegmentPlan();
             _declined.Clear();
             AwaitingNext = true;
@@ -332,7 +411,7 @@ namespace EsportsManager.Session
             if (!AwaitingNext) throw new InvalidOperationException("Resolve the open segment first.");
             if (Season != null && Season.Phase != EventPhase.None) throw new InvalidOperationException("Finish and acknowledge the event first.");
             AwaitingNext = false;
-            Runner.BeginSegment();
+            if (World != null) World.BeginSegment(); else Runner.BeginSegment();
         }
 
         /// <summary>BeginNext without throwing: false + EventPending / SegmentNotOpen.</summary>
@@ -356,8 +435,35 @@ namespace EsportsManager.Session
 
         // ------------------------------------------------------------ plan editing (every change is validated)
 
-        /// <summary>Adds one training point on a main-lane dimension; refused (false + error) when the plan would be invalid.</summary>
-        public bool TryAddTrain(long playerId, int dimensionIndex, out PlanError error) => TryChange(p => p.Train(playerId, dimensionIndex), out error);
+        /// <summary>
+        /// Adds one training point on a phase (or command) with an optional focus dimension (-1 = none); refused (false + error)
+        /// when the plan would be invalid (TrainingUnavailable without the growth system).
+        /// </summary>
+        public bool TryAddTrain(long playerId, TrainingTarget target, int focusDimension, out PlanError error)
+            => TryChange(p => p.Train(playerId, target, focusDimension), out error);
+
+        /// <summary>Estimate of one more point (+-noise range) for the training pop-up; null without the growth system or for an unknown player.</summary>
+        public TrainingPointPreview PreviewTrainingPoint(long playerId, TrainingTarget target, int focusDimension)
+        {
+            var p = FindRostered(playerId);
+            if (Growth == null || p == null || !Growth.IsValidFocus(p.MainLane, target, focusDimension)) return null;
+            float i = _segment.training.intensity;
+            return new TrainingPointPreview
+            {
+                Low = Growth.PointGains(p, target, focusDimension, Growth.BaseAmount(p, target, i, Growth.NoiseLow)),
+                High = Growth.PointGains(p, target, focusDimension, Growth.BaseAmount(p, target, i, Growth.NoiseHigh)),
+                TargetDimensions = Growth.TargetDims(p.MainLane, target),
+            };
+        }
+
+        /// <summary>Display name of a specialty id (falls back to the id).</summary>
+        public string SpecialtyName(string id) => Growth?.Find(id)?.displayName ?? _players.specialty?.Find(id)?.displayName ?? id;
+
+        private Player FindRostered(long id)
+        {
+            foreach (var p in Team.Roster) if (p.Id == id) return p;
+            return null;
+        }
         /// <summary>Adds one stream point.</summary>
         public bool TryAddStream(long playerId, out PlanError error) => TryChange(p => p.Stream(playerId), out error);
         /// <summary>Adds one rest point.</summary>
@@ -514,7 +620,7 @@ namespace EsportsManager.Session
         public MatchPreviewData GetMatchPreview()
         {
             if (Tournament == null || !LineupError().IsNone) return null;
-            var ev = Tournament.Simulator.Preview(MatchLineup.FromTeam(Team, CurrentTactic));
+            var ev = Tournament.Simulator.Preview(MatchLineup.FromTeam(Team, CurrentTactic, Tournament.Hooks(Team)));
             var d = new MatchPreviewData { Execution = (float)ev.Execution };
             var layout = Tournament.Simulator.Layout;
             for (int k = 0; k < 3; k++)
@@ -529,6 +635,9 @@ namespace EsportsManager.Session
             return d;
         }
 
+        /// <summary>S_E / S_M / S_L of the current lineup, tactic and hooks (the match preview function); null when unavailable.</summary>
+        public float[] PhaseStrengths() => GetMatchPreview()?.Strength;
+
         /// <summary>The club name rules (null without a league).</summary>
         public ClubConfig ClubRules => Tournament?.Config.club;
 
@@ -539,8 +648,7 @@ namespace EsportsManager.Session
         public string SetClubName(string raw)
         {
             string name = ClubRules != null ? ClubRules.NormalizeName(raw) : (raw ?? "").Trim();
-            Team.Rename(name);
-            Tournament?.League.RenamePlayerClub(name);
+            if (World != null && World.PlayerClub != null) World.Rename(World.PlayerClub, name); else Team.Rename(name);
             return name;
         }
 
@@ -576,7 +684,8 @@ namespace EsportsManager.Session
 
         /// <summary>
         /// Demo / auto-play plan: accept every acceptable offer, one sponsorship attempt, one stream for the most
-        /// popular player, then round-robin: rest when stress >= 60, otherwise train the lowest main-lane dimension,
+        /// popular player, then round-robin: rest when stress >= 60, otherwise train his most specialized phase (ties E > M > L)
+        /// with that phase's specialty dimension as focus (its lowest dimension when the specialty dimension is near the ceiling),
         /// until no point can be added. Every step goes through the validated Try* methods.
         /// </summary>
         public void ApplyScriptedPlan()
@@ -592,18 +701,27 @@ namespace EsportsManager.Session
                 added = false;
                 foreach (var p in Team.Roster)
                 {
-                    bool ok = p.Stress >= 60f ? TryAddRest(p.Id, out _) : TryAddTrain(p.Id, LowestDimension(p), out _);
+                    bool ok;
+                    if (p.Stress >= 60f || Growth == null) ok = TryAddRest(p.Id, out _);
+                    else { var t = ScriptedTarget(p, out int focus); ok = TryAddTrain(p.Id, t, focus, out _); }
                     added |= ok;
                 }
             }
         }
 
-        private static int LowestDimension(Player p)
+        private TrainingTarget ScriptedTarget(Player p, out int focus)
         {
-            var radar = p.GetRadar(p.MainLane);
-            int best = 0;
-            for (int i = 1; i < radar.Length; i++) if (radar[i] < radar[best]) best = i;
-            return best;
+            int k = 0;
+            for (int i = 1; i < Player.FocusPhases; i++) if (p.GetFocus(i) > p.GetFocus(k)) k = i;
+            focus = -1;
+            foreach (var sp in Growth.Progress(p))
+                if (sp.Phase == k && !Growth.IsNearCap(p, sp.DimensionIndex)) { focus = sp.DimensionIndex; break; }
+            if (focus < 0)
+            {
+                var radar = p.GetRadar(p.MainLane);
+                foreach (int d in Growth.Map.PhaseDims(p.MainLane, k)) if (focus < 0 || radar[d] < radar[focus]) focus = d;
+            }
+            return (TrainingTarget)k;
         }
 
         private bool TryChange(Action<SegmentPlan> change, out PlanError error)
@@ -625,7 +743,7 @@ namespace EsportsManager.Session
                 var a = src.Assignments[i];
                 switch (a.Action)
                 {
-                    case SegmentAction.Train: c.Train(a.PlayerId, a.DimensionIndex); break;
+                    case SegmentAction.Train: c.Train(a.PlayerId, a.Target, a.FocusDimension); break;
                     case SegmentAction.Stream: c.Stream(a.PlayerId); break;
                     default: c.Rest(a.PlayerId); break;
                 }
@@ -650,7 +768,7 @@ namespace EsportsManager.Session
             return new TeamData
             {
                 Name = Team.Name,
-                Strength = Team.Strength(),
+                PhaseStrength = PhaseStrengths(),
                 Popularity = Team.ClubPopularity,
                 Funds = Team.Funds,
                 Chemistry = Team.Chemistry(),
@@ -681,7 +799,7 @@ namespace EsportsManager.Session
             for (int i = 0; i < names.Length; i++) { names[i] = lane.dimensions[i].displayName; values[i] = radar[i]; }
             var traits = new List<string>();
             foreach (var t in p.Traits) traits.Add(TraitName(t));
-            return new PlayerCardData
+            var card = new PlayerCardData
             {
                 Id = p.Id, Name = p.Name, Age = p.Age, LaneId = p.MainLane, LaneName = lane.displayName,
                 TraitNames = traits.ToArray(), Mood = p.Mood, Stress = p.Stress, Looks = p.Looks,
@@ -691,6 +809,24 @@ namespace EsportsManager.Session
                 Rating = p.GetLaneScore(p.MainLane),
                 HighStress = p.Stress > _segment.mood.highStressThreshold,
             };
+            for (int k = 0; k < Player.FocusPhases; k++) card.Focus[k] = p.GetFocus(k);
+            var owned = new List<string>();
+            foreach (var id in p.Specialties) owned.Add(SpecialtyName(id));
+            card.SpecialtyNames = owned.ToArray();
+            if (Growth != null)
+            {
+                for (int k = 0; k < 3; k++) card.PhaseDimensions[k] = Growth.Map.PhaseDims(p.MainLane, k);
+                card.CommandIndex = Growth.Map.CommandIndex(p.MainLane);
+                card.NearCap = new bool[names.Length];
+                for (int i = 0; i < names.Length; i++) card.NearCap[i] = Growth.IsNearCap(p, i);
+                foreach (var sp in Growth.Progress(p))
+                    card.SpecialtyProgress.Add(new SpecialtyProgressData
+                    {
+                        Id = sp.Def.id, Name = sp.Def.displayName, Phase = sp.Phase, DimensionIndex = sp.DimensionIndex,
+                        DimensionName = names[sp.DimensionIndex], DimensionGap = sp.DimensionGap, FocusGap = sp.FocusGap, Owned = sp.Owned,
+                    });
+            }
+            return card;
         }
 
         /// <summary>Chinese display name of a trait id (falls back to the id).</summary>

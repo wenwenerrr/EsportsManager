@@ -27,7 +27,7 @@ namespace EsportsManager.Segments
         UnknownPlayer,
         /// <summary>An assignment has an undefined action (PlayerId set).</summary>
         UnknownAction,
-        /// <summary>A training target is outside the main lane's dimensions (PlayerId, DimensionIndex, Limit = dimension count).</summary>
+        /// <summary>A training focus dimension is not in the trained phase (PlayerId, DimensionIndex = the focus dimension).</summary>
         DimensionOutOfRange,
         /// <summary>An accepted offer id is not pending (OfferId set).</summary>
         UnknownOffer,
@@ -62,6 +62,10 @@ namespace EsportsManager.Segments
         ChoiceOptionOutOfRange,
         /// <summary>Story 006: the player is on leave by a choice answer (or default) and may get no action point (PlayerId, ChoiceId).</summary>
         PlayerOnLeave,
+        /// <summary>Story 012: the training target is not a defined phase / command (PlayerId).</summary>
+        UnknownTrainingTarget,
+        /// <summary>Story 012: training needs the growth system, which needs the match phase mapping (session without a match config).</summary>
+        TrainingUnavailable,
     }
 
     /// <summary>Machine-readable plan error. Fields that do not apply to the code are null.</summary>
@@ -75,7 +79,7 @@ namespace EsportsManager.Segments
         public int? OfferId;
         /// <summary>The choice event involved, if any (Story 006).</summary>
         public int? ChoiceId;
-        /// <summary>The training target involved, if any.</summary>
+        /// <summary>The training focus dimension involved, if any.</summary>
         public int? DimensionIndex;
         /// <summary>Points used (limit errors).</summary>
         public int? Used;
@@ -103,8 +107,14 @@ namespace EsportsManager.Segments
         public int RestPoints;
         /// <summary>Accepted offers.</summary>
         public int BusinessPoints;
-        /// <summary>Total training gain per main-lane dimension (before clamping); all zero without training.</summary>
+        /// <summary>Total training gain per main-lane dimension at noise 1 (before the ceiling); all zero without training.</summary>
         public float[] TrainingGains;
+        /// <summary>Same at the lowest noise (x (1 - noise), growth.md "训练预估" range); event modifiers are not known in advance.</summary>
+        public float[] TrainingGainsLow;
+        /// <summary>Same at the highest noise (x (1 + noise)).</summary>
+        public float[] TrainingGainsHigh;
+        /// <summary>Phase focus after this segment's training (F3), early / mid / late.</summary>
+        public float[] FocusAfter;
         /// <summary>
         /// Stress change at R = 1, before clamping (includes match terms from the context and recovery). With a league: a starter
         /// is counted as playing every scheduled series, losses unknown (0).

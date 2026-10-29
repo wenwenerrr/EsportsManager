@@ -20,7 +20,7 @@ namespace EsportsManager.Matches
     /// an identical result (same build, same machine).
     /// </remarks>
     /// <example><code>var sim = new MatchSimulator(matchCfg, teamCfg, playerCfg);
-    /// MatchResult r = sim.Simulate(MatchLineup.FromTeam(team, MatchTactic.Invade), MatchLineup.FromOpponent(club), rng, 3);</code></example>
+    /// MatchResult r = sim.Simulate(MatchLineup.FromTeam(team, MatchTactic.Invade), MatchLineup.FromTeam(otherTeam, MatchTactic.Develop), rng, 3);</code></example>
     public sealed class MatchSimulator
     {
         private readonly MatchConfig _match;
@@ -64,7 +64,14 @@ namespace EsportsManager.Matches
         /// Plays a best-of-<paramref name="bestOf"/> series. Validates first (see <see cref="Validate"/>); an invalid request
         /// throws before any draw.
         /// </summary>
-        public MatchResult Simulate(MatchLineup a, MatchLineup b, IRandomSource rng, int bestOf)
+        public MatchResult Simulate(MatchLineup a, MatchLineup b, IRandomSource rng, int bestOf) => Simulate(a, b, rng, bestOf, true);
+
+        /// <summary>
+        /// Same as above; <paramref name="counterfactuals"/> false skips the report-only tactic / specialty counterfactuals (league
+        /// series without the player club, Story 013 performance): the result and every draw are identical, only
+        /// <see cref="GameResult.TacticG0"/> and the no-hook G0 values are left at the actual G0.
+        /// </summary>
+        public MatchResult Simulate(MatchLineup a, MatchLineup b, IRandomSource rng, int bestOf, bool counterfactuals)
         {
             if (rng == null) throw new ArgumentNullException(nameof(rng));
             Validate(a, b, bestOf);
@@ -96,12 +103,12 @@ namespace EsportsManager.Matches
                 // Tactic counterfactual (match.md "战术对照"): A's three tactics, B unchanged, recomputed from step 9.
                 var cf = new double[MatchTactics.All.Length];
                 foreach (var t in MatchTactics.All)
-                    cf[(int)t] = t == a.Tactic ? game.G0
+                    cf[(int)t] = t == a.Tactic || !counterfactuals ? game.G0
                         : MatchFormulas.EvaluateGame(_match, MatchFormulas.EvaluateSide(_match, Layout, ia, t), eb).G0;
                 // Specialty counterfactual (match.md "绝活对照"): each side's hooks set to neutral, the other side unchanged.
-                double noHooksA = a.Effects.Count == 0 ? game.G0
+                double noHooksA = a.Effects.Count == 0 || !counterfactuals ? game.G0
                     : MatchFormulas.EvaluateGame(_match, MatchFormulas.EvaluateSide(_match, Layout, ia, a.Tactic, true), eb).G0;
-                double noHooksB = b.Effects.Count == 0 ? game.G0
+                double noHooksB = b.Effects.Count == 0 || !counterfactuals ? game.G0
                     : MatchFormulas.EvaluateGame(_match, ea, MatchFormulas.EvaluateSide(_match, Layout, ib, b.Tactic, true)).G0;
 
                 double uA = rng.NextFloat(0f, 1f);

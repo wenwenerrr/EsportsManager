@@ -12,7 +12,7 @@ namespace EsportsManager.Events
         public readonly EventAction Action;
         /// <summary>Player who spent it (0 for a sponsor point).</summary>
         public readonly long PlayerId;
-        /// <summary>Training target (train points), else 0.</summary>
+        /// <summary>Training target as (int)TrainingTarget (train points; growth.md), else 0.</summary>
         public readonly int DimensionIndex;
 
         /// <summary>Creates a point.</summary>
@@ -91,6 +91,7 @@ namespace EsportsManager.Events
         /// <summary>Rolls this segment's choice events (segment start). Ids continue from <paramref name="nextId"/>.</summary>
         public List<PendingChoice> RollChoices(Team team, ref int nextId)
         {
+            _chemTeam = null;
             var result = new List<PendingChoice>();
             var used = new HashSet<string>();
             for (int slot = 0; slot < _cfg.maxChoiceEvents; slot++)
@@ -129,6 +130,7 @@ namespace EsportsManager.Events
         /// <summary>Rolls action events for the points in the fixed order (see class remarks). Changes nothing.</summary>
         public List<EventOccurrence> RollActionEvents(Team team, IReadOnlyList<ActionPointRef> points)
         {
+            _chemTeam = null;
             var result = new List<EventOccurrence>();
             for (int i = 0; i < points.Count && result.Count < _cfg.maxActionEvents; i++)
             {
@@ -140,7 +142,7 @@ namespace EsportsManager.Events
                 var tone = _rng.NextFloat(0f, 1f) < pGood ? EventTone.Good : EventTone.Bad;
                 var cands = new List<EventDef>();
                 foreach (var e in _cfg.events)
-                    if (e.kind == EventKind.Action && e.action == pt.Action && e.tone == tone && Holds(e, team, actor, null)) cands.Add(e);
+                    if (e.kind == EventKind.Action && e.action == pt.Action && e.tone == tone && HoldsAll(e, team, actor, null)) cands.Add(e);
                 if (cands.Count == 0) continue;
                 var ev = cands[PickWeighted(cands)];
                 var o = NewOccurrence(ev, actor, null);
@@ -154,6 +156,7 @@ namespace EsportsManager.Events
         /// <summary>Rolls state events (after mood and stress). Changes nothing.</summary>
         public List<EventOccurrence> RollStateEvents(Team team)
         {
+            _chemTeam = null;
             var result = new List<EventOccurrence>();
             var used = new HashSet<string>();
             for (int slot = 0; slot < _cfg.maxStateEvents; slot++)
@@ -208,11 +211,29 @@ namespace EsportsManager.Events
         /// <summary>True when every condition of <paramref name="e"/> holds for the subject (a, b) on this team.</summary>
         public bool Holds(EventDef e, Team team, Player a, Player b)
         {
+            _chemTeam = null;
+            return HoldsAll(e, team, a, b);
+        }
+
+        // Holds with the per-roll chemistry cache (only inside a roll).
+        private bool HoldsAll(EventDef e, Team team, Player a, Player b)
+        {
             foreach (var c in e.conditions) if (!Holds(c, team, a, b)) return false;
             return true;
         }
 
-        private static bool Holds(EventConditionDef c, Team team, Player a, Player b)
+        // Team chemistry cached for one roll (it cannot change while rolling; Story 013 performance: Chemistry() was recomputed
+        // for every condition and every subject).
+        private Team _chemTeam;
+        private float _chem;
+
+        private float ChemistryOf(Team team)
+        {
+            if (!ReferenceEquals(_chemTeam, team)) { _chemTeam = team; _chem = team.Chemistry(); }
+            return _chem;
+        }
+
+        private bool Holds(EventConditionDef c, Team team, Player a, Player b)
         {
             float v = c.value;
             switch (c.type)
@@ -227,8 +248,8 @@ namespace EsportsManager.Events
                     if (a == null) return false;
                     foreach (var t in a.Traits) if (t == c.trait) return true;
                     return false;
-                case ConditionType.ChemistryBelow: return team.Chemistry() < v;
-                case ConditionType.ChemistryAbove: return team.Chemistry() > v;
+                case ConditionType.ChemistryBelow: return ChemistryOf(team) < v;
+                case ConditionType.ChemistryAbove: return ChemistryOf(team) > v;
                 case ConditionType.PairBadCompat: return a != null && b != null && a.CompatibilityWith(b) <= v;
                 case ConditionType.RecentWinRateAbove: return team.RecentResults.Count > 0 && team.RecentWinRate() > v;
                 case ConditionType.RecentWinRateBelow: return team.RecentResults.Count > 0 && team.RecentWinRate() < v;
@@ -253,19 +274,19 @@ namespace EsportsManager.Events
             switch (e.subject)
             {
                 case EventSubject.Team:
-                    if (Holds(e, team, null, null)) r.Add((null, null));
+                    if (HoldsAll(e, team, null, null)) r.Add((null, null));
                     break;
                 case EventSubject.Player:
-                    foreach (var p in team.Roster) if (Holds(e, team, p, null)) r.Add((p, null));
+                    foreach (var p in team.Roster) if (HoldsAll(e, team, p, null)) r.Add((p, null));
                     break;
                 case EventSubject.Starter:
-                    foreach (var p in team.Starters()) if (Holds(e, team, p, null)) r.Add((p, null));
+                    foreach (var p in team.Starters()) if (HoldsAll(e, team, p, null)) r.Add((p, null));
                     break;
                 case EventSubject.Pair:
                     var s = team.Starters();
                     for (int i = 0; i < s.Count; i++)
                         for (int j = i + 1; j < s.Count; j++)
-                            if (Holds(e, team, s[i], s[j])) r.Add((s[i], s[j]));
+                            if (HoldsAll(e, team, s[i], s[j])) r.Add((s[i], s[j]));
                     break;
             }
             return r;

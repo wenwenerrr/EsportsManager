@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EsportsManager.Leagues;
 using EsportsManager.Matches;
 using EsportsManager.Players;
 using EsportsManager.Segments;
@@ -52,7 +53,7 @@ namespace EsportsManager.Session
     /// <summary>Events of one year, for the year-end summary (Story 007) and the UI.</summary>
     public sealed class YearEvents
     {
-        /// <summary>1-based year.</summary>
+        /// <summary>Year (0 = warm-up).</summary>
         public int Year;
         /// <summary>Events in calendar order (the running one included).</summary>
         public List<EventRecord> Events = new List<EventRecord>();
@@ -77,16 +78,16 @@ namespace EsportsManager.Session
     /// </summary>
     public sealed class SeasonFlow
     {
+        private readonly LeagueWorld _world;
         private readonly MatchConfig _match;
         private readonly SegmentConfig _segment;
         private readonly PlayerConfig _players;
-        private readonly Team _team;
         private readonly List<YearEvents> _history = new List<YearEvents>();
 
         /// <summary>The tournament runner.</summary>
         public TournamentRunner Tournament { get; }
-        /// <summary>1-based year.</summary>
-        public int Year { get; private set; } = 1;
+        /// <summary>Year (0 = the warm-up year run by the AI).</summary>
+        public int Year { get; private set; }
         /// <summary>Segments resolved in this year.</summary>
         public int SegmentsDoneInYear { get; private set; }
         /// <summary>Segments per year (calendar config).</summary>
@@ -99,22 +100,25 @@ namespace EsportsManager.Session
         public EventRecord Current { get; private set; }
         /// <summary>The last completed event, or null.</summary>
         public EventRecord LastCompleted { get; private set; }
-        /// <summary>Tactic used for the next event stage (default Invade).</summary>
+        /// <summary>The player's tactic for the next event stage (default Invade).</summary>
         public MatchTactic Tactic { get; private set; } = MatchTactic.Invade;
-        /// <summary>All years so far (the current one last).</summary>
+        /// <summary>All years so far (the current one last; the warm-up year 0 first).</summary>
         public IReadOnlyList<YearEvents> History => _history;
         /// <summary>The current year's events.</summary>
         public YearEvents ThisYear => _history[_history.Count - 1];
 
-        /// <summary>Creates the flow at year 1, segment 1, phase None.</summary>
-        public SeasonFlow(MatchConfig match, SegmentConfig segment, PlayerConfig players, TournamentRunner tournament, Team team)
+        private Team PlayerTeam => _world.PlayerClub?.Team;
+
+        /// <summary>Creates the flow at <paramref name="startYear"/>, segment 1, phase None, for every club of the world.</summary>
+        public SeasonFlow(LeagueWorld world, int startYear)
         {
-            _match = match ?? throw new ArgumentNullException(nameof(match));
-            _segment = segment ?? throw new ArgumentNullException(nameof(segment));
-            _players = players ?? throw new ArgumentNullException(nameof(players));
-            Tournament = tournament ?? throw new ArgumentNullException(nameof(tournament));
-            _team = team ?? throw new ArgumentNullException(nameof(team));
-            _history.Add(new YearEvents { Year = 1 });
+            _world = world ?? throw new ArgumentNullException(nameof(world));
+            _match = world.Match;
+            _segment = world.SegmentConfig;
+            _players = world.Players;
+            Tournament = world.Tournament;
+            Year = startYear;
+            _history.Add(new YearEvents { Year = startYear });
         }
 
         /// <summary>
@@ -160,8 +164,12 @@ namespace EsportsManager.Session
             if (Phase != EventPhase.Prepare || Current.Event.Type != EventType.Split) return Err(PlanErrorCode.WrongEventPhase);
             var le = LineupError();
             if (!le.IsNone) return le;
-            Tournament.PlayRegularSeason(Current.Event, MatchLineup.FromTeam(_team, Tactic));
-            Current.RegularSeasonEffects = EventEffects.ApplyStage(_segment, _team, Current.Event.RegularSeries, Tournament.Random);
+            var ev = Current.Event;
+            var all = new List<int>();
+            for (int c = 0; c < Tournament.League.ClubCount; c++) all.Add(c);
+            _world.PrepareAiLineups(all);
+            Tournament.PlayRegularSeason(ev, c => c == ev.PlayerClub ? PlayerLineup() : _world.AiLineup(c, ev, false));
+            Current.RegularSeasonEffects = _world.ApplyStage(ev, ev.RegularSeries, 0);
             Phase = EventPhase.PlayoffPrep;
             return default;
         }
@@ -229,7 +237,7 @@ namespace EsportsManager.Session
             for (int y = _history.Count - 1; y >= 0; y--)
                 for (int i = _history[y].Events.Count - 1; i >= 0; i--)
                     if (_history[y].Events[i].Event.Type == EventType.Split) return _history[y].Events[i].Event.StandingsRows();
-            var empty = new EventResult { ClubNames = Names(), Regular = new Standings(Tournament.League.ClubCount) };
+            var empty = new EventResult { ClubNames = Names(), Regular = new Standings(Tournament.League.ClubCount), PlayerClub = Tournament.League.PlayerClub };
             return empty.StandingsRows();
         }
 
@@ -247,7 +255,8 @@ namespace EsportsManager.Session
             bool plays = Phase == EventPhase.Prepare
                 ? (Current.Event.Type == EventType.Split || Current.Event.PlayerInBracket)
                 : Phase == EventPhase.PlayoffPrep && Current.Event.PlayerInBracket;
-            int n = _team.Starters().Count;
+            if (PlayerTeam == null) return default;
+            int n = PlayerTeam.Starters().Count;
             if (!plays || n == _players.lanes.Length) return default;
             return new PlanError { Code = PlanErrorCode.IncompleteLineup, Used = n, Limit = _players.lanes.Length };
         }
@@ -257,32 +266,41 @@ namespace EsportsManager.Session
             var le = LineupError();
             if (!le.IsNone) return le;
             var ev = Current.Event;
-            Tournament.PlayBracket(ev, ev.PlayerInBracket ? MatchLineup.FromTeam(_team, Tactic) : null);
-            Current.BracketEffects = EventEffects.ApplyStage(_segment, _team, ev.PlayoffSeries, Tournament.Random);
-            Current.MoodEffects = EventEffects.ApplyEventEnd(_segment, _team, ev.PlayerSeries(), Tournament.Random);
-            Current.FundsBefore = _team.Funds;
-            Current.PrizeIncome = ev.PlayerPrize;
-            _team.ReceivePrize(ev.PlayerPrize);
-            Current.FundsAfter = _team.Funds;
-            Current.RecentWinRateAfter = _team.RecentWinRate();
+            _world.PrepareAiLineups(ev.Seeds);
+            Tournament.PlayBracket(ev, c => c == ev.PlayerClub ? PlayerLineup() : _world.AiLineup(c, ev, true));
+            Current.BracketEffects = _world.ApplyStage(ev, ev.PlayoffSeries, 1);
+            Current.MoodEffects = _world.FinishEvent(ev);
+            var team = PlayerTeam;
+            if (team != null)
+            {
+                Current.FundsBefore = team.Funds;
+                Current.PrizeIncome = ev.PlayerPrize;
+                team.ReceivePrize(ev.PlayerPrize);
+                Current.FundsAfter = team.Funds;
+                Current.RecentWinRateAfter = team.RecentWinRate();
+            }
+            _world.AfterEvent();
             LastCompleted = Current;
             Phase = EventPhase.Done;
             return default;
         }
 
+        // The player's lineup for a stage; his tactic is recorded like every club's (opponent info "最近 5 场战术").
+        private MatchLineup PlayerLineup()
+        {
+            _world.PlayerClub.RecordTactic(Tactic);
+            return Tournament.LineupOf(PlayerTeam, Tactic);
+        }
+
         private void RollYear()
         {
+            _world.EndYear();
             Year++;
             SegmentsDoneInYear = 0;
             _history.Add(new YearEvents { Year = Year });
         }
 
-        private string[] Names()
-        {
-            var names = new string[Tournament.League.ClubCount];
-            for (int i = 0; i < names.Length; i++) names[i] = Tournament.League.ClubName(i);
-            return names;
-        }
+        private string[] Names() => Tournament.Names();
 
         private static PlanError Err(PlanErrorCode c) => new PlanError { Code = c };
     }

@@ -13,7 +13,7 @@ namespace EsportsManager.Tests.Segments
         // ' stands for " to keep the literal readable.
         private static readonly string ValidJson = (
             "{'action_points':{'per_segment':6,'max_per_player':2},"
-            + "'training':{'intensity':1,'target_bonus':1.5},"
+            + "'training':{'intensity':1},"
             + "'stream':{'cap':2},"
             + "'business':{'weight_popularity':1.5,'weight_lane_score':0.5,'weight_looks':1,'max_probability':0.4,'base_amount':5000,'amount_per_popularity':100,'amount_per_looks':80,'random_range':0.2,'club_share':0.7,'heat_cap':1},"
             + "'sponsorship':{'weight_club_popularity':1,'weight_win_rate':1,'max_success_rate':0.8,'random_spread':0.1,'min_chance':0.05,'max_chance':0.9,'base_amount':6000,'amount_per_club_popularity':100,'duration_segments':4,'max_attempts_per_segment':3,'max_active_contracts':3},"
@@ -40,7 +40,6 @@ namespace EsportsManager.Tests.Segments
             Assert.AreEqual(6, c.actionPoints.perSegment);
             Assert.AreEqual(2, c.actionPoints.maxPerPlayer);
             Assert.AreEqual(1f, c.training.intensity);
-            Assert.AreEqual(1.5f, c.training.targetBonus);
             Assert.AreEqual(4f, c.stress.recovery);
             Assert.AreEqual(2f, c.stream.cap);
             Assert.AreEqual(1.5f, c.business.weightPopularity);
@@ -86,10 +85,10 @@ namespace EsportsManager.Tests.Segments
         [Test] public void FromJson_MissingKey_ThrowsNamingKey() => AssertLoadFails(Json("'cap':2", ""), "stream");
         [Test] public void FromJson_MissingNestedKey_ThrowsNamingKey() => AssertLoadFails(Json("'per_segment':6,", ""), "action_points.per_segment");
         [Test] public void FromJson_MisspelledKey_Throws() => AssertLoadFails(Json("'club_share'", "'clubshare'"), "business.club_share");
-        [Test] public void FromJson_ExtraKey_Throws() => AssertLoadFails(Json("'intensity':1,", "'intensity':1,'bonus':1,"), "unknown key 'training.bonus'");
+        [Test] public void FromJson_ExtraKey_Throws() => AssertLoadFails(Json("'intensity':1}", "'intensity':1,'bonus':1}"), "unknown key 'training.bonus'");
         [Test] public void FromJson_MissingRecovery_Throws() => AssertLoadFails(Json("'recovery':4,", ""), "stress.recovery");
-        [Test] public void FromJson_MissingTargetBonus_Throws() => AssertLoadFails(Json(",'target_bonus':1.5", ""), "training.target_bonus");
-        [Test] public void FromJson_DuplicateKey_Throws() => AssertLoadFails(Json("'intensity':1,", "'intensity':1,'intensity':2,"), "duplicate key");
+        [Test] public void FromJson_ObsoleteTargetBonus_IsUnknownKey() => AssertLoadFails(Json("'intensity':1", "'intensity':1,'target_bonus':1.5"), "target_bonus");
+        [Test] public void FromJson_DuplicateKey_Throws() => AssertLoadFails(Json("'intensity':1}", "'intensity':1,'intensity':2}"), "duplicate key");
         [Test] public void FromJson_StringWhereNumberExpected_Throws() => AssertLoadFails(Json("'cap':2", "'cap':'2'"), "must be a number");
         [Test] public void FromJson_FractionWhereIntExpected_Throws() => AssertLoadFails(Json("'per_segment':6", "'per_segment':6.5"), "whole number");
         [Test] public void FromJson_NullValue_Throws() => AssertLoadFails(Json("'play':4", "'play':null"), "null");
@@ -127,7 +126,6 @@ namespace EsportsManager.Tests.Segments
         [Test] public void Validate_NeutralOutOfRange_Throws() => AssertInvalid(c => c.mood.neutral = 120f, "mood.neutral");
         [Test] public void Validate_NegativeMoodConstant_Throws() => AssertInvalid(c => c.mood.play = -1f, "mood.play");
         [Test] public void Validate_StressRandomRangeOne_Throws() => AssertInvalid(c => c.stress.randomRange = 1f, "stress.randomRange");
-        [Test] public void Validate_TargetBonusBelowOne_Throws() => AssertInvalid(c => c.training.targetBonus = 0.9f, "training.targetBonus");
         [Test] public void Validate_NegativeRecovery_Throws() => AssertInvalid(c => c.stress.recovery = -1f, "stress.recovery");
         [Test] public void Validate_NegativeRest_Throws() => AssertInvalid(c => c.stress.rest = -1f, "stress.rest");
         [Test] public void Validate_NaNValue_Throws() => AssertInvalid(c => c.stress.stream = float.NaN, "stress.stream");
@@ -144,7 +142,6 @@ namespace EsportsManager.Tests.Segments
             Assert.AreEqual(8, c.actionPoints.perSegment);
             Assert.AreEqual(2, c.actionPoints.maxPerPlayer);
             Assert.AreEqual(1f, c.training.intensity);
-            Assert.AreEqual(1.5f, c.training.targetBonus);   // v3
             Assert.AreEqual(9500, c.sponsorship.baseAmount);  // v3
             Assert.AreEqual(3, c.sponsorship.maxAttemptsPerSegment); // v3.2
             Assert.AreEqual(3, c.sponsorship.maxActiveContracts);    // v3.2

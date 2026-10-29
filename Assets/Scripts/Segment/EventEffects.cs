@@ -23,7 +23,7 @@ namespace EsportsManager.Segments
     }
 
     /// <summary>
-    /// Applies the match terms of an event to the player club (numbers.md 4.18 "对其他公式的影响", 4.6, 4.7, 4.8). Uses the SAME
+    /// Applies the match terms of an event to ONE club (any club: the player's and every AI club, league.md "同一套公式") (numbers.md 4.18 "对其他公式的影响", 4.6, 4.7, 4.8). Uses the SAME
     /// formula code as the segment runner (<see cref="SegmentFormulas.MatchStressDelta"/> / <see cref="SegmentFormulas.MatchMoodDelta"/>
     /// share the bracket terms with StressDelta / MoodDelta). Every count comes from the participant snapshots; players who left
     /// the roster are skipped; players who played no series get nothing (and draw nothing).
@@ -39,9 +39,9 @@ namespace EsportsManager.Segments
     public static class EventEffects
     {
         /// <summary>Stage effects: stress match terms and + f_win per won series to the pairs who played it. Returns one entry per player who played.</summary>
-        public static List<EventPlayerEffect> ApplyStage(SegmentConfig cfg, Team team, IReadOnlyList<EventSeries> playerSeries, IRandomSource rng)
+        public static List<EventPlayerEffect> ApplyStage(SegmentConfig cfg, Team team, int club, IReadOnlyList<EventSeries> series, IRandomSource rng)
         {
-            var counts = Count(playerSeries);
+            var counts = Count(series, club);
             var list = new List<EventPlayerEffect>();
             float rs = cfg.stress.randomRange;
             foreach (var p in team.Roster)
@@ -54,11 +54,11 @@ namespace EsportsManager.Segments
                 list.Add(c);
             }
             var winning = new List<IReadOnlyList<long>>();
-            foreach (var s in playerSeries)
+            foreach (var s in series)
             {
-                if (!s.PlayerInvolved || !s.Result.WinnerIsA) continue;
+                if (!s.Involves(club) || !s.Won(club)) continue;
                 var ids = new List<long>();
-                foreach (var part in s.Result.SideA.Participants) ids.Add(part.PlayerId);
+                foreach (var part in s.SideOf(club).Participants) ids.Add(part.PlayerId);
                 winning.Add(ids);
             }
             if (winning.Count > 0) team.AddWinFamiliarity(winning);
@@ -69,9 +69,9 @@ namespace EsportsManager.Segments
         /// Event-end effects: mood win/loss term for every player who played, then the team's recent results = this event's series
         /// results (unchanged when the player club played none). Returns one entry per player who played.
         /// </summary>
-        public static List<EventPlayerEffect> ApplyEventEnd(SegmentConfig cfg, Team team, IReadOnlyList<EventSeries> playerSeries, IRandomSource rng)
+        public static List<EventPlayerEffect> ApplyEventEnd(SegmentConfig cfg, Team team, int club, IReadOnlyList<EventSeries> series, IRandomSource rng)
         {
-            var counts = Count(playerSeries);
+            var counts = Count(series, club);
             var list = new List<EventPlayerEffect>();
             float rm = cfg.mood.randomRange;
             foreach (var p in team.Roster)
@@ -85,22 +85,22 @@ namespace EsportsManager.Segments
                 list.Add(c);
             }
             var results = new List<bool>();
-            foreach (var s in playerSeries) if (s.PlayerInvolved) results.Add(s.Result.WinnerIsA);
+            foreach (var s in series) if (s.Involves(club)) results.Add(s.Won(club));
             team.SetRecentResults(results);
             return list;
         }
 
-        private static Dictionary<long, EventPlayerEffect> Count(IReadOnlyList<EventSeries> series)
+        private static Dictionary<long, EventPlayerEffect> Count(IReadOnlyList<EventSeries> series, int club)
         {
             var map = new Dictionary<long, EventPlayerEffect>();
             foreach (var s in series)
             {
-                if (!s.PlayerInvolved) continue;
-                foreach (var part in s.Result.SideA.Participants)
+                if (!s.Involves(club)) continue;
+                foreach (var part in s.SideOf(club).Participants)
                 {
                     if (!map.TryGetValue(part.PlayerId, out var c)) map[part.PlayerId] = c = new EventPlayerEffect { PlayerId = part.PlayerId };
                     c.SeriesPlayed++;
-                    if (s.Result.WinnerIsA) c.SeriesWon++; else c.SeriesLost++;
+                    if (s.Won(club)) c.SeriesWon++; else c.SeriesLost++;
                 }
             }
             return map;

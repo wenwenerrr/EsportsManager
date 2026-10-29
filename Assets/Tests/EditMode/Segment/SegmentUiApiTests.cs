@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EsportsManager.Growth;
 using EsportsManager.Players;
 using EsportsManager.Segments;
 using EsportsManager.Tests.Players;
@@ -104,7 +105,7 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             fx.Runner.BeginSegment();
-            Assert.AreEqual(PlanErrorCode.None, Error(fx, new SegmentPlan().Train(1, 0).Sponsor()).Code);
+            Assert.AreEqual(PlanErrorCode.None, Error(fx, new SegmentPlan().Train(1, TrainingTarget.Early).Sponsor()).Code);
         }
 
         [Test]
@@ -145,13 +146,13 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             fx.Runner.BeginSegment();
-            var e = Error(fx, new SegmentPlan().Train(999, 0));
+            var e = Error(fx, new SegmentPlan().Train(999, TrainingTarget.Early));
             Assert.AreEqual(PlanErrorCode.UnknownPlayer, e.Code); Assert.AreEqual(999L, e.PlayerId);
             e = Error(fx, WithAction(2, (SegmentAction)42));
             Assert.AreEqual(PlanErrorCode.UnknownAction, e.Code); Assert.AreEqual(2L, e.PlayerId);
-            e = Error(fx, new SegmentPlan().Train(1, 6));
+            e = Error(fx, new SegmentPlan().Train(1, TrainingTarget.Early, 6)); // focus dimension outside the early phase
             Assert.AreEqual(PlanErrorCode.DimensionOutOfRange, e.Code);
-            Assert.AreEqual(1L, e.PlayerId); Assert.AreEqual(6, e.DimensionIndex); Assert.AreEqual(6, e.Limit);
+            Assert.AreEqual(1L, e.PlayerId); Assert.AreEqual(6, e.DimensionIndex);
         }
 
         [Test]
@@ -173,10 +174,10 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             fx.Runner.BeginSegment();
-            var e = Error(fx, new SegmentPlan().Train(1, 0).Stream(1).Rest(1));
+            var e = Error(fx, new SegmentPlan().Train(1, TrainingTarget.Early).Stream(1).Rest(1));
             Assert.AreEqual(PlanErrorCode.PlayerOverLimit, e.Code);
             Assert.AreEqual(1L, e.PlayerId); Assert.AreEqual(3, e.Used); Assert.AreEqual(2, e.Limit);
-            e = Error(fx, new SegmentPlan().Train(1, 0).Train(1, 0).Train(2, 0).Train(2, 0).Train(3, 0).Train(3, 0).Sponsor());
+            e = Error(fx, new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(3, TrainingTarget.Early).Sponsor());
             Assert.AreEqual(PlanErrorCode.OverTotalPoints, e.Code);
             Assert.AreEqual(7, e.Used); Assert.AreEqual(6, e.Limit);
         }
@@ -188,7 +189,7 @@ namespace EsportsManager.Tests.Segments
             var fx = new Fixture(rng);
             fx.Runner.BeginSegment();
             int draws = rng.Draws;
-            fx.Runner.TryValidate(new SegmentPlan().Train(999, 0), Ctx(), out _);
+            fx.Runner.TryValidate(new SegmentPlan().Train(999, TrainingTarget.Early), Ctx(), out _);
             Assert.AreEqual(draws, rng.Draws);
             Assert.IsTrue(fx.Runner.GetState().IsOpen);
         }
@@ -204,7 +205,7 @@ namespace EsportsManager.Tests.Segments
             int draws = rng.Draws;
             var radar = fx.Starters[0].GetRadar("top");
             float stress = fx.Starters[0].Stress, mood = fx.Starters[0].Mood, pop = fx.Starters[0].Popularity, obs = fx.Starters[0].Observation;
-            fx.Runner.Preview(new SegmentPlan().Train(1, 0).Train(1, 2).Stream(2).Rest(3).Sponsor(), Ctx(true));
+            fx.Runner.Preview(new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early).Stream(2).Rest(3).Sponsor(), Ctx(true));
             Assert.AreEqual(draws, rng.Draws);
             CollectionAssert.AreEqual(radar, fx.Starters[0].GetRadar("top"));
             Assert.AreEqual(stress, fx.Starters[0].Stress);
@@ -223,7 +224,7 @@ namespace EsportsManager.Tests.Segments
             var fx = new Fixture();
             fx.Starters[0].SetDimension("top", 0, 70f);
             fx.Runner.BeginSegment();
-            var plan = new SegmentPlan().Train(1, 0).Train(1, 2).Train(2, 3).Train(2, 3);
+            var plan = new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(2, TrainingTarget.Early);
             var pv = fx.Runner.Preview(plan, Ctx());
             var before1 = fx.Starters[0].GetRadar("top");
             var before2 = fx.Starters[1].GetRadar("jungle");
@@ -242,7 +243,7 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture(new StubRandomSource(1f)); // the runner's R would be 1.1 / 1.15; preview must ignore it
             fx.Runner.BeginSegment();
-            var pv = fx.Runner.Preview(new SegmentPlan().Train(1, 0), Ctx());
+            var pv = fx.Runner.Preview(new SegmentPlan().Train(1, TrainingTarget.Early), Ctx());
             Assert.AreEqual(6f, pv.Players[0].StressDelta, Tol);
             Assert.AreEqual(4f, pv.Players[0].MoodDelta, Tol);
             Assert.AreEqual(0f, pv.Players[1].StressDelta, Tol);
@@ -253,7 +254,7 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             fx.Runner.BeginSegment();
-            var pv = fx.Runner.Preview(new SegmentPlan().Train(1, 0).Stream(1).Rest(1).Rest(2), Ctx());
+            var pv = fx.Runner.Preview(new SegmentPlan().Train(1, TrainingTarget.Early).Stream(1).Rest(1).Rest(2), Ctx());
             Assert.AreEqual(PlanErrorCode.PlayerOverLimit, pv.Error.Code);
             Assert.AreEqual(4, pv.PointsUsed);
             Assert.AreEqual(2, pv.PointsRemaining);
@@ -283,7 +284,7 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = new Fixture();
             fx.Runner.BeginSegment();
-            var pv = fx.Runner.Preview(new SegmentPlan().Train(999, 0).Train(1, 9).AcceptOffer(3), Ctx());
+            var pv = fx.Runner.Preview(new SegmentPlan().Train(999, TrainingTarget.Early).Train(1, TrainingTarget.Early, 9).AcceptOffer(3), Ctx());
             Assert.AreEqual(PlanErrorCode.UnknownPlayer, pv.Error.Code);
             Assert.AreEqual(0, pv.Players[0].TrainPoints);
             Assert.AreEqual(0, pv.AcceptedOffers.Count);
@@ -325,7 +326,7 @@ namespace EsportsManager.Tests.Segments
             Assert.AreEqual(PlanErrorCode.ContractsFull, e.Code);
             Assert.AreEqual(3, e.Used); Assert.AreEqual(3, e.Limit);
             Assert.Throws<InvalidOperationException>(() => fx.Runner.Resolve(new SegmentPlan().Sponsor(), Ctx()));
-            Assert.AreEqual(PlanErrorCode.None, Error(fx, new SegmentPlan().Train(1, 0)).Code, "other actions still allowed");
+            Assert.AreEqual(PlanErrorCode.None, Error(fx, new SegmentPlan().Train(1, TrainingTarget.Early)).Code, "other actions still allowed");
         }
 
         [Test]

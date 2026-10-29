@@ -4,23 +4,21 @@ using EsportsManager.Teams;
 namespace EsportsManager.Segments
 {
     /// <summary>
-    /// One training pass (numbers.md 4.1 v3): all points a player put on the same TARGET dimension. The pass raises
-    /// every main-lane dimension; the target's gain is multiplied by target_bonus.
+    /// One training point (design/gdd/growth.md rev 3): the base amount b (F1 with its noise and the F5 event modifiers) and the
+    /// gains it gave every main-lane dimension (F2, from SEGMENT-START values; all points are summed and applied once).
     /// </summary>
     public struct TrainingResult
     {
-        /// <summary>The chosen target dimension index (main lane).</summary>
-        public int DimensionIndex;
-        /// <summary>Training points on this target (intensity = Points x train_intensity).</summary>
-        public int Points;
-        /// <summary>Gain of the target dimension (Player.TrainingGain x target_bonus).</summary>
-        public float Gain;
-        /// <summary>Target dimension value after all of this player's training this segment (clamped 0-100).</summary>
-        public float NewValue;
-        /// <summary>Gain of every main-lane dimension in this pass, by index (target included, bonus applied), from SEGMENT-START values.</summary>
+        /// <summary>Trained phase or command.</summary>
+        public EsportsManager.Growth.TrainingTarget Target;
+        /// <summary>Focus dimension (main-lane index), -1 = none.</summary>
+        public int FocusDimension;
+        /// <summary>The noise factor drawn for this point (1 without a noise source).</summary>
+        public float Noise;
+        /// <summary>Base amount b after noise and event modifiers.</summary>
+        public float Base;
+        /// <summary>Gain of every main-lane dimension, by index (before the ceiling clamp).</summary>
         public float[] Gains;
-        /// <summary>Every main-lane dimension value after ALL of this player's passes were summed and applied, by index.</summary>
-        public float[] NewValues;
     }
 
     /// <summary>What happened to one rostered player this segment (all deltas are actual, after clamping).</summary>
@@ -36,8 +34,16 @@ namespace EsportsManager.Segments
         public int RestPoints;
         /// <summary>Accepted business deals.</summary>
         public int BusinessPoints;
-        /// <summary>Per dimension training results.</summary>
+        /// <summary>One entry per training point, plan order.</summary>
         public List<TrainingResult> Training = new List<TrainingResult>();
+        /// <summary>Main-lane dimension values before / after this segment's training (null without training).</summary>
+        public float[] ValuesBefore, ValuesAfter;
+        /// <summary>Phase focus before / after the segment (early, mid, late).</summary>
+        public float[] FocusBefore, FocusAfter;
+        /// <summary>Specialties gained at the segment-end check (ids).</summary>
+        public List<string> SpecialtiesGained = new List<string>();
+        /// <summary>Specialties lost at the segment-end check (ids).</summary>
+        public List<string> SpecialtiesLost = new List<string>();
         /// <summary>Stream heat 0-100 sent to Team.SettleSegment.</summary>
         public float StreamHeat;
         /// <summary>Business heat 0-100 sent to Team.SettleSegment.</summary>

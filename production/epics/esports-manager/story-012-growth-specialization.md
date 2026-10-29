@@ -1,7 +1,7 @@
 # Story 012: 成长：专精与绝活
 
 > **Epic**: 战队经理人 MVP
-> **Status**: Ready
+> **Status**: In Progress
 > **Layer**: Core
 > **Type**: Logic
 > **Estimate**: L
@@ -38,6 +38,7 @@
 
 ## Implementation Notes
 
+- **2026-10-28（用户）**：主界面和结算里的"实力"改为三阶段（前期 / 团战 / 后期），用比赛系统的赛前预估函数计算；旧的 TeamStrength 总数不再显示。
 - **2026-10-27**：规格改为 `design/gdd/growth.md` rev 3（练一个阶段 + 重点维度、天花板 潜力+10、心情 / 压力影响训练、专精每赛段按点数更新、16 个绝活、门槛 76/73）。数值对照 `tools/sim/sim5.py`。
 - AI 选手同一规则（013 调用）
 - 现有存档 / 状态里没有专精字段的选手，按 talent.md 规则补初值

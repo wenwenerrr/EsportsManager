@@ -395,6 +395,7 @@ MonoBehaviour:
   matchConfig: {fileID: 4900000, guid: 9c4f15fea37e4499ea359a5296347e10, type: 3}
   eventConfig: {fileID: 4900000, guid: a33bc8108bb0f43a38b9626540c5f690, type: 3}
   eventText: {fileID: 4900000, guid: f1562aba3a5854ae3ae6afe1ef9170ad, type: 3}
+  leagueConfig: {fileID: 4900000, guid: 4fac712365ce64f5a87ae71e3df895d8, type: 3}
 --- !u!4 &990220911
 Transform:
   m_ObjectHideFlags: 0

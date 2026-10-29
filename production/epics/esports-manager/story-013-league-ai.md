@@ -1,7 +1,7 @@
 # Story 013: 联赛 AI 与预热
 
 > **Epic**: 战队经理人 MVP
-> **Status**: Ready
+> **Status**: In Progress
 > **Layer**: Feature
 > **Type**: Integration
 > **Estimate**: L

@@ -22,7 +22,7 @@ namespace EsportsManager.Matches
     /// changes do not affect the series.
     /// </summary>
     /// <example><code>var s = new MatchSeries(sim, 5);
-    /// if (s.TryLock(MatchLineup.FromTeam(team, tactic), MatchLineup.FromOpponent(club), out var err)) s.Play(rng);</code></example>
+    /// if (s.TryLock(MatchLineup.FromTeam(team, tactic), MatchLineup.FromTeam(otherTeam, MatchTactic.Develop), out var err)) s.Play(rng);</code></example>
     public sealed class MatchSeries
     {
         private readonly MatchSimulator _sim;

@@ -38,6 +38,10 @@ namespace EsportsManager.Matches
     /// <summary>One series played in an event. When the player club plays, it is ALWAYS side A.</summary>
     public sealed class EventSeries
     {
+        /// <summary>The player club when the series was played (<see cref="League.NoClub"/> during the warm-up).</summary>
+        public int PlayerClub = League.NoClub;
+        /// <summary>Schedule slot (regular: round x 100 + pairing index; bracket: semi 0 / 1, final 0) - part of the random key.</summary>
+        public int Slot;
         /// <summary>Stage.</summary>
         public EventStage Stage;
         /// <summary>Regular-season round (0-based); -1 for playoff series.</summary>
@@ -50,8 +54,16 @@ namespace EsportsManager.Matches
         public MatchResult Result;
         /// <summary>Report from the player club's point of view; null when the player club did not play.</summary>
         public MatchReport Report;
-        /// <summary>True when the player club (index 0) is side A.</summary>
-        public bool PlayerInvolved => ClubA == League.PlayerClub;
+        /// <summary>True when the player club is side A (it always is when it plays).</summary>
+        public bool PlayerInvolved => PlayerClub >= 0 && ClubA == PlayerClub;
+        /// <summary>True when <paramref name="club"/> played this series.</summary>
+        public bool Involves(int club) => ClubA == club || ClubB == club;
+        /// <summary>The side snapshot of <paramref name="club"/> (null when it did not play).</summary>
+        public MatchSideSnapshot SideOf(int club) => club == ClubA ? Result.SideA : club == ClubB ? Result.SideB : null;
+        /// <summary>The other club of the series.</summary>
+        public int OpponentOf(int club) => club == ClubA ? ClubB : ClubA;
+        /// <summary>True when <paramref name="club"/> won.</summary>
+        public bool Won(int club) => Winner == club;
         /// <summary>Club index of the winner / loser.</summary>
         public int Winner => Result.WinnerIsA ? ClubA : ClubB;
         /// <summary>Club index of the loser.</summary>
@@ -92,8 +104,12 @@ namespace EsportsManager.Matches
     {
         /// <summary>The calendar entry.</summary>
         public CalendarEventDef Def;
-        /// <summary>1-based year.</summary>
+        /// <summary>Index of the entry in the calendar (part of the series random key).</summary>
+        public int EventIndex;
+        /// <summary>Year (0 = warm-up).</summary>
         public int Year;
+        /// <summary>The player club when the event was created (<see cref="League.NoClub"/> during the warm-up).</summary>
+        public int PlayerClub = League.NoClub;
         /// <summary>Club names by index (snapshot).</summary>
         public string[] ClubNames;
         /// <summary>Regular-season standings (splits only; null for the finals).</summary>
@@ -122,21 +138,33 @@ namespace EsportsManager.Matches
         /// <summary>Event kind.</summary>
         public EventType Type => Def.type;
         /// <summary>True when the player club is in the playoff bracket / finals.</summary>
-        public bool PlayerInBracket => Seeds != null && Array.IndexOf(Seeds, League.PlayerClub) >= 0;
+        public bool PlayerInBracket => PlayerClub >= 0 && Seeds != null && Array.IndexOf(Seeds, PlayerClub) >= 0;
+        /// <summary>True when <paramref name="club"/> is in the playoff bracket / finals.</summary>
+        public bool InBracket(int club) => Seeds != null && Array.IndexOf(Seeds, club) >= 0;
+        /// <summary>The first bracket opponent of a seeded club (seed 1 v last ...), or -1.</summary>
+        public int FirstOpponent(int club)
+        {
+            if (!InBracket(club)) return -1;
+            int i = Array.IndexOf(Seeds, club);
+            return Seeds[Seeds.Length - 1 - i];
+        }
+        /// <summary>Every series <paramref name="club"/> played, play order (regular season first).</summary>
+        public List<EventSeries> SeriesOf(int club)
+        {
+            var list = new List<EventSeries>();
+            foreach (var s in RegularSeries) if (s.Involves(club)) list.Add(s);
+            foreach (var s in PlayoffSeries) if (s.Involves(club)) list.Add(s);
+            return list;
+        }
         /// <summary>The player club's first bracket opponent (seed 1 v last seed, 2 v second-to-last ...); -1 when not seeded.</summary>
         public int PlayerFirstOpponent
         {
-            get
-            {
-                if (!PlayerInBracket) return -1;
-                int i = Array.IndexOf(Seeds, League.PlayerClub);
-                return Seeds[Seeds.Length - 1 - i];
-            }
+            get { return PlayerInBracket ? FirstOpponent(PlayerClub) : -1; }
         }
         /// <summary>The player club's place (0 = did not take part / not complete).</summary>
-        public int PlayerPlacing => Placing == null ? 0 : Placing[League.PlayerClub];
+        public int PlayerPlacing => Placing == null || PlayerClub < 0 ? 0 : Placing[PlayerClub];
         /// <summary>The player club's prize.</summary>
-        public long PlayerPrize => Prize == null ? 0 : Prize[League.PlayerClub];
+        public long PlayerPrize => Prize == null || PlayerClub < 0 ? 0 : Prize[PlayerClub];
 
         /// <summary>Every series the player club played, in play order (regular season first).</summary>
         public List<EventSeries> PlayerSeries()
@@ -155,7 +183,7 @@ namespace EsportsManager.Matches
             foreach (var e in Regular.Ranking())
                 rows.Add(new StandingsRow
                 {
-                    ClubIndex = e.ClubIndex, ClubName = ClubNames[e.ClubIndex], IsPlayer = e.ClubIndex == League.PlayerClub,
+                    ClubIndex = e.ClubIndex, ClubName = ClubNames[e.ClubIndex], IsPlayer = e.ClubIndex == PlayerClub,
                     SeriesWins = e.SeriesWins, SeriesLosses = e.SeriesLosses, GamesWon = e.GamesWon, GamesLost = e.GamesLost,
                     GameDiff = e.GameDiff, Rank = e.Rank,
                 });
@@ -164,41 +192,57 @@ namespace EsportsManager.Matches
     }
 
     /// <summary>
-    /// Plays the calendar events (numbers.md 4.18 v3.4) on a DEDICATED random source. Pure C#.
-    /// </summary>
-    /// <remarks>
-    /// FIXED DRAW ORDER on the runner's source (Story 011: no opponent form walk any more): (a) regular season: rounds
-    /// 0..6 in order, inside a round the pairings in <see cref="League.PairingsOfRound"/> order (the player club's pairing is
-    /// always the first); (b) playoffs / finals: semi-final seed 1 v seed 4, semi-final seed 2 v seed 3, then the final. Each
-    /// series draws as documented on <see cref="MatchSimulator"/>. Callers (the session's event effects) draw from the same source
-    /// right after a stage's series; see <c>EventEffects</c>.
+    /// Plays the calendar events (numbers.md 4.18 v3.4; league.md rev 3) for ALL clubs with the same rules. Pure C#.
+    /// Lineups (starters, chemistry, tactic, hooks) come from the caller per club: the session for the player club, the league
+    /// AI for the others. Every series draws on its own KEYED source (league.md 随机数): purpose "match", key (year, calendar
+    /// event index, stage, schedule slot), so no series depends on how many draws other series made.
     /// TIE-BREAKS: regular season = <see cref="Standings"/> (series wins, game diff, games won, lower club index).
     /// Finals qualification: points, then regular-season series wins of all splits, then their game diff, then lower club index.
-    /// </remarks>
+    /// </summary>
     public sealed class TournamentRunner
     {
         private readonly MatchConfig _match;
-        private readonly TeamConfig _team;
-        private readonly PlayerConfig _players;
+        private readonly Func<int, int, int, int, IRandomSource> _seriesRng;
 
-        /// <summary>Opponents, names, schedule.</summary>
+        /// <summary>Club names, schedule and the player club id.</summary>
         public League League { get; }
         /// <summary>The simulator.</summary>
         public MatchSimulator Simulator { get; }
         /// <summary>The match config.</summary>
         public MatchConfig Config => _match;
-        /// <summary>The dedicated random source (also used by the session's event effects, see remarks).</summary>
-        public IRandomSource Random { get; }
 
-        /// <summary>Creates a runner; every dependency is injected.</summary>
-        public TournamentRunner(League league, MatchConfig match, TeamConfig team, PlayerConfig players, IRandomSource rng)
+        /// <summary>
+        /// Builds a side's specialty hook table from its starters (Story 012: the growth system filters and de-duplicates). Null =
+        /// no specialties (neutral hooks).
+        /// </summary>
+        public Func<IReadOnlyDictionary<string, Player>, IEnumerable<SpecialtyEffect>> HookBuilder { get; set; }
+
+        /// <summary>Hook table of a team's current starters (empty without a <see cref="HookBuilder"/>).</summary>
+        public IEnumerable<SpecialtyEffect> Hooks(EsportsManager.Teams.Team team)
+            => HookBuilder == null || team == null ? null : HookBuilder(team.StartersByLane());
+
+        /// <summary>A team's lineup with its hook table and the given tactic.</summary>
+        public MatchLineup LineupOf(EsportsManager.Teams.Team team, MatchTactic tactic) => MatchLineup.FromTeam(team, tactic, Hooks(team));
+
+        /// <summary>
+        /// Creates a runner. <paramref name="seriesRng"/> returns the source of one series from (year, event index, stage, slot).
+        /// </summary>
+        public TournamentRunner(League league, MatchConfig match, TeamConfig team, PlayerConfig players, Func<int, int, int, int, IRandomSource> seriesRng)
         {
             League = league ?? throw new ArgumentNullException(nameof(league));
             _match = match ?? throw new ArgumentNullException(nameof(match));
-            _team = team ?? throw new ArgumentNullException(nameof(team));
-            _players = players ?? throw new ArgumentNullException(nameof(players));
-            Random = rng ?? throw new ArgumentNullException(nameof(rng));
+            if (team == null) throw new ArgumentNullException(nameof(team));
+            if (players == null) throw new ArgumentNullException(nameof(players));
+            _seriesRng = seriesRng ?? throw new ArgumentNullException(nameof(seriesRng));
             Simulator = new MatchSimulator(match, team, players);
+        }
+
+        /// <summary>Club names snapshot.</summary>
+        public string[] Names()
+        {
+            var names = new string[League.ClubCount];
+            for (int i = 0; i < names.Length; i++) names[i] = League.ClubName(i);
+            return names;
         }
 
         /// <summary>
@@ -208,9 +252,12 @@ namespace EsportsManager.Matches
         public EventResult CreateEvent(CalendarEventDef def, int year, IReadOnlyList<EventResult> earlierThisYear)
         {
             if (def == null) throw new ArgumentNullException(nameof(def));
-            var names = new string[League.ClubCount];
-            for (int i = 0; i < names.Length; i++) names[i] = League.ClubName(i);
-            var ev = new EventResult { Def = def, Year = year, ClubNames = names };
+            var names = Names();
+            var ev = new EventResult
+            {
+                Def = def, Year = year, ClubNames = names, PlayerClub = League.PlayerClub,
+                EventIndex = Array.IndexOf(_match.calendar.events, def),
+            };
             if (def.type == EventType.Split) ev.Regular = new Standings(League.ClubCount);
             else
             {
@@ -258,27 +305,33 @@ namespace EsportsManager.Matches
         }
 
         /// <summary>
-        /// Plays the whole single round robin of a split (every club 7 series, 28 in total with 8 clubs) with
-        /// <paramref name="player"/> for every player series, then seeds the playoffs from the table. Throws
-        /// <see cref="InvalidOperationException"/> BEFORE any draw when the event is not a split awaiting its regular season or a
-        /// lineup is incomplete.
+        /// Plays the whole single round robin of a split with <paramref name="lineupOf"/>(club) for every club (asked once per
+        /// club, in club order, before any series), then seeds the playoffs. Throws BEFORE any draw when the event is not a split
+        /// awaiting its regular season or a lineup is incomplete.
         /// </summary>
-        public void PlayRegularSeason(EventResult ev, MatchLineup player)
+        public void PlayRegularSeason(EventResult ev, Func<int, MatchLineup> lineupOf)
         {
             if (ev == null) throw new ArgumentNullException(nameof(ev));
-            if (player == null) throw new ArgumentNullException(nameof(player));
+            if (lineupOf == null) throw new ArgumentNullException(nameof(lineupOf));
             if (ev.Type != EventType.Split || ev.RegularDone) throw new InvalidOperationException("This event has no regular season to play now.");
-            RequireOpponents();
-            MatchFormulas.RequireFullLineup(Simulator.Layout, player);
+            var lineups = new MatchLineup[League.ClubCount];
+            for (int c = 0; c < lineups.Length; c++)
+            {
+                lineups[c] = lineupOf(c) ?? throw new InvalidOperationException("No lineup for club " + c + ".");
+                MatchFormulas.RequireFullLineup(Simulator.Layout, lineups[c]);
+            }
             int bo = _match.format.regularBestOf;
             for (int round = 0; round < League.RoundsPerCycle; round++)
-                foreach (var p in League.PairingsOfRound(round))
+            {
+                var pairs = League.PairingsOfRound(round);
+                for (int i = 0; i < pairs.Count; i++)
                 {
-                    var s = Play(p.ClubA, p.ClubB, player, bo, EventStage.RegularSeason);
+                    var s = Play(ev, pairs[i].ClubA, pairs[i].ClubB, lineups, bo, EventStage.RegularSeason, round * 100 + i);
                     s.Round = round;
                     ev.Regular.Record(s.ClubA, s.ClubB, s.Result);
                     ev.RegularSeries.Add(s);
                 }
+            }
             ev.RegularDone = true;
             var ranking = ev.Regular.Ranking();
             ev.Seeds = new int[_match.format.playoffTeams];
@@ -286,19 +339,20 @@ namespace EsportsManager.Matches
         }
 
         /// <summary>
-        /// Plays the bracket of a split (after its regular season) or of the finals, then sets placings, points and prizes.
-        /// <paramref name="player"/> may be null only when the player club is not in the bracket. Throws BEFORE any draw on a
-        /// wrong state or an incomplete lineup.
+        /// Plays the bracket of a split (after its regular season) or of the finals with <paramref name="lineupOf"/>(club) for every
+        /// seeded club (asked once per club in seed order; the final reuses the semi-final lineup and tactic, match.md 战术节奏),
+        /// then sets placings, points and prizes. Throws BEFORE any draw on a wrong state or an incomplete lineup.
         /// </summary>
-        public void PlayBracket(EventResult ev, MatchLineup player)
+        public void PlayBracket(EventResult ev, Func<int, MatchLineup> lineupOf)
         {
             if (ev == null) throw new ArgumentNullException(nameof(ev));
+            if (lineupOf == null) throw new ArgumentNullException(nameof(lineupOf));
             if (!ev.RegularDone || ev.IsComplete || ev.Seeds == null) throw new InvalidOperationException("This event has no bracket to play now.");
-            RequireOpponents();
-            if (ev.PlayerInBracket)
+            var lineups = new MatchLineup[League.ClubCount];
+            foreach (int c in ev.Seeds)
             {
-                if (player == null) throw new ArgumentNullException(nameof(player), "the player club is in the bracket.");
-                MatchFormulas.RequireFullLineup(Simulator.Layout, player);
+                lineups[c] = lineupOf(c) ?? throw new InvalidOperationException("No lineup for club " + c + ".");
+                MatchFormulas.RequireFullLineup(Simulator.Layout, lineups[c]);
             }
             var f = _match.format;
             bool split = ev.Type == EventType.Split;
@@ -310,15 +364,14 @@ namespace EsportsManager.Matches
             var semiLosers = new List<int>();
             if (seeds.Length == 4)
             {
-                var s1 = Play(seeds[0], seeds[3], player, semiBo, EventStage.Semifinal);
-                var s2 = Play(seeds[1], seeds[2], player, semiBo, EventStage.Semifinal);
+                var s1 = Play(ev, seeds[0], seeds[3], lineups, semiBo, EventStage.Semifinal, 0);
+                var s2 = Play(ev, seeds[1], seeds[2], lineups, semiBo, EventStage.Semifinal, 1);
                 ev.PlayoffSeries.Add(s1); ev.PlayoffSeries.Add(s2);
                 finA = s1.Winner; finB = s2.Winner;
-                // both losers share place 3; listed in seed order
                 foreach (int c in seeds) if (c == s1.Loser || c == s2.Loser) semiLosers.Add(c);
             }
             else { finA = seeds[0]; finB = seeds[1]; }
-            var fin = Play(finA, finB, player, finalBo, EventStage.Final);
+            var fin = Play(ev, finA, finB, lineups, finalBo, EventStage.Final, 0);
             ev.PlayoffSeries.Add(fin);
             order.Add(fin.Winner); order.Add(fin.Loser); order.AddRange(semiLosers);
             if (split)
@@ -335,29 +388,25 @@ namespace EsportsManager.Matches
             {
                 int c = order[pos];
                 ev.Placing[c] = seeds.Length == 4 && pos == 3 ? 3 : pos + 1;
-                ev.Prize[c] = prizes[pos];
+                ev.Prize[c] = pos < prizes.Length ? prizes[pos] : 0;
                 if (split) ev.Points[c] = f.finalsPoints[pos];
             }
             ev.IsComplete = true;
         }
 
         // The player club always plays as side A (its report is from side A); otherwise the first club given is side A.
-        private EventSeries Play(int a, int b, MatchLineup player, int bestOf, EventStage stage)
+        private EventSeries Play(EventResult ev, int a, int b, MatchLineup[] lineups, int bestOf, EventStage stage, int slot)
         {
-            if (b == League.PlayerClub) { int t = a; a = b; b = t; }
-            var la = a == League.PlayerClub ? player : MatchLineup.FromOpponent(League.OpponentAt(a));
-            var lb = MatchLineup.FromOpponent(League.OpponentAt(b));
-            var result = Simulator.Simulate(la, lb, Random, bestOf);
+            int player = ev.PlayerClub;
+            if (player >= 0 && b == player) { int t = a; a = b; b = t; }
+            var rng = _seriesRng(ev.Year, ev.EventIndex, (int)stage, slot);
+            bool mine = player >= 0 && a == player;
+            var result = Simulator.Simulate(lineups[a], lineups[b], rng, bestOf, mine);
             return new EventSeries
             {
-                Stage = stage, ClubA = a, ClubB = b, BestOf = bestOf, Result = result,
-                Report = a == League.PlayerClub ? MatchReport.Build(result, _match, true) : null,
+                Stage = stage, ClubA = a, ClubB = b, BestOf = bestOf, Result = result, PlayerClub = player, Slot = slot,
+                Report = mine ? MatchReport.Build(result, _match, true) : null,
             };
-        }
-
-        private void RequireOpponents()
-        {
-            foreach (var o in League.Opponents) MatchFormulas.RequireFullLineup(Simulator.Layout, MatchLineup.FromOpponent(o));
         }
     }
 }

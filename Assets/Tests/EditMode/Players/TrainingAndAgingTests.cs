@@ -297,148 +297,7 @@ namespace EsportsManager.Tests.Players
                 Assert.That(p.ContractYearsLeft, Is.InRange(cfg.generation.contractYearsMin, cfg.generation.contractYearsMax));
         }
 
-        // ---- training gain (numbers.md 4.1) ----
-
-        [Test]
-        public void TrainingGain_MatchesFormula()
-        {
-            var cfg = Cfg();
-            // T_base 2, intensity 1.5, dim 40 of potential 80, age 22 (coef 1.0), stress 40, k_s 0.5, no trait effect
-            var p = Neutral(cfg, age: 22, fill: 40f, potential: 80f, stress: 40f);
-            float expected = 2f * 1.5f * (1f - 40f / 80f) * 1f * 1.0f * (1f - 0.5f * 40f / 100f);
-            Assert.AreEqual(expected, p.TrainingGain("mid", 0, 1.5f), 1e-5f);
-            Assert.AreEqual(1.2f, p.TrainingGain("mid", 0, 1.5f), 1e-5f); // 2 x 1.5 x 0.5 x 0.8
-        }
-
-        [Test]
-        public void TrainingGain_AtOrAbovePotential_StaysAtSoftCapFloorNotZero()
-        {
-            var cfg = Cfg();
-            // headroom = max(1 - dim/P, rho) = rho 0.15 -> 2 x 1 x 0.15 x 1 x 1.0 x 1
-            float expected = 2f * 0.15f;
-            Assert.AreEqual(expected, Neutral(cfg, fill: 80f, potential: 80f).TrainingGain("mid", 0, 1f), 1e-5f);
-            Assert.AreEqual(expected, Neutral(cfg, fill: 95f, potential: 80f).TrainingGain("mid", 0, 1f), 1e-5f);
-            Assert.AreEqual(expected, Neutral(cfg, fill: 75f, potential: 80f).TrainingGain("mid", 0, 1f), 1e-5f,
-                "1 - 75/80 = 0.0625 is below rho, so the floor applies before reaching potential too");
-        }
-
-        [Test]
-        public void TrainingGain_SoftCapFloorComesFromConfig()
-        {
-            var cfg = Cfg();
-            var p = Neutral(cfg, fill: 90f, potential: 80f);
-            cfg.training.softCapFloor = 0.3f;
-            Assert.AreEqual(2f * 0.3f, p.TrainingGain("mid", 0, 1f), 1e-5f);
-        }
-
-        [Test]
-        public void TrainingGain_PastPotential_RepeatedTrainingKeepsRaisingDimensionUpTo100()
-        {
-            var p = Neutral(Cfg(), fill: 80f, potential: 80f);
-            for (int i = 0; i < 500; i++)
-                p.SetDimension("mid", 0, p.GetDimension("mid", 0) + p.TrainingGain("mid", 0, 1f));
-            Assert.AreEqual(100f, p.GetDimension("mid", 0));
-        }
-
-        [Test]
-        public void TrainingGain_ZeroPotential_UsesFloorNotNaN()
-        {
-            var gain = Neutral(Cfg(), fill: 0f, potential: 0f).TrainingGain("mid", 0, 1f);
-            Assert.AreEqual(2f * 0.15f, gain, 1e-5f);
-        }
-
-        [Test]
-        public void TrainingGain_ShrinksAsDimensionApproachesPotential()
-        {
-            var cfg = Cfg();
-            var p = Neutral(cfg, fill: 10f, potential: 80f);
-            float previous = float.MaxValue;
-            foreach (float dim in new[] { 10f, 30f, 50f, 65f }) // 1 - 65/80 = 0.1875, still above rho
-            {
-                p.SetDimension("mid", 0, dim);
-                float gain = p.TrainingGain("mid", 0, 1f);
-                Assert.Less(gain, previous, "dim " + dim);
-                Assert.Greater(gain, 0f);
-                previous = gain;
-            }
-        }
-
-        [Test]
-        public void TrainingGain_OlderPlayersGainLess()
-        {
-            var cfg = Cfg();
-            float previous = float.MaxValue;
-            foreach (int age in new[] { 18, 21, 24, 27, 30 }) // one age from each band
-            {
-                float gain = Neutral(cfg, age: age).TrainingGain("mid", 0, 1f);
-                Assert.Less(gain, previous, "age " + age);
-                previous = gain;
-            }
-        }
-
-        [Test]
-        public void TrainingGain_AgeCoefficientsComeFromConfigBands()
-        {
-            var cfg = Cfg();
-            float at19 = Neutral(cfg, age: 19).TrainingGain("mid", 0, 1f);
-            float at20 = Neutral(cfg, age: 20).TrainingGain("mid", 0, 1f);
-            Assert.AreEqual(1.2f / 1.0f, at19 / at20, 1e-5f);
-            Assert.AreEqual(0.3f / 1.0f, Neutral(cfg, age: 40).TrainingGain("mid", 0, 1f) / at20, 1e-5f);
-        }
-
-        [Test]
-        public void TrainingGain_AgeNotCoveredByAnyBand_UsesCoefficientOne()
-        {
-            var cfg = Cfg();
-            cfg.training.ageBands = cfg.training.ageBands.Where(b => b.minAge != 20).ToArray(); // gap at 20-22
-            Assert.DoesNotThrow(cfg.Validate);
-            Assert.AreEqual(1f, cfg.GetAgeCoefficient(21));
-        }
-
-        [Test]
-        public void TrainingGain_StressLowersGain()
-        {
-            var cfg = Cfg();
-            float calm = Neutral(cfg, stress: 0f).TrainingGain("mid", 0, 1f);
-            float tense = Neutral(cfg, stress: 100f).TrainingGain("mid", 0, 1f);
-            Assert.AreEqual(1f - 0.5f, tense / calm, 1e-5f);
-        }
-
-        [Test]
-        public void TrainingGain_ScalesLinearlyWithIntensity_AndZeroIntensityGivesZero()
-        {
-            var p = Neutral(Cfg());
-            float one = p.TrainingGain("mid", 0, 1f);
-            Assert.AreEqual(2f * one, p.TrainingGain("mid", 0, 2f), 1e-5f);
-            Assert.AreEqual(0f, p.TrainingGain("mid", 0, 0f));
-        }
-
-        [Test]
-        public void TrainingGain_NegativeIntensity_Throws()
-        {
-            Assert.Throws<ArgumentOutOfRangeException>(() => Neutral(Cfg()).TrainingGain("mid", 0, -1f));
-        }
-
-        [Test]
-        public void TrainingGain_PersonalityTrainingMultiplierApplies()
-        {
-            var cfg = Cfg();
-            float neutral = Neutral(cfg).TrainingGain("mid", 0, 1f);
-            var diligent = TestConfigFactory.MakePlayer(cfg, fill: 40f, traitA: "diligent", traitB: NeutralA);
-            var lazy = TestConfigFactory.MakePlayer(cfg, fill: 40f, traitA: "lazy", traitB: NeutralA);
-            Assert.AreEqual(neutral * 1.2f, diligent.TrainingGain("mid", 0, 1f), 1e-5f);
-            Assert.AreEqual(neutral * 0.8f, lazy.TrainingGain("mid", 0, 1f), 1e-5f);
-        }
-
-        [Test]
-        public void TrainingGain_IsDeterministicAndDoesNotChangeThePlayer()
-        {
-            var p = Neutral(Cfg(), stress: 30f);
-            float first = p.TrainingGain("mid", 2, 1f);
-            for (int i = 0; i < 5; i++) Assert.AreEqual(first, p.TrainingGain("mid", 2, 1f));
-            Assert.AreEqual(40f, p.GetDimension("mid", 2));
-            Assert.AreEqual(30f, p.Stress);
-        }
+        // Training gain tests moved to Assets/Tests/EditMode/Growth/ (growth.md rev 3 replaces numbers.md 4.1 training).
 
         // ---- AdvanceYear (numbers.md 4.1) ----
 
@@ -652,17 +511,17 @@ namespace EsportsManager.Tests.Players
             cfg.training.baseGain = -1f;
             AssertInvalid(cfg, "training.baseGain");
             cfg = Cfg();
-            cfg.training.stressFactor = 1.5f;
-            AssertInvalid(cfg, "training.stressFactor");
+            cfg.training.span = 0f;
+            AssertInvalid(cfg, "training.span");
             cfg = Cfg();
-            cfg.training.stressFactor = -0.1f;
-            AssertInvalid(cfg, "training.stressFactor");
+            cfg.training.focusBonus = 1.1f;
+            AssertInvalid(cfg, "training.focusBonus");
             cfg = Cfg();
-            cfg.training.softCapFloor = 1.1f;
-            AssertInvalid(cfg, "training.softCapFloor");
+            cfg.training.specializationRate = 1f;
+            AssertInvalid(cfg, "training.specializationRate");
             cfg = Cfg();
-            cfg.training.softCapFloor = -0.1f;
-            AssertInvalid(cfg, "training.softCapFloor");
+            cfg.training.noise = -0.1f;
+            AssertInvalid(cfg, "training.noise");
         }
 
         [Test]
@@ -761,7 +620,7 @@ namespace EsportsManager.Tests.Players
                 (c => c.traitEffects[0].multiplier = float.PositiveInfinity, "traitEffects[0].multiplier"),
                 (c => c.traitPairs[0].value = float.NaN, "traitPairs[0].value"),
                 (c => c.training.baseGain = float.PositiveInfinity, "training.baseGain"),
-                (c => c.training.softCapFloor = float.NaN, "training.softCapFloor"),
+                (c => c.training.span = float.NaN, "training.span"),
                 (c => c.training.ageBands[0].coefficient = float.PositiveInfinity, "training.ageBands[0].coefficient"),
                 (c => c.aging.declineBands[0].amount = float.PositiveInfinity, "aging.declineBands[0].amount"),
                 (c => c.potential.estimateHalfWidth = float.PositiveInfinity, "potential.estimateHalfWidth"),

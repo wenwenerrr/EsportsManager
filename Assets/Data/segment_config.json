@@ -1,6 +1,6 @@
 {
     "action_points": { "per_segment": 8, "max_per_player": 2 },
-    "training": { "intensity": 1.0, "target_bonus": 1.5 },
+    "training": { "intensity": 1.0 },
     "stream": { "cap": 2 },
     "business": {
         "weight_popularity": 1.5,

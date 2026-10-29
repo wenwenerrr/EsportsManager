@@ -3,7 +3,7 @@ using System;
 namespace EsportsManager.UI
 {
     /// <summary>The state the player build should present at launch (debug / screenshot use).</summary>
-    public enum DemoState { Main, Card, Assign, Offer, Summary, Lineup, Report, Standings, Name, EventPrep, Regular, Bracket, FinalsQual, Choice, Events }
+    public enum DemoState { Main, Card, Assign, Offer, Summary, Lineup, Report, Standings, Name, EventPrep, Regular, Bracket, FinalsQual, Choice, Events, Training, Specialty, JobOffers, News, Opponent }
 
     /// <summary>
     /// Debug launch arguments of the built player, all parsed here:
@@ -21,6 +21,9 @@ namespace EsportsManager.UI
     /// STORY 006: <c>choice</c> = main screen with the two-choice pop-up open; <c>events</c> = settlement summary with several
     /// event cards (a bad money event and a choice result). Both search seeds from <c>--seed</c> (default
     /// <see cref="DemoSeeds.ChoiceDemoSeed"/> / <see cref="DemoSeeds.EventsDemoSeed"/>) upwards, see <see cref="DemoSeeds"/>.
+    /// STORY 012: <c>training</c> = main screen with a planned training point and the training pop-up open on the player closest
+    /// to a specialty (focus dimension selected); <c>specialty</c> = settlement summary in which a player gained a specialty (seed
+    /// search from <c>--seed</c>, default <see cref="DemoSeeds.SpecialtyDemoSeed"/>, see <see cref="DemoSeeds.HasSpecialtyGain"/>).
     /// Without <c>--demo</c> the game starts at the naming screen; every other demo skips it and keeps the default club name.</item>
     /// <item><c>--segments N</c> auto-play N scripted segments before presenting (events of earlier segments are auto-played
     /// with the scripted lineup - debug only, never in normal play).</item>
@@ -58,10 +61,10 @@ namespace EsportsManager.UI
 
         /// <summary>True for the demos that resolve the last segment through the UI and walk into an event.</summary>
         public bool IsEventDemo => Demo == DemoState.EventPrep || Demo == DemoState.Regular || Demo == DemoState.Bracket
-            || Demo == DemoState.Report || Demo == DemoState.FinalsQual;
+            || Demo == DemoState.Report || Demo == DemoState.FinalsQual || Demo == DemoState.Opponent;
 
         /// <summary>--segments, or the event demo default (3 = spring, finals-qual 12) when none was given.</summary>
-        public int EffectiveSegments => Segments > 0 || !IsEventDemo ? Segments : Demo == DemoState.FinalsQual ? 12 : 3;
+        public int EffectiveSegments => Segments > 0 || !IsEventDemo ? Segments : Demo == DemoState.FinalsQual ? 12 : Demo == DemoState.Opponent ? 6 : 3;
 
         /// <summary>Parses the process command line.</summary>
         public static DebugArgs Parse() => Parse(Environment.GetCommandLineArgs());

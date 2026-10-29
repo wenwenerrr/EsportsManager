@@ -181,6 +181,7 @@ namespace EsportsManager.UI
             var hint = EventLayout.Wrap(MainScreen.CounterHint(cfg), 13, UiKit.TextDim); hint.style.marginTop = 6; tac.Add(hint);
             var focus = EventLayout.Wrap(FocusHint(cfg), 13, UiKit.TextDim); focus.name = "focus-hint"; focus.style.marginTop = 2; tac.Add(focus);
             OurStrength(s, right);
+            if (s.World != null) LeagueWidgets.OpponentPanel(ui, right);
 
             string warn = EventTexts.HighStressWarning(high);
             if (warn != null)
@@ -446,7 +447,7 @@ namespace EsportsManager.UI
             var fin = new VisualElement(); fin.style.width = 250;
             fin.Add(MatchBox(ev, final));
             var champ = UiKit.Ellipsis(UiKit.Lbl(string.Format(UiStrings.ChampionFormat, ev.ClubNames[final.Winner]), 17,
-                final.Winner == League.PlayerClub ? UiKit.Accent : UiKit.Warn, true));
+                final.Winner == ev.PlayerClub ? UiKit.Accent : UiKit.Warn, true));
             champ.name = "champion"; fin.Add(champ);
             row.Add(fin);
             return row;
@@ -466,7 +467,7 @@ namespace EsportsManager.UI
         {
             var r = UiKit.Row(26);
             r.style.paddingLeft = 4;
-            if (club == League.PlayerClub)
+            if (club == ev.PlayerClub)
             {
                 r.name = "bracket-player";
                 r.style.backgroundColor = StandingsView.PlayerRowColor;
@@ -485,7 +486,7 @@ namespace EsportsManager.UI
 
         private static VisualElement PlacingRow(EventResult ev, int club)
         {
-            bool player = club == League.PlayerClub;
+            bool player = club == ev.PlayerClub;
             var r = UiKit.Row(26);
             r.style.paddingLeft = 4; r.style.borderBottomWidth = 1; r.style.borderBottomColor = UiKit.PanelLight;
             if (player)

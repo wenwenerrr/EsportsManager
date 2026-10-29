@@ -25,7 +25,8 @@ namespace EsportsManager.EditorTools
                 AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/segment_config.json"),
                 AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/match_config.json"),
                 AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/event_config.json"),
-                AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/event_text_zh.json"));
+                AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/event_text_zh.json"),
+                AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Data/league_config.json"));
             EditorUtility.SetDirty(boot);
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);

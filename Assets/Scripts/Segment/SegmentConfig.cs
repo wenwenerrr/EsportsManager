@@ -11,13 +11,14 @@ namespace EsportsManager.Segments
         public int maxPerPlayer;
     }
 
-    /// <summary>Training knobs (numbers.md 4.1, 4.16).</summary>
+    /// <summary>
+    /// Training knobs of the segment (numbers.md 4.16). The growth formulas and their numbers live in PlayerConfig.training
+    /// (design/gdd/growth.md); the old target_bonus was removed with the "six dims + target x1.5" model.
+    /// </summary>
     public sealed class SegmentTrainingConfig
     {
-        /// <summary>train_intensity per training point, > 0. Observation values come from PlayerConfig.potential.</summary>
+        /// <summary>I of growth.md F1 and the stress formula's training intensity per point, > 0. Observation values come from PlayerConfig.potential.</summary>
         public float intensity;
-        /// <summary>target_bonus (numbers.md 4.1 v3): multiplier on the chosen target dimension's gain, >= 1.</summary>
-        public float targetBonus;
     }
 
     /// <summary>Livestream knobs (numbers.md 4.2).</summary>
@@ -154,8 +155,6 @@ namespace EsportsManager.Segments
             if (actionPoints.perSegment < 1) throw Fail("actionPoints.perSegment must be >= 1, got " + actionPoints.perSegment + ".");
             if (actionPoints.maxPerPlayer < 1) throw Fail("actionPoints.maxPerPlayer must be >= 1, got " + actionPoints.maxPerPlayer + ".");
             Positive("training.intensity", training.intensity);
-            if (!(training.targetBonus >= 1f) || float.IsInfinity(training.targetBonus))
-                throw Fail("training.targetBonus must be finite and >= 1, got " + training.targetBonus + ".");
             Positive("stream.cap", stream.cap);
 
             var b = business;

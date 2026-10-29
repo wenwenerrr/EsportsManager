@@ -15,99 +15,99 @@ namespace EsportsManager.Matches
     }
 
     /// <summary>
-    /// The league (numbers.md 4.14, v3.3): the player club (index 0) and <c>opponent_count</c> opponents (indexes 1..N),
-    /// and the round-robin schedule. Per-event standings live in <see cref="EventResult"/> (numbers.md 4.18).
+    /// The schedule side of the league (design/gdd/league.md; numbers.md 4.18): club names by stable club id (= index) and the
+    /// round-robin schedule. The clubs themselves (one model for the player and the AI) live in <c>EsportsManager.Leagues.LeagueWorld</c>.
+    /// <see cref="PlayerClub"/> is the club the player runs, or <see cref="NoClub"/> during the warm-up (Story 013: the player club
+    /// is no longer assumed to be index 0).
     /// </summary>
     /// <remarks>
-    /// SCHEDULE: circle method over all clubs. Club 0 stays fixed, the others rotate by one position per round, in an order that
-    /// the factory shuffled once with the seed. Every round every club plays exactly one series (with an odd club count one club
-    /// has a bye per round). Rounds 0 .. RoundsPerCycle-1 are one single round robin: every club meets every other exactly once
-    /// (a split's regular season, numbers.md 4.18). The schedule depends only on the club count and the stored order.
+    /// SCHEDULE: circle method over all clubs. Club 0 stays fixed, the others rotate by one position per round, in an order the
+    /// generator shuffled once. Every round every club plays exactly one series (with an odd club count one club has a bye per
+    /// round). Rounds 0 .. RoundsPerCycle-1 are one single round robin. Schedule slots (round, pairing index) key the series
+    /// random numbers.
     /// </remarks>
     public sealed class League
     {
-        private readonly List<OpponentClub> _opponents;
+        private readonly string[] _names;
         private readonly int[] _rotation; // permutation of the non-fixed slots (club indexes, or ClubCount for a bye)
-        private readonly MatchConfig _config;
 
-        /// <summary>Player club index (always 0).</summary>
-        public const int PlayerClub = 0;
-        /// <summary>The player club's name.</summary>
-        public string PlayerClubName { get; private set; }
-
-        /// <summary>Renames the player club (shown in the standings).</summary>
-        public void RenamePlayerClub(string name) => PlayerClubName = name ?? "";
-        /// <summary>Opponent clubs; club index = list index + 1.</summary>
-        public IReadOnlyList<OpponentClub> Opponents => _opponents;
-        /// <summary>Total clubs: opponents + the player.</summary>
-        public int ClubCount => _opponents.Count + 1;
+        /// <summary>"No player club" (warm-up).</summary>
+        public const int NoClub = -1;
+        /// <summary>The club the player runs, or <see cref="NoClub"/>.</summary>
+        public int PlayerClub { get; set; } = NoClub;
+        /// <summary>Total clubs.</summary>
+        public int ClubCount => _names.Length;
         /// <summary>Rounds before the schedule repeats (every club meets every other once).</summary>
         public int RoundsPerCycle => _rotation.Length;
 
         /// <summary>
-        /// Creates a league. <paramref name="rotationOrder"/> is a permutation of club indexes 1..ClubCount-1 (the order of
-        /// the rotating slots); pass null for the natural order.
+        /// Creates the schedule. <paramref name="rotationOrder"/> is a permutation of club indexes 1..ClubCount-1 (the order of the
+        /// rotating slots); null = natural order.
         /// </summary>
-        public League(MatchConfig config, string playerClubName, IReadOnlyList<OpponentClub> opponents, IReadOnlyList<int> rotationOrder = null)
+        public League(IReadOnlyList<string> clubNames, IReadOnlyList<int> rotationOrder = null)
         {
-            _config = config ?? throw new ArgumentNullException(nameof(config));
-            if (opponents == null) throw new ArgumentNullException(nameof(opponents));
-            if (opponents.Count < 1) throw new ArgumentException("A league needs at least one opponent.", nameof(opponents));
-            PlayerClubName = playerClubName ?? "";
-            _opponents = new List<OpponentClub>(opponents);
+            if (clubNames == null) throw new ArgumentNullException(nameof(clubNames));
+            if (clubNames.Count < 2) throw new ArgumentException("A league needs at least two clubs.", nameof(clubNames));
+            _names = new string[clubNames.Count];
+            for (int i = 0; i < _names.Length; i++) _names[i] = clubNames[i] ?? "";
             int n = ClubCount;
-            int slots = n % 2 == 0 ? n - 1 : n; // odd club count: add one bye slot with index n
+            int slots = n % 2 == 0 ? n - 1 : n;
             _rotation = new int[slots];
             var seen = new HashSet<int>();
             for (int i = 0; i < slots; i++)
             {
                 int club = rotationOrder != null && i < n - 1 ? rotationOrder[i] : i + 1;
-                if (club < 1 || club > (n % 2 == 0 ? n - 1 : n) || !seen.Add(club))
-                    throw new ArgumentException("rotationOrder must be a permutation of 1.." + (slots) + ".", nameof(rotationOrder));
+                if (club < 1 || club > slots || !seen.Add(club))
+                    throw new ArgumentException("rotationOrder must be a permutation of 1.." + slots + ".", nameof(rotationOrder));
                 _rotation[i] = club;
             }
         }
 
-        /// <summary>Name of a club by index (0 = player).</summary>
+        /// <summary>Name of a club by index.</summary>
         public string ClubName(int club)
         {
-            if (club == PlayerClub) return PlayerClubName;
-            if (club < 1 || club > _opponents.Count) throw new ArgumentOutOfRangeException(nameof(club));
-            return _opponents[club - 1].Name;
+            if (club < 0 || club >= _names.Length) throw new ArgumentOutOfRangeException(nameof(club));
+            return _names[club];
         }
 
-        /// <summary>The opponent club with the given club index (1..N).</summary>
-        public OpponentClub OpponentAt(int club)
+        /// <summary>Renames a club (the player names the club he takes over).</summary>
+        public void Rename(int club, string name)
         {
-            if (club < 1 || club > _opponents.Count) throw new ArgumentOutOfRangeException(nameof(club), "not an opponent index: " + club);
-            return _opponents[club - 1];
+            if (club < 0 || club >= _names.Length) throw new ArgumentOutOfRangeException(nameof(club));
+            _names[club] = name ?? "";
         }
 
-        /// <summary>All pairings of a round (byes omitted). Club 0's pairing is included.</summary>
+        /// <summary>All pairings of a round (byes omitted), in schedule-slot order.</summary>
         public IReadOnlyList<LeaguePairing> PairingsOfRound(int round)
         {
             if (round < 0) throw new ArgumentOutOfRangeException(nameof(round));
             int slots = _rotation.Length;
-            int size = slots + 1; // arrangement size, even
+            int size = slots + 1;
             var arr = new int[size];
-            arr[0] = PlayerClub;
+            arr[0] = 0;
             for (int i = 1; i < size; i++) arr[i] = _rotation[(i - 1 + round) % slots];
             var list = new List<LeaguePairing>();
             for (int i = 0; i < size / 2; i++)
             {
                 int a = arr[i], b = arr[size - 1 - i];
-                if (a >= ClubCount || b >= ClubCount) continue; // bye
+                if (a >= ClubCount || b >= ClubCount) continue;
                 list.Add(a < b ? new LeaguePairing(a, b) : new LeaguePairing(b, a));
             }
             return list;
         }
 
-        /// <summary>The club the player club meets in a round, or -1 when it has a bye (only with an odd club count).</summary>
-        public int PlayerOpponentOfRound(int round)
+        /// <summary>The club <paramref name="club"/> meets in a round, or -1 (bye).</summary>
+        public int OpponentOfRound(int club, int round)
         {
             foreach (var p in PairingsOfRound(round))
-                if (p.ClubA == PlayerClub) return p.ClubB;
+            {
+                if (p.ClubA == club) return p.ClubB;
+                if (p.ClubB == club) return p.ClubA;
+            }
             return -1;
         }
+
+        /// <summary>The player club's opponent in a round (-1 when none / bye).</summary>
+        public int PlayerOpponentOfRound(int round) => PlayerClub < 0 ? -1 : OpponentOfRound(PlayerClub, round);
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EsportsManager.Events;
+using EsportsManager.Growth;
 using EsportsManager.Players;
 using EsportsManager.Segments;
 using EsportsManager.Session;
@@ -58,7 +59,7 @@ namespace EsportsManager.Tests.Events
         {
             var f = new Fixture(runnerRng);
             eventRng = new ScriptedRandomSource(0.5f);
-            f.Runner = new SegmentRunner(f.Cfg, f.Players, f.Team, f.Rng, new EventEngine(cfg, f.Players, eventRng));
+            f.Runner = new SegmentRunner(f.Cfg, f.Players, f.Team, f.Rng, new EventEngine(cfg, f.Players, eventRng), f.Growth);
             return f;
         }
 
@@ -151,7 +152,7 @@ namespace EsportsManager.Tests.Events
         public void ActionEvents_CappedAtMax_LaterPointsNotRolled()
         {
             var f = With(Cfg(Act("a", EventAction.Train, Fx(EffectType.Mood, 1f))), out var rng);
-            var s = Run(f, new SegmentPlan().Train(1, 0).Train(1, 0).Train(2, 0).Train(2, 0).Train(3, 0).Train(3, 0));
+            var s = Run(f, new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(3, TrainingTarget.Early));
             var action = s.Events.Where(e => e.Kind == EventKind.Action).ToList();
             Assert.AreEqual(3, action.Count);
             CollectionAssert.AreEqual(new[] { 0, 1, 2 }, action.Select(e => e.PointIndex));
@@ -184,14 +185,14 @@ namespace EsportsManager.Tests.Events
         public void TrainMultiplier_DoublesGain_TrainAdd_AddsToTarget()
         {
             var lane = "top";
-            var baseF = new Fixture(); Run(baseF, new SegmentPlan().Train(1, 0));
+            var baseF = new Fixture(); Run(baseF, new SegmentPlan().Train(1, TrainingTarget.Early));
             float baseGain = baseF.Starters[0].GetDimension(lane, 0) - 50f;
             var f = With(Cfg(Act("a", EventAction.Train, Fx(EffectType.TrainMultiplier, 2f))), out _);
-            var s = Run(f, new SegmentPlan().Train(1, 0));
+            var s = Run(f, new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(2f * baseGain, f.Starters[0].GetDimension(lane, 0) - 50f, Tol);
             Assert.AreEqual(baseGain, s.Events[0].Effects[0].Applied, Tol);
             var g = With(Cfg(Act("a", EventAction.Train, Fx(EffectType.TrainAdd, 2f))), out _);
-            Run(g, new SegmentPlan().Train(1, 0));
+            Run(g, new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(baseGain + 2f, g.Starters[0].GetDimension(lane, 0) - 50f, Tol);
         }
 
@@ -243,7 +244,7 @@ namespace EsportsManager.Tests.Events
         {
             var f = With(Cfg(Act("a", EventAction.Train, Fx(EffectType.Mood, 500f), Fx(EffectType.Stress, -500f))), out _);
             f.Starters[0].Stress = 40f;
-            var s = Run(f, new SegmentPlan().Train(1, 0));
+            var s = Run(f, new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(100f, f.Starters[0].Mood, Tol);
             Assert.AreEqual(0f, f.Starters[0].Stress, Tol);
             Assert.LessOrEqual(s.Events[0].Effects[0].Applied, 100f);
@@ -252,15 +253,15 @@ namespace EsportsManager.Tests.Events
         [Test]
         public void Funds_BookedAsEventIncomeAndExpenses()
         {
-            var baseS = Run(new Fixture(), new SegmentPlan().Train(1, 0).Train(2, 0));
+            var baseS = Run(new Fixture(), new SegmentPlan().Train(1, TrainingTarget.Early).Train(2, TrainingTarget.Early));
             var cfg = Cfg(Act("a", EventAction.Train, Fx(EffectType.Funds, -5000f, EffectTarget.Club)));
             var f = With(cfg, out _);
-            var s = Run(f, new SegmentPlan().Train(1, 0));
+            var s = Run(f, new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(5000, s.EventExpenses);
             Assert.AreEqual(0, s.EventIncome);
             Assert.AreEqual(-5000L, s.Events[0].FundsDelta);
             var g = With(Cfg(Act("a", EventAction.Train, Fx(EffectType.Funds, 3000f, EffectTarget.Club))), out _);
-            var t = Run(g, new SegmentPlan().Train(1, 0));
+            var t = Run(g, new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(3000, t.EventIncome);
             Assert.AreEqual(baseS.Report.Income + 3000, t.Report.Income);
             Assert.AreEqual(baseS.Report.Expenses + 5000, s.Report.Expenses);
@@ -269,10 +270,10 @@ namespace EsportsManager.Tests.Events
         [Test]
         public void Popularity_ClubPopularity_Familiarity_AppliedAfterSettle()
         {
-            var b = new Fixture(); Run(b, new SegmentPlan().Train(1, 0));
+            var b = new Fixture(); Run(b, new SegmentPlan().Train(1, TrainingTarget.Early));
             var f = With(Cfg(Act("a", EventAction.Train, Fx(EffectType.PlayerPopularity, 10f), Fx(EffectType.ClubPopularity, 5f, EffectTarget.Club),
                 Fx(EffectType.Familiarity, 10f, EffectTarget.SubjectWithStarters))), out _);
-            Run(f, new SegmentPlan().Train(1, 0));
+            Run(f, new SegmentPlan().Train(1, TrainingTarget.Early));
             Assert.AreEqual(b.Starters[0].Popularity + 10f, f.Starters[0].Popularity, Tol);
             Assert.AreEqual(b.Team.ClubPopularity + 5f, f.Team.ClubPopularity, Tol);
             Assert.AreEqual(b.Team.GetFamiliarity(1, 2) + 10f, f.Team.GetFamiliarity(1, 2), Tol);
@@ -315,7 +316,7 @@ namespace EsportsManager.Tests.Events
             // event draws: choice slot trigger, state attempt, pick 0.1 (-> a), chance 0.5 (fails 0.4), pick (-> b), chance 0.5 (passes 0.6)
             var f = new Fixture();
             var rng = new ScriptedRandomSource(0.5f, 0.5f, 0.5f, 0.1f, 0.5f, 0.5f, 0.5f);
-            f.Runner = new SegmentRunner(f.Cfg, f.Players, f.Team, f.Rng, new EventEngine(Cfg(a, b), f.Players, rng));
+            f.Runner = new SegmentRunner(f.Cfg, f.Players, f.Team, f.Rng, new EventEngine(Cfg(a, b), f.Players, rng), f.Growth);
             var s = Run(f, new SegmentPlan());
             Assert.AreEqual("b", s.Events.Single().EventId);
         }
@@ -327,7 +328,7 @@ namespace EsportsManager.Tests.Events
             var b = State("b", Fx(EffectType.Mood, 2f)); b.chance = 0.4f;
             var f = new Fixture();
             var rng = new ScriptedRandomSource(0.5f);
-            f.Runner = new SegmentRunner(f.Cfg, f.Players, f.Team, f.Rng, new EventEngine(Cfg(a, b), f.Players, rng));
+            f.Runner = new SegmentRunner(f.Cfg, f.Players, f.Team, f.Rng, new EventEngine(Cfg(a, b), f.Players, rng), f.Growth);
             Assert.AreEqual(0, Run(f, new SegmentPlan()).Events.Count);
             Assert.AreEqual(1 + 1 + 4, rng.Draws); // choice trigger + state attempt + 2 x (pick, chance)
         }
@@ -339,7 +340,7 @@ namespace EsportsManager.Tests.Events
             cfg.stateAttemptChance = 0.4f;
             var f = new Fixture();
             var rng = new ScriptedRandomSource(0.5f); // attempt draw 0.5 >= 0.4: slot skipped
-            f.Runner = new SegmentRunner(f.Cfg, f.Players, f.Team, f.Rng, new EventEngine(cfg, f.Players, rng));
+            f.Runner = new SegmentRunner(f.Cfg, f.Players, f.Team, f.Rng, new EventEngine(cfg, f.Players, rng), f.Growth);
             Assert.AreEqual(0, Run(f, new SegmentPlan()).Events.Count);
             Assert.AreEqual(1 + 1, rng.Draws); // choice trigger + state attempt only
         }
@@ -369,7 +370,7 @@ namespace EsportsManager.Tests.Events
             var ch = f.Runner.GetState().PendingChoices.Single();
             Assert.AreEqual(f.Team.Roster[0].Id, ch.PlayerId);
             Assert.IsTrue(ch.Options[0].PutsOnLeave);
-            var s = f.Runner.Resolve(new SegmentPlan().Train(ch.PlayerId.Value, 0), Ctx());
+            var s = f.Runner.Resolve(new SegmentPlan().Train(ch.PlayerId.Value, TrainingTarget.Early), Ctx());
             var e = s.Events.Single();
             Assert.AreEqual(1, e.OptionTaken);
             Assert.IsTrue(e.OptionWasDefault);
@@ -384,7 +385,7 @@ namespace EsportsManager.Tests.Events
             var ch = f.Runner.GetState().PendingChoices.Single();
             var p = f.Team.Roster[0];
             float mood = p.Mood; long funds = f.Team.Funds; int draws = rng.Draws;
-            var plan = new SegmentPlan().Train(p.Id, 0).AnswerChoice(ch.Id, 0);
+            var plan = new SegmentPlan().Train(p.Id, TrainingTarget.Early).AnswerChoice(ch.Id, 0);
             Assert.IsFalse(f.Runner.TryValidate(plan, Ctx(), out var err));
             Assert.AreEqual(PlanErrorCode.PlayerOnLeave, err.Code);
             Assert.AreEqual(ch.Id, err.ChoiceId);
@@ -393,7 +394,7 @@ namespace EsportsManager.Tests.Events
             Assert.IsTrue(f.Runner.GetState().IsOpen);
             Assert.AreEqual(1, f.Runner.GetState().PendingChoices.Count);
             // answered "leave" without actions for him resolves and applies option 0
-            var s = f.Runner.Resolve(new SegmentPlan().Train(f.Team.Roster[1].Id, 0).AnswerChoice(ch.Id, 0), Ctx());
+            var s = f.Runner.Resolve(new SegmentPlan().Train(f.Team.Roster[1].Id, TrainingTarget.Early).AnswerChoice(ch.Id, 0), Ctx());
             var e = s.Events.First(x => x.Kind == EventKind.Choice);
             Assert.AreEqual(0, e.OptionTaken);
             Assert.IsFalse(e.OptionWasDefault);
@@ -474,6 +475,6 @@ namespace EsportsManager.Tests.Events
 
         private static GameSession ShippedSession(int seed) => GameSession.FromJson(
             File.ReadAllText("Assets/Data/player_config.json"), File.ReadAllText("Assets/Data/team_config.json"),
-            File.ReadAllText("Assets/Data/segment_config.json"), File.ReadAllText("Assets/Data/match_config.json"), Json, seed);
+            File.ReadAllText("Assets/Data/segment_config.json"), File.ReadAllText("Assets/Data/match_config.json"), Json, File.ReadAllText("Assets/Data/league_config.json"), seed);
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using EsportsManager.Growth;
 using EsportsManager.Players;
 using EsportsManager.Segments;
 using EsportsManager.Tests.Players;
@@ -65,9 +66,9 @@ namespace EsportsManager.Tests.Segments
             var fx = OfferFor1(out _);
             fx.Runner.BeginSegment();
             // player 1 already has 2 points after accepting + 1 train; a third point on him is over the limit
-            var over = new SegmentPlan().Train(1, 0).Train(1, 0).AcceptOffer(0);
+            var over = new SegmentPlan().Train(1, TrainingTarget.Early).Train(1, TrainingTarget.Early).AcceptOffer(0);
             Assert.Throws<InvalidOperationException>(() => fx.Runner.Resolve(over, Ctx()));
-            var ok = new SegmentPlan().Train(1, 0).AcceptOffer(0);
+            var ok = new SegmentPlan().Train(1, TrainingTarget.Early).AcceptOffer(0);
             var s = fx.Runner.Resolve(ok, Ctx());
             Assert.AreEqual(2, s.PointsUsed);
             Assert.AreEqual(1, Of(s, 1).BusinessPoints);
@@ -79,11 +80,11 @@ namespace EsportsManager.Tests.Segments
         {
             var fx = OfferFor1(out _);
             fx.Runner.BeginSegment();
-            var full = new SegmentPlan().Train(2, 0).Train(2, 0).Train(3, 0).Train(3, 0).Train(4, 0).Train(4, 0).AcceptOffer(0);
+            var full = new SegmentPlan().Train(2, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(4, TrainingTarget.Early).Train(4, TrainingTarget.Early).AcceptOffer(0);
             var ex = Assert.Throws<InvalidOperationException>(() => fx.Runner.Resolve(full, Ctx()));
             StringAssert.Contains("7", ex.Message);
             // a plan that leaves one point free accepts fine
-            var fits = new SegmentPlan().Train(2, 0).Train(2, 0).Train(3, 0).Train(3, 0).Train(4, 0).AcceptOffer(0);
+            var fits = new SegmentPlan().Train(2, TrainingTarget.Early).Train(2, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(3, TrainingTarget.Early).Train(4, TrainingTarget.Early).AcceptOffer(0);
             Assert.DoesNotThrow(() => fx.Runner.Resolve(fits, Ctx()));
         }
 

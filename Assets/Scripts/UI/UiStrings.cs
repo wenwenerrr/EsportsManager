@@ -49,7 +49,7 @@ namespace EsportsManager.UI
         public const string NoActions = "未分配行动";
         public const string ActionCountFormat = "{0}×{1}";
         public const string PlayerPointsFormat = "行动点 {0}/{1}";
-        public const string ClickDimToTrain = "点维度条 = 训练该维度";
+        public const string ClickDimToTrain = "小条 = 专精";
         public const string PreviewFormat = "预计  压力 {0}  心情 {1}  直播收入 {2}";
         public const string Sponsor = "拉赞助";
         public const string UndoSponsor = "撤销赞助";
@@ -58,11 +58,69 @@ namespace EsportsManager.UI
         public const string Resolve = "结算本赛段";
         public const string OffersBadgeFormat = "商务邀约 {0}";
         public const string IncomeLineFormat = "直播收入 {0} · 商务分成 {1}";
-        public const string Hint = "点维度条训练、或给选手安排直播 / 休息，也可以拉赞助；完成后结算本赛段";
+        public const string Hint = "点“训练”选阶段练选手、或安排直播 / 休息，也可以拉赞助；完成后结算本赛段";
         public const string Added = "已加入计划：{0} {1}";
         public const string Undone = "已撤销 {0} 的最后一项行动";
         public const string NothingToUndo = "{0} 没有可撤销的行动";
         public const string Cleared = "计划已清空";
+
+        // ---- growth (Story 012, design/gdd/growth.md): phases, focus, specialties, training pop-up
+        public const string TargetEarly = "前期";
+        public const string TargetMid = "团战";
+        public const string TargetLate = "后期";
+        public const string TargetCommand = "指挥";
+        public const string PhaseStrengthItemFormat = "{0} {1}";
+        public const string FocusTitle = "专精";
+        public const string NearCapTag = "近上限";
+        public const string SpecialtyTitle = "绝活";
+        public const string SpecialtyNone = "暂无绝活";
+        public const string SpecialtyGapPrefixFormat = "离「{0}」还差：";
+        public const string SpecialtyGapDimFormat = "{0} +{1}";
+        public const string SpecialtyGapFocusFormat = "{0}专精 +{1}";
+        public const string SpecialtyGapJoin = "，";
+        public const string SpecialtyUnlocked = "已解锁";
+        public const string TrainButton = "训练";
+        public const string TrainAddedFormat = "练{0}";
+        public const string TrainAddedFocusFormat = "练{0}（重点 {1}）";
+        public const string TrainTitleFormat = "训练 · {0}（{1}）";
+        public const string TrainChooseTarget = "1. 选择要练的阶段（该阶段所有维度一起涨）";
+        public const string TrainChooseFocus = "2. 重点维度（可选）：在本阶段内多分涨幅，阶段平均涨幅不变";
+        public const string TrainNoFocus = "不指定";
+        public const string TrainFocusSingle = "这个阶段只有一个维度，不需要指定重点";
+        public const string TrainCommandNote = "指挥只练指挥能力，三个阶段的专精都会略降";
+        public const string TrainPreviewTitle = "预计涨幅（训练有 ±15% 随机）";
+        public const string TrainRangeFormat = "{0} +{1}～{2}";
+        public const string TrainOtherFormat = "其他维度各约 +{0}～{1}";
+        public const string TrainStateNote = "心情越好练得越快；压力超过 50 后越来越练不动；越接近上限涨得越慢";
+        public const string TrainConfirm = "加入训练计划";
+        public const string TrainClose = "关闭";
+        public const string TrainPointsFormat = "该选手本赛段已用行动点 {0}/{1}";
+        public const string TrainSummaryFormat = "{0}×{1}";
+        public const string TrainDimsTotalFormat = "维度合计 {0}";
+        public const string SpecialtyChanges = "绝活变化";
+        public const string SpecialtyGainedFormat = "解锁绝活！{0} 获得「{1}」";
+        public const string SpecialtyLostFormat = "{0} 失去了绝活「{1}」";
+        public const string NoSpecialtyChange = "本赛段没有绝活变化";
+
+        /// <summary>
+        /// "离「X」还差：维度 +a，前期专精 +b" (growth.md UI: max(0, 76 - d) and max(0, 0.55 - focus)); a part that is already met is
+        /// left out; both met = "已解锁" is shown by the caller for owned specialties.
+        /// </summary>
+        public static string SpecialtyGap(string name, string dimName, float dimGap, int phase, float focusGap)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            if (dimGap > 0.05f) parts.Add(F(SpecialtyGapDimFormat, dimName, dimGap.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)));
+            if (phase >= 0 && focusGap > 0.005f) parts.Add(F(SpecialtyGapFocusFormat, GrowthPhaseName(phase), focusGap.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)));
+            return F(SpecialtyGapPrefixFormat, name) + string.Join(SpecialtyGapJoin, parts);
+        }
+
+        /// <summary>Chinese name of a training target (前期 / 团战 / 后期 / 指挥).</summary>
+        public static string TargetName(EsportsManager.Growth.TrainingTarget t)
+            => t == EsportsManager.Growth.TrainingTarget.Early ? TargetEarly : t == EsportsManager.Growth.TrainingTarget.Mid ? TargetMid
+                : t == EsportsManager.Growth.TrainingTarget.Late ? TargetLate : TargetCommand;
+
+        /// <summary>Chinese name of a phase index 0-2 for growth / strength displays (前期 / 团战 / 后期).</summary>
+        public static string GrowthPhaseName(int k) => TargetName((EsportsManager.Growth.TrainingTarget)k);
 
         // ---- business pop-up
         public const string OfferTitle = "商务邀约";
@@ -172,7 +230,9 @@ namespace EsportsManager.UI
         public const string ErrDuplicateOffer = "这份邀约已经接受";
         public const string ErrUnknownOffer = "这份邀约已失效";
         public const string ErrOfferPlayerLeft = "该选手已离队，邀约作废";
-        public const string ErrDimension = "训练维度无效";
+        public const string ErrDimension = "重点维度必须属于所练的阶段";
+        public const string ErrUnknownTrainingTarget = "训练目标无效";
+        public const string ErrTrainingUnavailable = "当前模式不能训练（缺少比赛配置）";
         public const string ErrUnknownPlayer = "选手不在阵中";
         public const string ErrGeneric = "这份计划暂时无法执行";
         public const string ErrIncompleteLineup = "首发只有 {0}/{1} 人：在替补卡片上点“上场”补齐后才能结算";
@@ -196,6 +256,69 @@ namespace EsportsManager.UI
         public const string ErrUnknownAction = "{0} 的行动无效";
 
         // ---- new club (Story 004)
+        // ---- Story 013: job offers, style tags, opponent info, league news
+        public const string OffersTitle = "三份聘书";
+        public const string OffersSubtitle = "联赛已经运行了一整年。三家俱乐部想请你当经理，选一家接手。";
+        public const string OfferStrong = "强队";
+        public const string OfferMid = "中游";
+        public const string OfferWeak = "弱队";
+        public const string OfferFunds = "资金";
+        public const string OfferLastRankFormat = "去年第 {0} 名";
+        public const string OfferStyleFormat = "风格：{0}";
+        public const string OfferExpiringFormat = "本年到期合同 {0} 人";
+        public const string OfferPick = "选这家";
+        public const string OfferPicked = "已选择";
+        public const string OfferNamePrompt = "队名（可改，最多 {0} 个字）";
+        public const string OfferConfirm = "接手并开始";
+        public const string OfferPickFirst = "先选择一家俱乐部";
+        public const string OfferTakenFormat = "你接手了 {0}。新老板注资后开始第 1 年。";
+        public const string OfferTopUpNote = "接手时新老板会把资金补到至少 6 个赛段的工资（弱队 8 个赛段）。";
+        public const string StyleInvade = "入侵";
+        public const string StyleTeamfight = "团战";
+        public const string StyleLate = "后期";
+        public const string StyleStar = "明星";
+        public const string StyleTagFormat = "{0} · {1}";
+        public const string OpponentTitle = "对手信息";
+        public const string OpponentBenchFormat = "替补：{0}";
+        public const string OpponentPick = "查看其他对手";
+        public const string OpponentRecentTactics = "最近 5 场战术：";
+        public const string OpponentNoTactics = "还没有比赛记录";
+        public const string OpponentLastMeeting = "上次交手（我方 − 对方）：";
+        public const string OpponentNeverMet = "还没交过手";
+        public const string OpponentWon = "（我方胜）";
+        public const string OpponentLost = "（我方负）";
+        public const string OpponentPhaseFormat = "{0} {1}";
+        public const string OpponentRadarNote = "雷达图三个角：前期（上）/ 中期 / 后期，所有俱乐部同一刻度";
+        public const string NewsTitle = "联赛新闻";
+        public const string NewsEmpty = "暂无新闻";
+        public const string NewsWarmUp = "去年";
+        public const string NewsYearFormat = "第 {0} 年";
+        public const string NewsStyleFormat = "{0} 改打法：{1} → {2}";
+        public const string NewsSigningFormat = "{0} 签下 {1}";
+        public const string NewsFireSaleFormat = "{0} 为补资金把 {1} 卖给联盟（¥{2}）";
+        public const string NewsLoanFormat = "{0} 资金耗尽，向联盟借款 ¥{1}";
+        public const string NewsSpecialtyFormat = "{0} 的 {1} 练成绝活「{2}」";
+        public const string NewsChampionFormat = "{0} 获得{1}冠军";
+
+        /// <summary>Display name of a club style.</summary>
+        public static string StyleName(EsportsManager.Leagues.ClubStyle s)
+        {
+            switch (s)
+            {
+                case EsportsManager.Leagues.ClubStyle.Invade: return StyleInvade;
+                case EsportsManager.Leagues.ClubStyle.Teamfight: return StyleTeamfight;
+                case EsportsManager.Leagues.ClubStyle.Late: return StyleLate;
+                default: return StyleStar;
+            }
+        }
+
+        /// <summary>Offer tier title.</summary>
+        public static string TierName(EsportsManager.Leagues.OfferTier t)
+            => t == EsportsManager.Leagues.OfferTier.Strong ? OfferStrong : t == EsportsManager.Leagues.OfferTier.Mid ? OfferMid : OfferWeak;
+
+        /// <summary>Phase name by index.</summary>
+        public static string PhaseName(int k) => k == 0 ? PhaseEarly : k == 1 ? PhaseMid : PhaseLate;
+
         public const string NewClubTitle = "新建战队";
         public const string NewClubPromptFormat = "给你的俱乐部起个名字（最多 {0} 个字）";
         public const string NewClubDefaultFormat = "不填写则使用默认名：{0}";
@@ -423,6 +546,8 @@ namespace EsportsManager.UI
                 case PlanErrorCode.UnknownOffer: return ErrUnknownOffer;
                 case PlanErrorCode.OfferPlayerLeft: return ErrOfferPlayerLeft;
                 case PlanErrorCode.DimensionOutOfRange: return ErrDimension;
+                case PlanErrorCode.UnknownTrainingTarget: return ErrUnknownTrainingTarget;
+                case PlanErrorCode.TrainingUnavailable: return ErrTrainingUnavailable;
                 case PlanErrorCode.UnknownPlayer: return ErrUnknownPlayer;
                 case PlanErrorCode.IncompleteLineup: return string.Format(ErrIncompleteLineup, e.Used ?? 0, e.Limit ?? 0);
                 case PlanErrorCode.UnknownTactic: return ErrUnknownTactic;

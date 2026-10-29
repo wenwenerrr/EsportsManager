@@ -76,7 +76,7 @@ namespace EsportsManager.Tests.UI
         {
             var names = new string[8];
             for (int i = 0; i < names.Length; i++) names[i] = "Club" + i;
-            return new EventResult { Def = Def("spring"), ClubNames = names, Regular = new Standings(8), RegularDone = true, Seeds = seeds };
+            return new EventResult { Def = Def("spring"), ClubNames = names, Regular = new Standings(8), RegularDone = true, Seeds = seeds, PlayerClub = 0 };
         }
 
         [Test]
@@ -143,7 +143,7 @@ namespace EsportsManager.Tests.UI
 
         private static string Data(string f) => File.ReadAllText("Assets/Data/" + f);
         private static GameSession MakeSession() => GameSession.FromJson(Data("player_config.json"), Data("team_config.json"),
-            Data("segment_config.json"), Data("match_config.json"), GameSession.DefaultSeed);
+            Data("segment_config.json"), Data("match_config.json"), Data("league_config.json"), GameSession.DefaultSeed);
 
         [Test]
         public void FlowGuard_RapidSecondClick_DoesNotAdvancePastPhaseOrScreen()

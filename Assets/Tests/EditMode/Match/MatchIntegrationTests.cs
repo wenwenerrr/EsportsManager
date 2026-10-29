@@ -20,7 +20,7 @@ namespace EsportsManager.Tests.Matches
         private const float Tol = 1e-3f;
         private static string Data(string f) => File.ReadAllText("Assets/Data/" + f);
         private static GameSession Make(int seed) => GameSession.FromJson(Data("player_config.json"), Data("team_config.json"),
-            Data("segment_config.json"), Data("match_config.json"), seed);
+            Data("segment_config.json"), Data("match_config.json"), Data("league_config.json"), seed);
 
         // ------------------------------------------------------------ team feedback
 

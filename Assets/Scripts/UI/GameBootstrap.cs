@@ -17,14 +17,16 @@ namespace EsportsManager.UI
         [SerializeField] private TextAsset matchConfig;
         [SerializeField] private TextAsset eventConfig;
         [SerializeField] private TextAsset eventText;
+        [SerializeField] private TextAsset leagueConfig;
 
         private GameSession _session;
         private GameUi _ui;
 
         /// <summary>Assigns the config assets (used by the editor setup script).</summary>
-        public void SetConfigs(TextAsset player, TextAsset team, TextAsset segment, TextAsset match, TextAsset events, TextAsset texts)
+        public void SetConfigs(TextAsset player, TextAsset team, TextAsset segment, TextAsset match, TextAsset events, TextAsset texts, TextAsset league)
         {
             playerConfig = player; teamConfig = team; segmentConfig = segment; matchConfig = match; eventConfig = events; eventText = texts;
+            leagueConfig = league;
         }
 
         // Unattended screenshot runs launch the player without focus; macOS pauses an unfocused player unless this is set.
@@ -46,12 +48,17 @@ namespace EsportsManager.UI
             if (match == null) Debug.LogWarning("GameBootstrap: no match_config assigned; re-run SceneSetup. Playing without matches.");
             string events = eventConfig != null ? eventConfig.text : null;
             if (events == null) Debug.LogWarning("GameBootstrap: no event_config assigned; re-run SceneSetup. Playing without random events.");
-            System.Func<int, GameSession> make = sd => GameSession.FromJson(playerConfig.text, teamConfig.text, segmentConfig.text, match, events, sd);
+            string league = leagueConfig != null ? leagueConfig.text : null;
+            if (match != null && league == null) { Debug.LogWarning("GameBootstrap: no league_config assigned; re-run SceneSetup. Playing without matches."); match = null; }
+            // A real new game leaves the three job offers pending (offer screen); every demo takes the mid offer.
+            bool pickOffer = !args.DemoGiven || args.Demo == DemoState.Name || args.Demo == DemoState.JobOffers;
+            System.Func<int, GameSession> make = sd => GameSession.FromJson(playerConfig.text, teamConfig.text, segmentConfig.text, match, events, league, sd, GameSession.DefaultFunds, !pickOffer);
             // Story 006 demos: deterministic seed search (from --seed, else the documented demo seed, upwards).
             if (args.Demo == DemoState.Choice) seed = DemoSeeds.FindChoiceSeed(make, args.Seed ?? DemoSeeds.ChoiceDemoSeed);
             else if (args.Demo == DemoState.Events) seed = DemoSeeds.FindEventsSeed(make, args.Seed ?? DemoSeeds.EventsDemoSeed);
+            else if (args.Demo == DemoState.Specialty) seed = DemoSeeds.FindSpecialtySeed(make, args.Seed ?? DemoSeeds.SpecialtyDemoSeed);
             _session = args.ForceOffer || args.Demo == DemoState.Offer
-                ? GameSession.FromJsonWithOffer(playerConfig.text, teamConfig.text, segmentConfig.text, match, events, seed)
+                ? GameSession.FromJsonWithOffer(playerConfig.text, teamConfig.text, segmentConfig.text, match, events, league, seed)
                 : make(seed);
             if (eventText != null)
             {
@@ -95,13 +102,16 @@ namespace EsportsManager.UI
             // Scripted demo steps run back to back; the double-click guard is for players only.
             double guard = _ui.FlowGuardSeconds;
             _ui.FlowGuardSeconds = 0;
-            // A real new game (no --demo) and --demo name start at the club naming screen.
-            if (!args.DemoGiven || args.Demo == DemoState.Name) { _ui.FlowGuardSeconds = guard; _ui.ShowNewClub(); return; }
-            // Every other demo first passes through the naming screen exactly like a player (default name), so captures
-            // include anything that screen leaves behind (it once left the shared root centred and squeezed later screens).
-            _ui.ShowNewClub();
+            // Story 013: a real new game (no --demo), --demo name and --demo job-offers start at the three job offers (pick + name).
+            if (pickOffer)
+            {
+                _ui.FlowGuardSeconds = guard;
+                _ui.ShowJobOffers();
+                if (args.Demo == DemoState.JobOffers) _ui.SelectOffer(1);
+                return;
+            }
+            // Every other demo took the mid offer under the club's own name (GameSession autoTakeOffer).
             _ui.Refresh();
-            _ui.ConfirmClubName("");
             // Pop-ups stay only for the demos that show them (the offer demo shows offers, the choice demo the choice).
             if (args.Demo == DemoState.Offer) _ui.LaterChoices();
             else if (args.Demo != DemoState.Choice) _ui.ClosePopups();
@@ -121,6 +131,23 @@ namespace EsportsManager.UI
                     if (!_ui.ChoicePopupOpen) Debug.LogWarning("GameBootstrap: no choice event in this segment (seed " + _session.Seed + ").");
                     break;
                 case DemoState.Events: _session.ApplyScriptedPlan(); _ui.Resolve(); break;
+                case DemoState.Specialty: DemoSeeds.ApplySpecialtyPlan(_session); _ui.Resolve(); break;
+                case DemoState.Training:
+                {
+                    foreach (var o in _session.UnansweredOffers()) _session.DeclineOffer(o.Id);
+                    long id = -1; float bestScore = float.MaxValue; Session.SpecialtyProgressData sp = null;
+                    foreach (var c in _session.GetRosterData())
+                        foreach (var x in c.SpecialtyProgress)
+                            if (!x.Owned && x.Phase >= 0 && c.PhaseDimensions[x.Phase].Length > 1 && x.DimensionGap + x.FocusGap * 100f < bestScore) { bestScore = x.DimensionGap + x.FocusGap * 100f; id = c.Id; sp = x; }
+                    if (sp != null)
+                    {
+                        _ui.Train(id, (Growth.TrainingTarget)sp.Phase, sp.DimensionIndex);
+                        _ui.OpenTraining(id);
+                        _ui.SelectTrainingTarget((Growth.TrainingTarget)sp.Phase);
+                        _ui.SelectTrainingFocus(sp.DimensionIndex);
+                    }
+                    break;
+                }
                 case DemoState.EventPrep:
                 case DemoState.FinalsQual:
                 case DemoState.Regular:
@@ -129,6 +156,8 @@ namespace EsportsManager.UI
                     RunEventDemo(args.Demo);
                     break;
                 case DemoState.Standings: _ui.OpenStandings(); break;
+                case DemoState.News: _ui.OpenStandings(); break;
+                case DemoState.Opponent: RunEventDemo(DemoState.EventPrep); break;
                 case DemoState.Lineup:
                     foreach (var o in _session.UnansweredOffers()) _session.DeclineOffer(o.Id);
                     _ui.SetTactic(Matches.MatchTactic.Teamfight);
@@ -140,7 +169,7 @@ namespace EsportsManager.UI
             if (_session.EventPhase == EventPhase.None && !_session.AwaitingNext)
             {
                 var roster = _session.GetRosterData();
-                for (int i = 0; i < args.Clicks && roster.Count > 0; i++) _ui.Train(roster[i % roster.Count].Id, 0);
+                for (int i = 0; i < args.Clicks && roster.Count > 0; i++) _ui.Train(roster[i % roster.Count].Id, Growth.TrainingTarget.Early, -1);
             }
             _ui.FlowGuardSeconds = guard;
             _ui.Refresh();

@@ -1,4 +1,5 @@
 using System;
+using EsportsManager.Growth;
 using EsportsManager.Players;
 using EsportsManager.Segments;
 using EsportsManager.Tests.Players;
@@ -92,7 +93,7 @@ namespace EsportsManager.Tests.Segments
             {
                 var fx = new Fixture(new SeededRandomSource(7), new SeededRandomSource(8), funds: 500000);
                 fx.Runner.BeginSegment();
-                var plan = new SegmentPlan().Train(1, 0).Stream(2).Sponsor().Rest(3);
+                var plan = new SegmentPlan().Train(1, TrainingTarget.Early).Stream(2).Sponsor().Rest(3);
                 var offers = fx.Runner.GetState().PendingOffers;
                 if (offers.Count > 0) plan.AcceptOffer(offers[0].Id);
                 return fx.Runner.Resolve(plan, Ctx(true, false));
@@ -123,7 +124,7 @@ namespace EsportsManager.Tests.Segments
         public void Summary_ReportsStatDeltasPerPlayer()
         {
             var fx = new Fixture();
-            var s = fx.Run(new SegmentPlan().Train(1, 0));
+            var s = fx.Run(new SegmentPlan().Train(1, TrainingTarget.Early));
             var p1 = s.Players.Find(x => x.PlayerId == 1);
             Assert.AreEqual(6f, p1.StressDelta, Tol);
             Assert.AreEqual(4f, p1.MoodDelta, 0.2f); // play term; salary term is ~0: training lifted his expected salary a little

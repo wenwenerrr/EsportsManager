@@ -56,7 +56,7 @@ namespace EsportsManager.Matches
     /// and stress (no fixed values, no form).
     /// </summary>
     /// <example><code>var mine = MatchLineup.FromTeam(team, MatchTactic.Invade);
-    /// var theirs = MatchLineup.FromOpponent(club);</code></example>
+    /// var theirs = MatchLineup.FromTeam(otherTeam, MatchTactic.Develop);</code></example>
     public sealed class MatchLineup
     {
         private readonly Dictionary<string, StarterSnapshot> _starters = new Dictionary<string, StarterSnapshot>();
@@ -111,13 +111,6 @@ namespace EsportsManager.Matches
         {
             if (team == null) throw new ArgumentNullException(nameof(team));
             return new MatchLineup(team.Name, team.StartersByLane(), team.Chemistry(), tactic, hooks);
-        }
-
-        /// <summary>An opponent club: its starters, chemistry and tactic; its players' own mood and stress (match.md, Story 011).</summary>
-        public static MatchLineup FromOpponent(OpponentClub club, IEnumerable<SpecialtyEffect> hooks = null)
-        {
-            if (club == null) throw new ArgumentNullException(nameof(club));
-            return new MatchLineup(club.Name, club.Team.StartersByLane(), club.Team.Chemistry(), club.Tactic, hooks);
         }
     }
 }

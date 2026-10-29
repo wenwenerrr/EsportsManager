@@ -9,7 +9,7 @@ namespace EsportsManager.Players
     /// </summary>
     /// <example>
     /// <code>float score = player.GetLaneScore("mid"); // discounted if mid is not the main lane
-    /// float gain = player.TrainingGain("mid", 0, 1f); // deterministic training formula (numbers.md 4.1)
+    /// // training, focus and specialties: EsportsManager.Growth.GrowthSystem (design/gdd/growth.md)
     /// player.AdvanceYear(); // decline only, age + 1, contract - 1</code>
     /// </example>
     public sealed class Player
@@ -25,6 +25,11 @@ namespace EsportsManager.Players
         private float _looks, _popularity, _mood, _stress;
         private int _contractYearsLeft;
         private float _potential, _observation;
+        private readonly float[] _focus = new float[FocusPhases];
+        private readonly List<string> _specialties = new List<string>();
+
+        /// <summary>Number of phase focus values (early, mid, late; index = MatchPhase value).</summary>
+        public const int FocusPhases = 3;
 
         /// <summary>Stable unique id (assigned by <see cref="PlayerGenerator"/>); key for pair data and saves.</summary>
         public long Id { get; }
@@ -249,28 +254,37 @@ namespace EsportsManager.Players
         }
 
         /// <summary>
-        /// Training gain for one dimension (numbers.md 4.1 v2), deterministic and side-effect free:
-        /// <c>T_base x intensity x max(1 - dim/potential, rho) x trait training multiplier x age coefficient x (1 - k_s x stress/100)</c>.
-        /// Potential is a SOFT cap: at or above it the headroom factor stays at rho, never 0 (potential 0
-        /// also gives rho). The caller applies the result with <see cref="SetDimension"/>, which clamps to 0-100.
+        /// True once the phase focus was set (by the growth system: talent.md initial focus for a new player, or a backfill for
+        /// a player created without it). A player without it trains as if every focus were 0 until the growth system fills it.
         /// </summary>
-        /// <param name="laneId">Lane of the dimension.</param>
-        /// <param name="dimensionIndex">Index of the dimension in the lane.</param>
-        /// <param name="intensity">Training intensity, must be >= 0.</param>
-        /// <example><code>p.SetDimension("mid", 0, p.GetDimension("mid", 0) + p.TrainingGain("mid", 0, 1f));</code></example>
-        public float TrainingGain(string laneId, int dimensionIndex, float intensity)
+        public bool HasFocus { get; private set; }
+
+        /// <summary>Focus of a phase (0 early, 1 mid, 2 late), 0-1 (growth.md "专精").</summary>
+        public float GetFocus(int phase) => _focus[phase];
+
+        /// <summary>Sets the focus of a phase (clamped 0-1) and marks the focus as set. Written by the growth system only.</summary>
+        public void SetFocus(int phase, float value)
         {
-            if (!(intensity >= 0f)) throw new ArgumentOutOfRangeException(nameof(intensity), "must be >= 0.");
-            float dim = GetDimension(laneId, dimensionIndex);
-            var t = _config.training;
-            float headroom = _potential > 0f ? 1f - dim / _potential : t.softCapFloor;
-            if (headroom < t.softCapFloor) headroom = t.softCapFloor;
-            float gain = t.baseGain * intensity * headroom
-                * GetTraitMultiplier(PlayerEffectKeys.TrainingGain)
-                * _config.GetAgeCoefficient(Age)
-                * (1f - t.stressFactor * _stress / StatMax);
-            return gain > 0f ? gain : 0f;
+            if (float.IsNaN(value) || float.IsInfinity(value)) throw new ArgumentOutOfRangeException(nameof(value), "must be finite.");
+            _focus[phase] = value < 0f ? 0f : (value > 1f ? 1f : value);
+            HasFocus = true;
         }
+
+        /// <summary>Ids of the specialties he owns, in the order they were gained. They move with him on a transfer.</summary>
+        public IReadOnlyList<string> Specialties => _specialties;
+
+        /// <summary>True when he owns the specialty.</summary>
+        public bool HasSpecialty(string id) => _specialties.Contains(id);
+
+        /// <summary>Adds a specialty (no-op when owned). Called by the growth system's F4 check.</summary>
+        public void AddSpecialty(string id)
+        {
+            if (string.IsNullOrEmpty(id)) throw new ArgumentException("Specialty id is empty.", nameof(id));
+            if (!_specialties.Contains(id)) _specialties.Add(id);
+        }
+
+        /// <summary>Removes a specialty; false when he did not own it.</summary>
+        public bool RemoveSpecialty(string id) => _specialties.Remove(id);
 
         /// <summary>
         /// Salary for signing or renewing (numbers.md 4.4):

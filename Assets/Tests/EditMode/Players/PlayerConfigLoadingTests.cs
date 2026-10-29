@@ -22,7 +22,11 @@ namespace EsportsManager.Tests.Players
             + "{'id':'g2','traits':[{'id':'t3','display_name':'T3'},{'id':'t4','display_name':'T4'}]}],"
             + "'trait_effects':[{'trait':'t1','key':'training_gain','multiplier':1.2}],"
             + "'trait_pairs':[{'a':'t1','b':'t3','value':0.5}],"
-            + "'training':{'base_gain':2,'stress_factor':0.5,'soft_cap_floor':0.15,'age_bands':[{'min_age':0,'max_age':99,'coefficient':1}]},"
+            + "'training':{'base_gain':2,'age_bands':[{'min_age':0,'max_age':99,'coefficient':1}],'cap_margin':10,'span':25,'focus_bonus':0.5,"
+            + "'other_share':0.1,'mood_factor_min':0.8,'mood_factor_max':1.2,'stress_threshold':50,'stress_slope':2.3,'specialization_rate':0.163,"
+            + "'specialization_gain':0.6,'noise':0.15,'near_cap_margin':5,'initial_focus_high':0.4,'initial_focus_low':0.2},"
+            + "'specialty':{'unlock_value':76,'lose_value':73,'unlock_focus':0.55,'lose_focus':0.3,'specialties':[{'id':'sp','display_name':'SP',"
+            + "'lane':'x','phase':'early','dimension':'d','effects':[{'hook':'phase_flat','phase':'early','value':1.5}]}]},"
             + "'aging':{'decline_start_age':27,'decline_bands':[{'min_age':27,'max_age':99,'amount':1}]},"
             + "'potential':{'talent_threshold':85,'scouting_bias':10,'estimate_half_width':20,'estimate_min_half_width':3,'observation_per_segment':5,'observation_per_training':3},"
             + "'salary':{'min_salary':20000,'max_salary':200000,'weight_lane_score':1,'weight_popularity':0.8,'weight_potential':0.3,'random_range':0.1},"
@@ -38,7 +42,10 @@ namespace EsportsManager.Tests.Players
             "off_lane_discount", "lanes", "id", "display_name", "dimensions", "weight",
             "personality_groups", "traits", "trait_effects", "trait", "key", "multiplier",
             "trait_pairs", "a", "b", "value",
-            "training", "base_gain", "stress_factor", "soft_cap_floor", "age_bands", "min_age", "max_age", "coefficient",
+            "training", "base_gain", "age_bands", "min_age", "max_age", "coefficient", "cap_margin", "span", "focus_bonus", "other_share",
+            "mood_factor_min", "mood_factor_max", "stress_threshold", "stress_slope", "specialization_rate", "specialization_gain", "noise",
+            "near_cap_margin", "initial_focus_high", "initial_focus_low",
+            "specialty", "unlock_value", "lose_value", "unlock_focus", "lose_focus", "specialties", "lane", "phase", "dimension", "effects", "hook",
             "aging", "decline_start_age", "decline_bands", "amount",
             "potential", "talent_threshold", "scouting_bias", "estimate_half_width", "estimate_min_half_width",
             "observation_per_segment", "observation_per_training",
@@ -65,8 +72,9 @@ namespace EsportsManager.Tests.Players
             Assert.AreEqual(1.2f, cfg.traitEffects[0].multiplier);
             Assert.AreEqual(0.5f, cfg.GetPairCompatibility("t3", "t1"));
             Assert.AreEqual(2f, cfg.training.baseGain);
-            Assert.AreEqual(0.5f, cfg.training.stressFactor);
-            Assert.AreEqual(0.15f, cfg.training.softCapFloor);
+            Assert.AreEqual(25f, cfg.training.span);
+            Assert.AreEqual(0.163f, cfg.training.specializationRate);
+            Assert.AreEqual("sp", cfg.specialty.specialties[0].id);
             Assert.AreEqual(10f, cfg.potential.scoutingBias);
             Assert.AreEqual(20f, cfg.potential.estimateHalfWidth);
             Assert.AreEqual(3f, cfg.potential.estimateMinHalfWidth);
@@ -410,9 +418,18 @@ namespace EsportsManager.Tests.Players
             // initial values named by the story
             Assert.AreEqual(85f, cfg.potential.talentThreshold);
             Assert.AreEqual(27, cfg.aging.declineStartAge);
-            Assert.AreEqual(5f, cfg.training.baseGain); // numbers.md v3 T_base
-            Assert.AreEqual(0.5f, cfg.training.stressFactor);
-            Assert.AreEqual(0.15f, cfg.training.softCapFloor);
+            Assert.AreEqual(2f, cfg.training.baseGain); // growth.md rev 3 T_base
+            Assert.AreEqual(10f, cfg.training.capMargin);
+            Assert.AreEqual(25f, cfg.training.span);
+            Assert.AreEqual(0.5f, cfg.training.focusBonus);
+            Assert.AreEqual(0.1f, cfg.training.otherShare);
+            Assert.AreEqual(2.3f, cfg.training.stressSlope);
+            Assert.AreEqual(0.163f, cfg.training.specializationRate);
+            Assert.AreEqual(0.6f, cfg.training.specializationGain);
+            Assert.AreEqual(0.15f, cfg.training.noise);
+            Assert.AreEqual(76f, cfg.specialty.unlockValue);
+            Assert.AreEqual(73f, cfg.specialty.loseValue);
+            Assert.AreEqual(16, cfg.specialty.specialties.Length);
             Assert.AreEqual(10f, cfg.potential.scoutingBias);
             Assert.AreEqual(20f, cfg.potential.estimateHalfWidth);
             Assert.AreEqual(3f, cfg.potential.estimateMinHalfWidth);

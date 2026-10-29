@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using EsportsManager.Matches;
+using EsportsManager.Session;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -20,14 +21,14 @@ namespace EsportsManager.UI
         public static readonly Color PlayerRowColor = new Color(90f / 255f, 160f / 255f, 240f / 255f, 0.28f);
 
         /// <summary>Builds the table.</summary>
-        public static VisualElement Build(IReadOnlyList<StandingsRow> rows, float rowHeight, int fontSize)
+        public static VisualElement Build(IReadOnlyList<StandingsRow> rows, float rowHeight, int fontSize, System.Func<int, string> clubLabel = null)
         {
             var table = new VisualElement();
             table.name = "standings-table";
             table.Add(Row(true, rowHeight, fontSize, false, UiStrings.ColRank, UiStrings.ColClub, UiStrings.ColSeries, UiStrings.ColGames, UiStrings.ColGameDiff));
             foreach (var r in rows)
                 table.Add(Row(false, rowHeight, fontSize, r.IsPlayer,
-                    string.Format(UiStrings.RankFormat, r.Rank), r.ClubName,
+                    string.Format(UiStrings.RankFormat, r.Rank), clubLabel != null ? clubLabel(r.ClubIndex) : r.ClubName,
                     string.Format(UiStrings.WinLossFormat, r.SeriesWins, r.SeriesLosses),
                     string.Format(UiStrings.WinLossFormat, r.GamesWon, r.GamesLost),
                     r.GameDiff.ToString(UiStrings.SignedIntFormat, CultureInfo.InvariantCulture)));
@@ -155,7 +156,8 @@ namespace EsportsManager.UI
             var sub = split != null ? string.Format(UiStrings.StandingsOfFormat, split.Year, UiStrings.EventName(split.Def.nameKey)) : UiStrings.NoSplitYet;
             var st = UiKit.Ellipsis(UiKit.Lbl(sub, 15, UiKit.Accent, true)); st.style.marginBottom = 6; left.Add(st);
             var rows = split != null ? (IReadOnlyList<StandingsRow>)split.StandingsRows() : s.GetStandings();
-            left.Add(StandingsView.Build(rows, 34, 15));
+            // Story 013: club names carry the style tag (league.md 俱乐部风格标签).
+            left.Add(StandingsView.Build(rows, 34, 15, c => LeagueWidgets.WithTag(s.Tournament.League.ClubName(c), LeagueViews.StyleTag(s, c))));
             var note = UiKit.Lbl(string.Format(UiStrings.StandingsNoteFormat, rows.Count), 12, UiKit.TextDim);
             note.style.marginTop = 8; note.style.whiteSpace = WhiteSpace.Normal; left.Add(note);
             body.Add(left);
@@ -169,6 +171,12 @@ namespace EsportsManager.UI
             {
                 var qn = UiKit.Lbl(EventTexts.QualificationNote(s.MatchConfig.format), 12, UiKit.TextDim);
                 qn.style.marginTop = 8; qn.style.whiteSpace = WhiteSpace.Normal; right.Add(qn);
+            }
+            if (s.World != null)
+            {
+                var news = LeagueWidgets.NewsPanel(s, 13);
+                news.style.marginTop = 8;
+                right.Add(news);
             }
             body.Add(right);
             EventLayout.NoVerticalShrink(body);

@@ -81,8 +81,10 @@ namespace EsportsManager.Tests.Players
                 training = new TrainingConfig
                 {
                     baseGain = 2f,
-                    stressFactor = 0.5f,
-                    softCapFloor = 0.15f,
+                    capMargin = 10f, span = 25f, focusBonus = 0.5f, otherShare = 0.1f,
+                    moodFactorMin = 0.8f, moodFactorMax = 1.2f, stressThreshold = 50f, stressSlope = 2.3f,
+                    specializationRate = 0.163f, specializationGain = 0.6f, noise = 0.15f, nearCapMargin = 5f,
+                    initialFocusHigh = 0.4f, initialFocusLow = 0.2f,
                     ageBands = new[]
                     {
                         new AgeCoefficientBand { minAge = 0, maxAge = 19, coefficient = 1.2f },
@@ -92,6 +94,8 @@ namespace EsportsManager.Tests.Players
                         new AgeCoefficientBand { minAge = 29, maxAge = 200, coefficient = 0.3f },
                     }
                 },
+                // growth.md thresholds; the table itself is empty here (Growth tests use the real dimension ids).
+                specialty = new SpecialtyTable { unlockValue = 76f, loseValue = 73f, unlockFocus = 0.55f, loseFocus = 0.3f, specialties = new SpecialtyDef[0] },
                 aging = new AgingConfig
                 {
                     declineStartAge = 27,

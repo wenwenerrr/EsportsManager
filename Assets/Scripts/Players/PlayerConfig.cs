@@ -90,17 +90,110 @@ namespace EsportsManager.Players
         public float amount;
     }
 
-    /// <summary>Training formula knobs (numbers.md 4.1).</summary>
+    /// <summary>
+    /// Training and specialization knobs (design/gdd/growth.md rev 3, F1-F3; age bands from numbers.md 4.1). Replaces the
+    /// numbers.md 4.1 "six dims + target x1.5" model and its per-dimension soft cap.
+    /// </summary>
     public sealed class TrainingConfig
     {
-        /// <summary>T_base: dimension points gained at intensity 1 with every other factor at 1. Must be >= 0.</summary>
+        /// <summary>T_base (2): base amount b of one training point with every factor at 1. Must be >= 0.</summary>
         public float baseGain;
-        /// <summary>k_s: how strongly stress cuts gain, factor = 1 - k_s * stress/100. Within [0, 1].</summary>
-        public float stressFactor;
-        /// <summary>rho: floor of the headroom factor max(1 - dim/potential, rho); potential is a soft cap. Within [0, 1].</summary>
-        public float softCapFloor;
-        /// <summary>Age coefficient bands. Ages not covered by any band use coefficient 1.</summary>
+        /// <summary>Age coefficient bands (age_f). Ages not covered by any band use coefficient 1.</summary>
         public AgeCoefficientBand[] ageBands;
+        /// <summary>cap_margin (10): every dimension's ceiling is min(100, potential + cap_margin). In [0, 100].</summary>
+        public float capMargin;
+        /// <summary>span (25): head_d = clamp((cap - d) / span, 0, 1). Must be > 0.</summary>
+        public float span;
+        /// <summary>bonus (0.5): share the focus dimension takes from its phase mates (phase mean unchanged). In [0, 1].</summary>
+        public float focusBonus;
+        /// <summary>s_other (0.1): weight of every dimension outside the trained phase. In [0, 1].</summary>
+        public float otherShare;
+        /// <summary>mood_t at mood 0 (0.8); mood_t = min + (max - min) x mood/100. >= 0.</summary>
+        public float moodFactorMin;
+        /// <summary>mood_t at mood 100 (1.2), >= <see cref="moodFactorMin"/>.</summary>
+        public float moodFactorMax;
+        /// <summary>Stress at or below this does not slow training (50). In [0, 100].</summary>
+        public float stressThreshold;
+        /// <summary>k_th (2.3): stress_t = max(0, 1 - k_th x max(0, stress - threshold)/100). >= 0.</summary>
+        public float stressSlope;
+        /// <summary>mu (0.163): specialization step per training point (F3). In (0, 1).</summary>
+        public float specializationRate;
+        /// <summary>phi (0.6): spec = 1 + phi x focus of the trained phase. >= 0.</summary>
+        public float specializationGain;
+        /// <summary>Training noise half-width (0.15): each point's b is multiplied by U(1 - noise, 1 + noise). In [0, 1).</summary>
+        public float noise;
+        /// <summary>UI "接近上限" marker when cap - d is below this (5). >= 0. Display only.</summary>
+        public float nearCapMargin;
+        /// <summary>talent.md initial focus of the phase with the highest phase mean (0.4). In [0, 1].</summary>
+        public float initialFocusHigh;
+        /// <summary>talent.md initial focus of the other two phases (0.2). In [0, 1].</summary>
+        public float initialFocusLow;
+    }
+
+    /// <summary>One match hook of a specialty (growth.md specialty table; hook ids from match.md "绝活挂钩点").</summary>
+    public sealed class SpecialtyEffectDef
+    {
+        /// <summary>"phase_flat", "star_scale", "exec_add" or "sigma_scale".</summary>
+        public string hook;
+        /// <summary>"early" / "mid" / "late" for phase_flat (star_scale: early or late only); "none" for exec_add and sigma_scale.</summary>
+        public string phase;
+        /// <summary>Added value (phase_flat, exec_add) or multiplier &gt; 0 (star_scale, sigma_scale).</summary>
+        public float value;
+    }
+
+    /// <summary>One specialty (绝活) of the growth.md table. Data from config.</summary>
+    public sealed class SpecialtyDef
+    {
+        /// <summary>Stable id, unique.</summary>
+        public string id;
+        /// <summary>Chinese name shown to the player.</summary>
+        public string displayName;
+        /// <summary>Lane id, or <see cref="SpecialtyTable.AnyLane"/> for a specialty every lane can learn (tactical brain).</summary>
+        public string lane;
+        /// <summary>"early" / "mid" / "late"; <see cref="SpecialtyTable.NoPhase"/> for an any-lane specialty (it ignores focus).</summary>
+        public string phase;
+        /// <summary>Dimension id checked against the unlock / lose values (on the player's main lane).</summary>
+        public string dimension;
+        /// <summary>Match hooks while the owner starts on his main lane (at least one).</summary>
+        public SpecialtyEffectDef[] effects;
+
+        /// <summary>True for an any-lane specialty.</summary>
+        public bool IsAnyLane => lane == SpecialtyTable.AnyLane;
+    }
+
+    /// <summary>Specialty rules and table (growth.md F4 and "绝活表").</summary>
+    public sealed class SpecialtyTable
+    {
+        /// <summary>Lane value of a specialty every lane can learn.</summary>
+        public const string AnyLane = "any";
+        /// <summary>Phase value of an any-lane specialty and of hooks without a phase.</summary>
+        public const string NoPhase = "none";
+        /// <summary>Phase ids in index order (index = MatchPhase value).</summary>
+        public static readonly string[] PhaseIds = { "early", "mid", "late" };
+        /// <summary>Known hook ids (match.md).</summary>
+        public static readonly string[] HookIds = { "phase_flat", "star_scale", "exec_add", "sigma_scale" };
+
+        /// <summary>Gain when the dimension is at least this (76).</summary>
+        public float unlockValue;
+        /// <summary>Lose when the dimension is below this (73).</summary>
+        public float loseValue;
+        /// <summary>Gain needs the phase focus at least this (0.55).</summary>
+        public float unlockFocus;
+        /// <summary>Lose when the phase focus is below this (0.30).</summary>
+        public float loseFocus;
+        /// <summary>The table, config order.</summary>
+        public SpecialtyDef[] specialties;
+
+        /// <summary>Index of a phase id in <see cref="PhaseIds"/>, or -1.</summary>
+        public static int PhaseIndex(string phase) => Array.IndexOf(PhaseIds, phase);
+
+        /// <summary>Finds a specialty by id, or null.</summary>
+        public SpecialtyDef Find(string id)
+        {
+            if (specialties == null) return null;
+            foreach (var s in specialties) if (s != null && s.id == id) return s;
+            return null;
+        }
     }
 
     /// <summary>Yearly decline knobs (numbers.md 4.1).</summary>
@@ -195,8 +288,10 @@ namespace EsportsManager.Players
         public TraitEffectDef[] traitEffects;
         /// <summary>Personality compatibility table (numbers.md 3.3).</summary>
         public TraitPairDef[] traitPairs;
-        /// <summary>Training formula knobs.</summary>
+        /// <summary>Training formula knobs (growth.md).</summary>
         public TrainingConfig training;
+        /// <summary>Specialty rules and table (growth.md).</summary>
+        public SpecialtyTable specialty;
         /// <summary>Age decline knobs.</summary>
         public AgingConfig aging;
         /// <summary>Potential knobs.</summary>
@@ -283,13 +378,14 @@ namespace EsportsManager.Players
         /// sum &gt; 0); offLaneDiscount in (0,1); at least two personality groups with unique ids, exactly two
         /// non-empty trait ids each, no trait id in two groups; effect table entries reference known traits,
         /// have a key, a multiplier &gt; 0 and are unique; pair table entries reference known traits, have
-        /// a value in [-1,1] and are unique as unordered pairs; training (baseGain &gt;= 0, stressFactor in [0,1],
-        /// age bands valid and non-overlapping); aging (start &gt;= 0, decline bands valid, non-overlapping,
+        /// a value in [-1,1] and are unique as unordered pairs; training (growth.md knobs in their ranges, age bands valid
+        /// and non-overlapping); specialty (thresholds, the two growth.md interval rules, every specialty's lane / phase /
+        /// dimension / hooks known — errors name the specialty id); aging (start &gt;= 0, decline bands valid, non-overlapping,
         /// amount &gt;= 0); talentThreshold in [0,100]; salary (min &lt;= max, weights &gt;= 0 with sum &gt; 0,
         /// randomRange in [0,1)); generation (playersPerLane &gt; 0, every min &lt;= max, 0-100 ranges inside
         /// 0-100, talent potential min &gt;= threshold, chance in [0,1], contract years min &gt;= 0, non-empty name pools).
         /// Every float must be finite (no NaN / Infinity); effect keys must be in <see cref="PlayerEffectKeys.All"/>;
-        /// training.softCapFloor in [0,1]; potential estimate knobs &gt;= 0; dimension fractions in [0,1].
+        /// potential estimate knobs &gt;= 0; dimension fractions in [0,1].
         /// Gaps between bands are allowed.
         /// </summary>
         /// <example><code>config.Validate(); // throws InvalidOperationException if unusable</code></example>
@@ -301,6 +397,7 @@ namespace EsportsManager.Players
                 throw Fail("offLaneDiscount must be in (0,1), got " + offLaneDiscount + ".");
             ValidatePersonality();
             ValidateTraining();
+            ValidateSpecialty();
             ValidateAging();
             ValidatePotential();
             ValidateSalary();
@@ -393,10 +490,22 @@ namespace EsportsManager.Players
         {
             var t = training ?? throw Fail("missing training.");
             if (!(t.baseGain >= 0f)) throw Fail("training.baseGain must be >= 0, got " + t.baseGain + ".");
-            if (!(t.stressFactor >= 0f && t.stressFactor <= 1f))
-                throw Fail("training.stressFactor must be in [0,1], got " + t.stressFactor + ".");
-            if (!(t.softCapFloor >= 0f && t.softCapFloor <= 1f))
-                throw Fail("training.softCapFloor must be in [0,1], got " + t.softCapFloor + ".");
+            if (!(t.capMargin >= 0f && t.capMargin <= 100f)) throw Fail("training.capMargin must be in [0,100], got " + t.capMargin + ".");
+            if (!(t.span > 0f)) throw Fail("training.span must be > 0, got " + t.span + ".");
+            if (!(t.focusBonus >= 0f && t.focusBonus <= 1f)) throw Fail("training.focusBonus must be in [0,1], got " + t.focusBonus + ".");
+            if (!(t.otherShare >= 0f && t.otherShare <= 1f)) throw Fail("training.otherShare must be in [0,1], got " + t.otherShare + ".");
+            if (!(t.moodFactorMin >= 0f && t.moodFactorMax >= t.moodFactorMin))
+                throw Fail("training.moodFactorMin/Max must satisfy 0 <= min <= max, got " + t.moodFactorMin + ".." + t.moodFactorMax + ".");
+            if (!(t.stressThreshold >= 0f && t.stressThreshold <= 100f))
+                throw Fail("training.stressThreshold must be in [0,100], got " + t.stressThreshold + ".");
+            if (!(t.stressSlope >= 0f)) throw Fail("training.stressSlope must be >= 0, got " + t.stressSlope + ".");
+            if (!(t.specializationRate > 0f && t.specializationRate < 1f))
+                throw Fail("training.specializationRate must be in (0,1), got " + t.specializationRate + ".");
+            if (!(t.specializationGain >= 0f)) throw Fail("training.specializationGain must be >= 0, got " + t.specializationGain + ".");
+            if (!(t.noise >= 0f && t.noise < 1f)) throw Fail("training.noise must be in [0,1), got " + t.noise + ".");
+            if (!(t.nearCapMargin >= 0f)) throw Fail("training.nearCapMargin must be >= 0, got " + t.nearCapMargin + ".");
+            if (!(t.initialFocusHigh >= 0f && t.initialFocusHigh <= 1f)) throw Fail("training.initialFocusHigh must be in [0,1].");
+            if (!(t.initialFocusLow >= 0f && t.initialFocusLow <= 1f)) throw Fail("training.initialFocusLow must be in [0,1].");
             if (t.ageBands == null || t.ageBands.Length == 0) throw Fail("training.ageBands is empty.");
             var spans = new List<int[]>();
             for (int i = 0; i < t.ageBands.Length; i++)
@@ -406,6 +515,75 @@ namespace EsportsManager.Players
                     throw Fail("training.ageBands[" + i + "].coefficient must be >= 0, got " + b.coefficient + ".");
                 CheckBand("training.ageBands", i, b.minAge, b.maxAge, spans);
             }
+        }
+
+        // growth.md F4 and the specialty table. Every per-specialty error names the specialty id. Phase membership of the
+        // dimension is checked later against the match phase mapping (GrowthSystem), which this config does not own.
+        private void ValidateSpecialty()
+        {
+            var s = specialty ?? throw Fail("missing specialty.");
+            if (!(s.unlockValue >= 0f && s.unlockValue <= 100f)) throw Fail("specialty.unlockValue must be in [0,100], got " + s.unlockValue + ".");
+            if (!(s.loseValue >= 0f && s.loseValue <= s.unlockValue))
+                throw Fail("specialty.loseValue must be in [0, unlockValue], got " + s.loseValue + ".");
+            if (!(s.loseFocus >= 0f && s.unlockFocus > s.loseFocus && s.unlockFocus <= 1f))
+                throw Fail("specialty focus thresholds must satisfy 0 <= loseFocus < unlockFocus <= 1, got " + s.loseFocus + " / " + s.unlockFocus + ".");
+            float mu = training.specializationRate;
+            // One training point must not re-activate a lost specialty; one idle point must not drop a fresh one (growth.md F4).
+            if (!(s.unlockFocus > mu + (1f - mu) * s.loseFocus))
+                throw Fail("specialty interval rule violated: unlockFocus " + s.unlockFocus + " must be > mu + (1 - mu) x loseFocus = " + (mu + (1f - mu) * s.loseFocus) + ".");
+            if (!((1f - mu) * s.unlockFocus >= s.loseFocus))
+                throw Fail("specialty interval rule violated: (1 - mu) x unlockFocus = " + ((1f - mu) * s.unlockFocus) + " must be >= loseFocus " + s.loseFocus + ".");
+            if (s.specialties == null) throw Fail("missing specialty.specialties.");
+            var ids = new HashSet<string>();
+            for (int i = 0; i < s.specialties.Length; i++)
+            {
+                var d = s.specialties[i] ?? throw Fail("specialty.specialties[" + i + "] is null.");
+                string who = "specialty '" + d.id + "'";
+                if (string.IsNullOrEmpty(d.id)) throw Fail("specialty.specialties[" + i + "] has no id.");
+                if (!ids.Add(d.id)) throw Fail("duplicate " + who + ".");
+                if (d.IsAnyLane)
+                {
+                    if (d.phase != SpecialtyTable.NoPhase) throw Fail(who + ": an any-lane specialty must have phase '" + SpecialtyTable.NoPhase + "', got '" + d.phase + "'.");
+                    foreach (var lane in lanes)
+                        if (DimIndex(lane, d.dimension) < 0) throw Fail(who + ": unknown dimension '" + d.dimension + "' in lane '" + lane.id + "'.");
+                }
+                else
+                {
+                    var lane = FindLane(d.lane) ?? throw Fail(who + ": unknown lane '" + d.lane + "'.");
+                    if (SpecialtyTable.PhaseIndex(d.phase) < 0) throw Fail(who + ": unknown phase '" + d.phase + "'.");
+                    if (DimIndex(lane, d.dimension) < 0) throw Fail(who + ": unknown dimension '" + d.dimension + "' in lane '" + d.lane + "'.");
+                }
+                if (d.effects == null || d.effects.Length == 0) throw Fail(who + " has no effects.");
+                foreach (var e in d.effects)
+                {
+                    if (e == null) throw Fail(who + " has a null effect.");
+                    if (Array.IndexOf(SpecialtyTable.HookIds, e.hook) < 0) throw Fail(who + ": unknown hook '" + e.hook + "'.");
+                    if (float.IsNaN(e.value) || float.IsInfinity(e.value)) throw Fail(who + ": hook '" + e.hook + "' value must be finite.");
+                    int ph = SpecialtyTable.PhaseIndex(e.phase);
+                    switch (e.hook)
+                    {
+                        case "phase_flat":
+                            if (ph < 0) throw Fail(who + ": phase_flat needs phase early/mid/late, got '" + e.phase + "'.");
+                            break;
+                        case "star_scale":
+                            if (ph != 0 && ph != 2) throw Fail(who + ": star_scale needs phase early or late, got '" + e.phase + "'.");
+                            if (!(e.value > 0f)) throw Fail(who + ": star_scale must be > 0.");
+                            break;
+                        default:
+                            if (e.phase != SpecialtyTable.NoPhase) throw Fail(who + ": " + e.hook + " takes phase '" + SpecialtyTable.NoPhase + "', got '" + e.phase + "'.");
+                            if (e.hook == "sigma_scale" && !(e.value > 0f)) throw Fail(who + ": sigma_scale must be > 0.");
+                            break;
+                    }
+                }
+            }
+        }
+
+        /// <summary>Index of a dimension id in a lane, or -1.</summary>
+        public static int DimIndex(LaneDef lane, string dimensionId)
+        {
+            if (lane?.dimensions == null) return -1;
+            for (int i = 0; i < lane.dimensions.Length; i++) if (lane.dimensions[i].id == dimensionId) return i;
+            return -1;
         }
 
         private void ValidateAging()
@@ -524,8 +702,20 @@ namespace EsportsManager.Players
             if (training != null)
             {
                 Finite("training.baseGain", training.baseGain);
-                Finite("training.stressFactor", training.stressFactor);
-                Finite("training.softCapFloor", training.softCapFloor);
+                Finite("training.capMargin", training.capMargin);
+                Finite("training.span", training.span);
+                Finite("training.focusBonus", training.focusBonus);
+                Finite("training.otherShare", training.otherShare);
+                Finite("training.moodFactorMin", training.moodFactorMin);
+                Finite("training.moodFactorMax", training.moodFactorMax);
+                Finite("training.stressThreshold", training.stressThreshold);
+                Finite("training.stressSlope", training.stressSlope);
+                Finite("training.specializationRate", training.specializationRate);
+                Finite("training.specializationGain", training.specializationGain);
+                Finite("training.noise", training.noise);
+                Finite("training.nearCapMargin", training.nearCapMargin);
+                Finite("training.initialFocusHigh", training.initialFocusHigh);
+                Finite("training.initialFocusLow", training.initialFocusLow);
                 if (training.ageBands != null)
                     for (int i = 0; i < training.ageBands.Length; i++)
                         if (training.ageBands[i] != null) Finite("training.ageBands[" + i + "].coefficient", training.ageBands[i].coefficient);
@@ -533,6 +723,13 @@ namespace EsportsManager.Players
             if (aging?.declineBands != null)
                 for (int i = 0; i < aging.declineBands.Length; i++)
                     if (aging.declineBands[i] != null) Finite("aging.declineBands[" + i + "].amount", aging.declineBands[i].amount);
+            if (specialty != null)
+            {
+                Finite("specialty.unlockValue", specialty.unlockValue);
+                Finite("specialty.loseValue", specialty.loseValue);
+                Finite("specialty.unlockFocus", specialty.unlockFocus);
+                Finite("specialty.loseFocus", specialty.loseFocus);
+            }
             if (potential != null)
             {
                 Finite("potential.talentThreshold", potential.talentThreshold);

@@ -1,0 +1,64 @@
+{
+  "club_names": ["Aurora", "Blue Comet", "Crimson Tide", "Dragon Gate", "Eclipse", "Frost Wolves", "Golden Dawn", "Harbor Lights", "Iron Owls", "Jade Phoenix"],
+  "club_count": 8,
+  "generation": {
+    "funds_min": 400000, "funds_max": 1000000,
+    "popularity_min": 20, "popularity_max": 80,
+    "familiarity_min": 40, "familiarity_max": 70,
+    "opening_sponsors": 2, "sponsor_segments_min": 1, "sponsor_segments_max": 4,
+    "pool_per_lane": 16, "pool_age_min": 17, "pool_age_max": 30,
+    "roster_base": 6, "roster_extra_clubs": 4,
+    "opening_league_popularity": 50,
+    "contract_years_min": 1, "contract_years_max": 3,
+    "opening_salary_factor": 0.85,
+    "style_weight": 0.5, "star_weight": 1.5, "age_penalty": 3, "age_penalty_from": 26,
+    "offset_rest": 5, "offset_cash": 1, "offset_renew": 0.2, "offset_bid": 0.1
+  },
+  "ai": {
+    "rest_base": 55, "rest_aggression": 15, "rest_pre_event": 15, "rest_double_margin": 20,
+    "floor_base": 3, "floor_frugal": 3,
+    "cover_chance": 0.25, "chase_value": 72, "chase_focus": 0.45,
+    "command_threshold": 60, "command_every": 3, "prospect_max_age": 21,
+    "lineup_hysteresis": 3, "stream_count": 2,
+    "emergency_business_stress": 70, "normal_business_stress": 60, "money_choice_stress": 60,
+    "min_roster": 5, "fill_roster": 6, "max_roster": 8
+  },
+  "tactics": { "style_noise": 0.2, "radar_step": 5 },
+  "style": {
+    "switch_chance": 0.5, "lock_events": 3, "missed_events": 2, "top_places": 4,
+    "star_switch_lead": 8, "star_label_lead": 15, "rare_max": 1
+  },
+  "offers": {
+    "strong_ranks": [3, 4], "mid_ranks": [4, 5], "weak_ranks": [6, 7],
+    "inject_segments": 6, "weak_inject_segments": 8, "min_roster": 6
+  },
+  "news": { "max_items": 10 },
+  "talent": {
+    "talent_chance": 0.05, "talent_potential_min": 85, "talent_potential_max": 95,
+    "mean_base": 50, "mean_per_popularity": 15, "sigma": 10, "potential_min": 40, "potential_max": 84,
+    "youth_count": 8, "youth_age_min": 17, "youth_age_max": 19,
+    "free_count": 3, "free_age_min": 21, "free_age_max": 27,
+    "youth_contract": 3, "free_contract": 2, "scout_contract": 3, "scout_age_min": 17, "scout_age_max": 20,
+    "scout_cost": 50000, "scout_t0": 0.05, "scout_t1": 0.05, "scout_t_max": 0.10, "scout_weak_margin": 5,
+    "pool_cap": 35,
+    "retire_signed_age": 31, "retire_signed_chance": 0.5, "retire_signed_must_age": 33,
+    "retire_free_age": 28, "retire_free_chance": 0.3, "retire_free_must_above": 30,
+    "emergency_age": 23
+  },
+  "economy": {
+    "honor_factor": 0.7, "specialty_factor": 0.15,
+    "value_base": 500000, "value_specialty": 0.25, "value_youth_age": 32, "value_youth_per_year": 8,
+    "value_weight_rating": 1, "value_weight_potential": 1, "value_weight_youth": 0.6,
+    "fire_sale": 0.6, "repay": 0.5, "wage_index": 1.0,
+    "young_age": 23, "old_age": 28,
+    "young_year_factors": [1.0, 1.06, 1.12], "old_year_factors": [1.0, 0.96, 0.92],
+    "salary_random": 0.1, "sign_years": 2
+  },
+  "choice_rules": [
+    { "event_id": "choice_home_leave", "kind": "leave" },
+    { "event_id": "choice_extra_stream", "kind": "money" },
+    { "event_id": "choice_variety_show", "kind": "money" },
+    { "event_id": "choice_equipment_upgrade", "kind": "spend" },
+    { "event_id": "choice_teammate_conflict", "kind": "conflict" }
+  ]
+}

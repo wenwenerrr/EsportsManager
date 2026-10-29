@@ -17,7 +17,7 @@ namespace EsportsManager.Tests.UI
         private static GameSession Make(int seed)
         {
             var s = GameSession.FromJson(Data("player_config.json"), Data("team_config.json"), Data("segment_config.json"),
-                Data("match_config.json"), Data("event_config.json"), seed);
+                Data("match_config.json"), Data("event_config.json"), Data("league_config.json"), seed);
             s.EventTexts = EventTextTable.FromJson(Data("event_text_zh.json"));
             return s;
         }

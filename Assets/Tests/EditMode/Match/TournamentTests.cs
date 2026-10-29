@@ -20,7 +20,7 @@ namespace EsportsManager.Tests.Matches
         private const float Tol = 1e-3f;
         private static string Data(string f) => File.ReadAllText("Assets/Data/" + f);
         private static GameSession Make(int seed) => GameSession.FromJson(Data("player_config.json"), Data("team_config.json"),
-            Data("segment_config.json"), Data("match_config.json"), seed);
+            Data("segment_config.json"), Data("match_config.json"), Data("league_config.json"), seed);
 
         // Resolves segments (scripted plan) until an event is pending; returns the segments resolved.
         private static int ToNextEvent(GameSession s)
@@ -96,7 +96,7 @@ namespace EsportsManager.Tests.Matches
                 Assert.IsTrue(pairs.Add((Math.Min(x.ClubA, x.ClubB), Math.Max(x.ClubA, x.ClubB))), "pair twice");
                 Assert.AreEqual(3, x.BestOf);
                 Assert.AreEqual(2, Math.Max(x.Result.ScoreA, x.Result.ScoreB));
-                Assert.AreEqual(x.ClubB != League.PlayerClub, true, "player is always side A");
+                Assert.AreEqual(x.ClubB != s.Tournament.League.PlayerClub, true, "player is always side A");
             }
             CollectionAssert.AreEqual(Enumerable.Repeat(7, 8), perClub);
             Assert.AreEqual(7, ev.PlayerSeries().Count);
@@ -223,8 +223,8 @@ namespace EsportsManager.Tests.Matches
             var pc = PlayerConfigLoader.FromJson(Data("player_config.json"));
             var mc = MatchConfigLoader.FromJson(Data("match_config.json"));
             var tc = TeamConfigLoader.FromJson(Data("team_config.json"));
-            var league = LeagueFactory.Build(mc, tc, pc, new PlayerGenerator(pc, new SeededRandomSource(3), 1000), 3, "P");
-            var runner = new TournamentRunner(league, mc, tc, pc, new SeededRandomSource(1));
+            var league = new League(Enumerable.Range(0, 8).Select(i => "C" + i).ToList());
+            var runner = new TournamentRunner(league, mc, tc, pc, (y, e, st, slot) => new SeededRandomSource(1));
             EventResult Split(int[] points)
             {
                 return new EventResult
@@ -284,7 +284,7 @@ namespace EsportsManager.Tests.Matches
             Assert.AreEqual(year.Events.Sum(x => x.PrizeIncome), year.TotalPrize);
             Assert.IsTrue(s.TryAcknowledgeEvent(out _));
             Assert.AreEqual(2, s.Season.Year);
-            Assert.AreEqual(2, s.Season.History.Count);
+            Assert.AreEqual(3, s.Season.History.Count, "warm-up year 0, year 1, year 2");
             Assert.AreEqual(0, s.BuildContext().SegmentIndexInYear);
         }
 
@@ -318,7 +318,7 @@ namespace EsportsManager.Tests.Matches
                 new EventSeries { ClubA = 2, ClubB = 3, BestOf = 3, Result = loss }, // AI series: ignored
             };
             var expectStress = mine.Select(p => p.Stress + SegmentFormulas.MatchStressDelta(cfg, p, 3, 1, 1f)).ToArray();
-            var stage = EventEffects.ApplyStage(cfg, team, series, new StubRandomSource(0.5f));
+            var stage = EventEffects.ApplyStage(cfg, team, 0, series, new StubRandomSource(0.5f));
             Assert.AreEqual(5, stage.Count, "only the five who played");
             for (int i = 0; i < 5; i++)
             {
@@ -331,7 +331,7 @@ namespace EsportsManager.Tests.Matches
 
             var expectMood = mine.Select(p => p.Mood + SegmentFormulas.MatchMoodDelta(cfg, p, 1, 1f)).ToArray();
             float benchMood = bench.Mood;
-            var end = EventEffects.ApplyEventEnd(cfg, team, series, new StubRandomSource(0.5f));
+            var end = EventEffects.ApplyEventEnd(cfg, team, 0, series, new StubRandomSource(0.5f));
             Assert.AreEqual(5, end.Count);
             for (int i = 0; i < 5; i++) Assert.AreEqual(Math.Min(100f, expectMood[i]), mine[i].Mood, Tol);
             Assert.AreEqual(benchMood, bench.Mood, Tol);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EsportsManager.Growth;
 using EsportsManager.Players;
 using EsportsManager.Segments;
 using EsportsManager.Teams;
@@ -21,7 +22,7 @@ namespace EsportsManager.Tests.Segments
         private sealed class World
         {
             public PlayerConfig Players; public TeamConfig TeamCfg; public SegmentConfig Cfg;
-            public Team Team; public SegmentRunner Runner; public List<Player> Starters;
+            public Team Team; public SegmentRunner Runner; public List<Player> Starters; public GrowthSystem Growth;
         }
 
         private static string Load(string path)
@@ -52,24 +53,33 @@ namespace EsportsManager.Tests.Segments
             }
             var bench = pool.Where(p => !w.Team.IsRostered(p)).OrderByDescending(p => p.GetLaneScore(p.MainLane)).First();
             w.Team.AddPlayer(bench);
-            w.Runner = new SegmentRunner(w.Cfg, w.Players, w.Team, new SeededRandomSource(Seed + 2));
+            var match = EsportsManager.Matches.MatchConfigLoader.FromJson(Load("Assets/Data/match_config.json"));
+            w.Growth = new GrowthSystem(w.Players, new GrowthPhaseMap(new EsportsManager.Matches.PhaseLayout(match, w.Players)));
+            foreach (var p in pool) w.Growth.InitializeNewPlayer(p);
+            w.Runner = new SegmentRunner(w.Cfg, w.Players, w.Team, new SeededRandomSource(Seed + 2), null, w.Growth);
             return w;
         }
 
-        private static int LowestMainDimension(Player p, PlayerConfig pc)
+        // Story 012: the phase (growth.md target) with the lowest phase mean of the main lane.
+        private static TrainingTarget WeakestPhase(Player p, World w)
         {
-            int dims = pc.FindLane(p.MainLane).dimensions.Length, best = 0;
-            for (int i = 1; i < dims; i++) if (p.GetDimension(p.MainLane, i) < p.GetDimension(p.MainLane, best)) best = i;
-            return best;
+            int best = 0; float bestMean = float.MaxValue;
+            for (int k = 0; k < 3; k++)
+            {
+                var dims = w.Growth.Map.PhaseDims(p.MainLane, k);
+                float mean = dims.Average(d => p.GetDimension(p.MainLane, d));
+                if (mean < bestMean) { bestMean = mean; best = k; }
+            }
+            return (TrainingTarget)best;
         }
 
-        /// <summary>All points on training: starters in lane order get 2 points each (max_per_player) on their weakest dimension.</summary>
+        /// <summary>All points on training: starters in lane order get 2 points each (max_per_player) on their weakest phase.</summary>
         private static SegmentPlan TrainPlan(World w)
         {
             var plan = new SegmentPlan();
             int ap = w.Cfg.actionPoints.perSegment, per = w.Cfg.actionPoints.maxPerPlayer;
             foreach (var p in w.Starters)
-                for (int k = 0; k < per && plan.PointsUsed < ap; k++) plan.Train(p.Id, LowestMainDimension(p, w.Players));
+                for (int k = 0; k < per && plan.PointsUsed < ap; k++) plan.Train(p.Id, WeakestPhase(p, w));
             return plan;
         }
 
@@ -103,7 +113,7 @@ namespace EsportsManager.Tests.Segments
             if (w.Runner.GetState().SponsorAttemptsRemaining > 0) plan.Sponsor(); // v3.2: contract slots may be full
             Player Free() => w.Starters.First(p => !used.ContainsKey(p.Id));
             var a = Free(); used[a.Id] = 2; plan.Stream(a.Id).Stream(a.Id);
-            var b = Free(); used[b.Id] = 2; int dim = LowestMainDimension(b, w.Players); plan.Train(b.Id, dim).Train(b.Id, dim);
+            var b = Free(); used[b.Id] = 2; var t = WeakestPhase(b, w); plan.Train(b.Id, t).Train(b.Id, t);
             var c = Free(); used[c.Id] = 2; plan.Rest(c.Id).Rest(c.Id);
             return plan;
         }
@@ -195,7 +205,7 @@ namespace EsportsManager.Tests.Segments
             for (int i = 0; i < 3; i++)
             {
                 w.Runner.BeginSegment();
-                var plan = new SegmentPlan().Train(w.Starters[0].Id, 0).Stream(w.Starters[1].Id).Rest(w.Starters[2].Id).Sponsor();
+                var plan = new SegmentPlan().Train(w.Starters[0].Id, TrainingTarget.Early).Stream(w.Starters[1].Id).Rest(w.Starters[2].Id).Sponsor();
                 var s = w.Runner.Resolve(plan, new SegmentContext { SegmentsPerYear = 12, SegmentIndexInYear = i, MatchResults = new[] { true, false } });
                 Assert.AreEqual(4, s.PointsUsed);
                 Assert.AreEqual(w.Cfg.actionPoints.perSegment - 4, s.PointsUnused);

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using EsportsManager.Growth;
 using EsportsManager.Players;
 using EsportsManager.Segments;
 using EsportsManager.Teams;
@@ -40,7 +41,7 @@ namespace EsportsManager.Tests.Segments
         public static SegmentConfig MakeConfig() => new SegmentConfig
         {
             actionPoints = new ActionPointConfig { perSegment = 6, maxPerPlayer = 2 },
-            training = new SegmentTrainingConfig { intensity = 1f, targetBonus = 1.5f },
+            training = new SegmentTrainingConfig { intensity = 1f },
             stream = new StreamConfig { cap = 2f },
             business = new BusinessConfig
             {
@@ -67,10 +68,21 @@ namespace EsportsManager.Tests.Segments
             },
         };
 
+        /// <summary>Story 012: the one specialty of the test config (top, early, dimension top_0, phase_flat early +1.5).</summary>
+        public const string TopEarlySpecialty = "top_early";
+
         /// <summary>Player config of Story 002 tests plus the effect keys Story 003 reads (exaggerated so tests see them).</summary>
         public static PlayerConfig MakePlayerConfig()
         {
             var cfg = TeamTestFactory.MakePlayerConfig();
+            cfg.specialty.specialties = new[]
+            {
+                new SpecialtyDef
+                {
+                    id = TopEarlySpecialty, displayName = "TE", lane = "top", phase = "early", dimension = "top_0",
+                    effects = new[] { new SpecialtyEffectDef { hook = "phase_flat", phase = "early", value = 1.5f } },
+                },
+            };
             cfg.traitEffects = cfg.traitEffects.Concat(new[]
             {
                 TestConfigFactory.Effect("earnest", PlayerEffectKeys.BusinessRate, 0.5f),
@@ -87,6 +99,22 @@ namespace EsportsManager.Tests.Segments
             return cfg;
         }
 
+        /// <summary>
+        /// Story 012 phase map for the test lanes (dimension ids "lane_i"): early {0}, mid {1, 2}, late {3, 4}, command 5. Every lane
+        /// uses the same layout so tests can reason about indexes directly.
+        /// </summary>
+        public static GrowthPhaseMap MakePhaseMap(PlayerConfig cfg)
+        {
+            var dims = new Dictionary<string, int[][]>();
+            var cmd = new Dictionary<string, int>();
+            foreach (var l in cfg.lanes)
+            {
+                dims[l.id] = new[] { new[] { 0 }, new[] { 1, 2 }, new[] { 3, 4 } };
+                cmd[l.id] = 5;
+            }
+            return new GrowthPhaseMap(dims, cmd);
+        }
+
         public static SegmentContext Ctx(params bool[] results) =>
             new SegmentContext { SegmentsPerYear = 12, SegmentIndexInYear = 0, MatchResults = results.Length == 0 ? null : results };
 
@@ -100,6 +128,7 @@ namespace EsportsManager.Tests.Segments
             public readonly Player[] Starters;
             public SegmentRunner Runner;
             public readonly IRandomSource Rng;
+            public readonly GrowthSystem Growth;
 
             public Fixture(IRandomSource runnerRng = null, IRandomSource teamRng = null, bool lineup = true, long funds = 0)
             {
@@ -111,7 +140,10 @@ namespace EsportsManager.Tests.Segments
                     Team.AddPlayer(Starters[i]);
                     if (lineup) Team.SetStarter(TeamTestFactory.Lanes[i], Starters[i]);
                 }
-                Runner = new SegmentRunner(Cfg, Players, Team, Rng);
+                Growth = new GrowthSystem(Players, MakePhaseMap(Players));
+                // fixed focus 0.2 / 0.2 / 0.2 (round numbers for the tests)
+                foreach (var p in Starters) for (int k = 0; k < 3; k++) p.SetFocus(k, 0.2f);
+                Runner = new SegmentRunner(Cfg, Players, Team, Rng, null, Growth);
             }
 
             /// <summary>Creates a player (salary = expected salary so satisfaction is 0). Not added to the roster.</summary>

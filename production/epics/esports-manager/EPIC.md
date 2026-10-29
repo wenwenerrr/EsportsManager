@@ -22,8 +22,8 @@
 | 009 | 文字界面（第一个可玩版本） | UI | Complete | N/A (minimal) |
 | 010 | 程序生成选手头像 | UI | Ready | N/A (minimal) |
 | 011 | 比赛模型 v4 | Logic | In Progress | N/A (minimal) |
-| 012 | 成长：专精与绝活 | Logic | Ready | N/A (minimal) |
-| 013 | 联赛 AI 与预热 | Integration | Ready | N/A (minimal) |
+| 012 | 成长：专精与绝活 | Logic | Implemented (close at playtest) | N/A (minimal) |
+| 013 | 联赛 AI 与预热 | Integration | Implemented (close at playtest) | N/A (minimal) |
 | 014 | 自动模拟器与平衡验证 | Logic | Ready | N/A (minimal) |
 
 **v4 实现顺序**（2026-10-22）：011 → 012 → 013 → 005 → 014 → 007 → 010

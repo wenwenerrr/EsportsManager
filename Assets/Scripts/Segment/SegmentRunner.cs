@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using EsportsManager.Matches;
 using EsportsManager.Events;
+using EsportsManager.Growth;
 using EsportsManager.Players;
 using EsportsManager.Teams;
 
@@ -11,9 +12,14 @@ namespace EsportsManager.Segments
     /// Runs one segment of player actions on a <see cref="Team"/> (Story 003; design/numbers.md 4.1, 4.2, 4.6, 4.7,
     /// 4.10, 4.11, 4.12, 4.16). Pure C#, not thread-safe, all numbers from <see cref="SegmentConfig"/>.
     /// <para>FLOW (two calls so the player can look at the offers before deciding):</para>
-    /// <para>TRAINING (numbers.md 4.1 v3): one pass per distinct target dimension; every pass computes all six gains from
-    /// the SEGMENT-START values, the gains are summed per dimension and applied once (clamped), so the order of training
-    /// points never matters. Same target twice = one pass at intensity 2.</para>
+    /// <para>TRAINING (design/gdd/growth.md rev 3, Story 012, via <see cref="GrowthSystem"/>): every point trains one phase of
+    /// the main lane (or command) with an optional focus dimension; its base amount b (F1, x the point's noise, then the F5 event
+    /// modifiers) and its gains (F2) come from the SEGMENT-START values; a player's gains are summed and applied once (clamped to
+    /// the ceiling), so the order of points never matters. Then each trained player's focus is updated from his point counts
+    /// (F3). The specialty check (F4) runs for every rostered player at the very END of Resolve (after events and settlement).
+    /// Noise: one U(1 - noise, 1 + noise) per point from the injected training-noise source (players in roster order, points
+    /// in plan order); without that source the noise is 1 (tests). Without a growth system no training point is accepted
+    /// (TrainingUnavailable).</para>
     /// <list type="number">
     /// <item><see cref="BeginSegment"/> rolls the business offers ONCE and opens the segment; read <see cref="GetState"/>.</item>
     /// <item><see cref="Resolve"/> is the one entry method. Order: validate (throws, changes NOTHING) -> actions: training ->
@@ -37,12 +43,11 @@ namespace EsportsManager.Segments
     /// segment pays from this segment on (N segments including this one); legacy context MatchResults (tests only) stress the
     /// starters and give the team's win/loss sign to every rostered player (unchanged Story 003 behaviour).
     /// Accepting a business offer costs one action point on that player (numbers.md 4.11 v3 / 4.16); his remaining
-    /// points can still be used for training etc. Training (4.1 v3): every point raises all six main-lane dimensions,
-    /// the target dimension x target_bonus. Stress (4.7 v3): s_recover is subtracted every segment for every rostered player.</para>
+    /// points can still be used for training etc. Stress (4.7 v3): s_recover is subtracted every segment for every rostered player.</para>
     /// </summary>
-    /// <example><code>var runner = new SegmentRunner(cfg, playerCfg, team, rng);
+    /// <example><code>var runner = new SegmentRunner(cfg, playerCfg, team, rng, events, growth, noiseRng);
     /// runner.BeginSegment();
-    /// var plan = new SegmentPlan().Train(p.Id, 0).Stream(q.Id);
+    /// var plan = new SegmentPlan().Train(p.Id, TrainingTarget.Early).Stream(q.Id);
     /// var summary = runner.Resolve(plan, new SegmentContext { SegmentsPerYear = 12 });</code></example>
     public sealed class SegmentRunner
     {
@@ -59,13 +64,20 @@ namespace EsportsManager.Segments
         private readonly EventEngine _events;
         private readonly List<PendingChoice> _choices = new List<PendingChoice>();
         private int _nextChoiceId;
+        private readonly GrowthSystem _growth;
+        private readonly IRandomSource _noise;
 
         /// <summary>Creates a runner. Validates the config; all dependencies are injected.</summary>
         /// <param name="rng">Random source for offers, sponsorship and the R factors (the team keeps its own).</param>
         /// <param name="events">Optional random-event engine (Story 006); null = no events (Story 003 behaviour).</param>
-        public SegmentRunner(SegmentConfig config, PlayerConfig players, Team team, IRandomSource rng, EventEngine events = null)
+        /// <param name="growth">Growth system (Story 012); null = training points are refused (TrainingUnavailable).</param>
+        /// <param name="trainingNoise">Own source for the training noise (so the other draws are unchanged); null = noise 1.</param>
+        public SegmentRunner(SegmentConfig config, PlayerConfig players, Team team, IRandomSource rng, EventEngine events = null,
+            GrowthSystem growth = null, IRandomSource trainingNoise = null)
         {
             _events = events;
+            _growth = growth;
+            _noise = trainingNoise;
             _cfg = config ?? throw new ArgumentNullException(nameof(config));
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _team = team ?? throw new ArgumentNullException(nameof(team));
@@ -181,7 +193,9 @@ namespace EsportsManager.Segments
                 case PlanErrorCode.UnknownPlayer: throw new ArgumentException("Unknown player id " + e.PlayerId + " (not on the roster).", nameof(plan));
                 case PlanErrorCode.UnknownAction: throw new ArgumentException("Unknown action for player " + e.PlayerId + ".", nameof(plan));
                 case PlanErrorCode.DimensionOutOfRange:
-                    throw new ArgumentException("Dimension index " + e.DimensionIndex + " is outside 0.." + (e.Limit - 1) + " for player " + e.PlayerId + ".", nameof(plan));
+                    throw new ArgumentException("Focus dimension " + e.DimensionIndex + " is not in the trained phase for player " + e.PlayerId + ".", nameof(plan));
+                case PlanErrorCode.UnknownTrainingTarget: throw new ArgumentException("Unknown training target for player " + e.PlayerId + ".", nameof(plan));
+                case PlanErrorCode.TrainingUnavailable: throw new InvalidOperationException("Training needs the growth system (no match phase mapping).");
                 case PlanErrorCode.UnknownOffer: throw new ArgumentException("Unknown business offer id " + e.OfferId + ".", nameof(plan));
                 case PlanErrorCode.DuplicateOffer: throw new ArgumentException("Business offer " + e.OfferId + " is accepted twice.", nameof(plan));
                 case PlanErrorCode.OfferPlayerLeft:
@@ -235,9 +249,8 @@ namespace EsportsManager.Segments
                 if (!Enum.IsDefined(typeof(SegmentAction), a.Action)) return new PlanError { Code = PlanErrorCode.UnknownAction, PlayerId = a.PlayerId };
                 if (a.Action == SegmentAction.Train)
                 {
-                    int dims = DimensionCount(player);
-                    if (a.DimensionIndex < 0 || a.DimensionIndex >= dims)
-                        return new PlanError { Code = PlanErrorCode.DimensionOutOfRange, PlayerId = a.PlayerId, DimensionIndex = a.DimensionIndex, Limit = dims };
+                    var te = CheckTraining(player, a);
+                    if (!te.IsNone) return te;
                 }
                 Count(perPlayer, order, a.PlayerId);
             }
@@ -273,6 +286,15 @@ namespace EsportsManager.Segments
 
         private static PlanError Err(PlanErrorCode code) => new PlanError { Code = code };
 
+        private PlanError CheckTraining(Player player, ActionAssignment a)
+        {
+            if (_growth == null) return new PlanError { Code = PlanErrorCode.TrainingUnavailable, PlayerId = a.PlayerId };
+            if (!Enum.IsDefined(typeof(TrainingTarget), a.Target)) return new PlanError { Code = PlanErrorCode.UnknownTrainingTarget, PlayerId = a.PlayerId };
+            if (!_growth.IsValidFocus(player.MainLane, a.Target, a.FocusDimension))
+                return new PlanError { Code = PlanErrorCode.DimensionOutOfRange, PlayerId = a.PlayerId, DimensionIndex = a.FocusDimension };
+            return default;
+        }
+
         private static void Count(Dictionary<long, int> map, List<long> order, long id)
         {
             if (!map.TryGetValue(id, out int n)) order.Add(id);
@@ -285,7 +307,8 @@ namespace EsportsManager.Segments
         /// What <paramref name="plan"/> would do, for a UI drafting a plan. Deterministic: NO random draws (all R = 1,
         /// sponsorship chance before noise) and NO state change. Works for invalid drafts too: <see cref="SegmentPreview.Error"/>
         /// carries the first problem, assignments naming unknown players or bad dimensions and unknown offers are skipped.
-        /// Training gains equal what Resolve applies for the same plan (before clamping).
+        /// Training gains equal what Resolve applies for the same plan at noise 1 without event modifiers (before clamping); the
+        /// low / high arrays are the +-noise range.
         /// </summary>
         public SegmentPreview Preview(SegmentPlan plan, SegmentContext ctx)
         {
@@ -324,7 +347,10 @@ namespace EsportsManager.Segments
                 {
                     PlayerId = p.Id, PointsUsed = used, PointsRemaining = _cfg.actionPoints.maxPerPlayer - used,
                     TrainPoints = ps.TrainPoints, StreamPoints = ps.StreamPoints, RestPoints = ps.RestPoints, BusinessPoints = ps.BusinessPoints,
-                    TrainingGains = ComputeTraining(p, ps.Training),
+                    TrainingGains = PreviewGains(plan, p, 1f),
+                    TrainingGainsLow = PreviewGains(plan, p, _growth != null ? _growth.NoiseLow : 1f),
+                    TrainingGainsHigh = PreviewGains(plan, p, _growth != null ? _growth.NoiseHigh : 1f),
+                    FocusAfter = PreviewFocus(plan, p),
                     StressDelta = SegmentFormulas.StressDelta(_cfg, p, StressFor(ps, starter ? matches : 0, starter ? losses : 0), 1f),
                     MoodDelta = SegmentFormulas.MoodDelta(_cfg, p, MoodFor(p, starter, result, starters), 1f),
                     LivestreamIncome = _team.LivestreamIncome(p, ps.StreamPoints),
@@ -339,7 +365,7 @@ namespace EsportsManager.Segments
         // ------------------------------------------------------------ resolve
 
         /// <summary>
-        /// The one entry method for a segment; see the class remarks for the fixed order. Any validation failure
+        /// The one entry method for a segment; see the class remarks for the fixed order (training first, specialty check last). Any validation failure
         /// throws BEFORE any state (players, team, contracts, offers, random source) changes and leaves the segment
         /// open so the plan can be corrected. On success the segment closes, unused points are lost, and the summary
         /// becomes <see cref="SegmentState.LastSummary"/>. Offers whose player left the roster are reported as voided.
@@ -365,7 +391,7 @@ namespace EsportsManager.Segments
             // ---- 0. random events (Story 006): roll the action events for every point; nothing changes yet
             int offerBase = plan.Assignments.Count, sponsorBase = offerBase + plan.AcceptedOfferIds.Count;
             var points = new List<ActionPointRef>();
-            foreach (var a in plan.Assignments) points.Add(new ActionPointRef(ToEventAction(a.Action), a.PlayerId, a.DimensionIndex));
+            foreach (var a in plan.Assignments) points.Add(new ActionPointRef(ToEventAction(a.Action), a.PlayerId, (int)a.Target));
             foreach (int id in plan.AcceptedOfferIds) points.Add(new ActionPointRef(EventAction.Business, FindOffer(id).Value.PlayerId));
             for (int i = 0; i < plan.SponsorPoints; i++) points.Add(new ActionPointRef(EventAction.Sponsor, 0));
             var actionEvents = _events != null ? _events.RollActionEvents(_team, points) : new List<EventOccurrence>();
@@ -374,45 +400,39 @@ namespace EsportsManager.Segments
             foreach (var ev in actionEvents)
                 foreach (var fx in ev.Effects) mods[ev.PointIndex].Add(fx);
 
-            // ---- 1. execute actions: tally, then training (order independent, see class remarks)
+            // ---- 1. execute actions: tally, then training (growth.md; order independent, see class remarks)
             TallyAssignments(plan, byId, skipInvalid: false);
             float o = _players.potential.observationPerTraining;
             foreach (var p in roster)
             {
                 var ps = byId[p.Id];
                 if (ps.TrainPoints == 0) continue;
-                // event modifiers: effective points per target (sum of multipliers) and flat adds on the target
-                var effective = new Dictionary<int, float>();
-                var adds = new Dictionary<int, float>();
+                _growth.EnsureFocus(p);
+                var acc = new float[DimensionCount(p)];
+                var counts = new int[4];
                 for (int i = 0; i < plan.Assignments.Count; i++)
                 {
                     var a = plan.Assignments[i];
                     if (a.PlayerId != p.Id || a.Action != SegmentAction.Train) continue;
                     var m = mods[i];
-                    effective.TryGetValue(a.DimensionIndex, out float ef); effective[a.DimensionIndex] = ef + m.TrainMult;
-                    adds.TryGetValue(a.DimensionIndex, out float ad); adds[a.DimensionIndex] = ad + m.TrainAdd;
+                    float noise = _noise != null ? _noise.NextFloat(_growth.NoiseLow, _growth.NoiseHigh) : 1f;
+                    float b0 = _growth.BaseAmount(p, a.Target, _cfg.training.intensity, noise);
+                    float b = GrowthSystem.WithEventModifiers(b0, m.TrainMult, m.TrainAdd);
                     foreach (var fx in m.Fx)
                     {
-                        if (fx.Type == EffectType.TrainMultiplier)
-                            fx.Applied = (fx.Value - 1f) * p.TrainingGain(p.MainLane, a.DimensionIndex, _cfg.training.intensity) * _cfg.training.targetBonus;
+                        if (fx.Type == EffectType.TrainMultiplier) fx.Applied = b0 * (fx.Value - 1f);
                         else if (fx.Type == EffectType.TrainAdd) fx.Applied = fx.Value;
                     }
+                    var gains = _growth.PointGains(p, a.Target, a.FocusDimension, b);
+                    for (int d = 0; d < acc.Length; d++) acc[d] += gains[d];
+                    ps.Training.Add(new TrainingResult { Target = a.Target, FocusDimension = a.FocusDimension, Noise = noise, Base = b, Gains = gains });
+                    counts[(int)a.Target]++;
                 }
-                float[] total = ComputeTraining(p, ps.Training, effective);
-                foreach (var kv in adds) total[kv.Key] += kv.Value;
-                var finals = new float[total.Length];
-                for (int d = 0; d < total.Length; d++)
-                {
-                    p.SetDimension(p.MainLane, d, p.GetDimension(p.MainLane, d) + total[d]);
-                    finals[d] = p.GetDimension(p.MainLane, d);
-                }
-                for (int k = 0; k < ps.Training.Count; k++)
-                {
-                    var t = ps.Training[k];
-                    t.NewValues = (float[])finals.Clone();
-                    t.NewValue = finals[t.DimensionIndex];
-                    ps.Training[k] = t;
-                }
+                ps.ValuesBefore = p.GetRadar(p.MainLane);
+                ps.FocusBefore = Focus(p);
+                _growth.ApplyGains(p, acc);
+                _growth.UpdateFocus(p, counts);
+                ps.ValuesAfter = p.GetRadar(p.MainLane);
                 p.AddObservation(o * ps.TrainPoints);
             }
 
@@ -562,6 +582,18 @@ namespace EsportsManager.Segments
             foreach (var c in _contracts) c.SegmentsRemaining--;
             _contracts.RemoveAll(c => c.SegmentsRemaining <= 0);
             foreach (var ev in occurrences) EventApplier.ApplyAfterSettle(ev, _team);
+
+            // ---- 8. growth.md F4: specialty check of every rostered player at segment end (after training, focus and events)
+            if (_growth != null)
+                foreach (var p in roster)
+                {
+                    var ps = byId[p.Id];
+                    if (ps.FocusBefore == null) ps.FocusBefore = Focus(p);
+                    var ch = _growth.CheckSpecialties(p);
+                    ps.SpecialtiesGained.AddRange(ch.Gained);
+                    ps.SpecialtiesLost.AddRange(ch.Lost);
+                    ps.FocusAfter = Focus(p);
+                }
             _offers.Clear();
             _choices.Clear();
             _open = false;
@@ -581,8 +613,8 @@ namespace EsportsManager.Segments
 
         // ------------------------------------------------------------ shared helpers (Preview and Resolve)
 
-        // Counts points per player and groups training points by target (first-appearance order). With skipInvalid,
-        // assignments that validation would reject are ignored (Preview of a draft); otherwise the plan is already valid.
+        // Counts points per player. With skipInvalid, assignments that validation would reject are ignored (Preview of a draft);
+        // otherwise the plan is already valid.
         private void TallyAssignments(SegmentPlan plan, Dictionary<long, PlayerSegmentSummary> byId, bool skipInvalid)
         {
             foreach (var a in plan.Assignments)
@@ -591,11 +623,8 @@ namespace EsportsManager.Segments
                 switch (a.Action)
                 {
                     case SegmentAction.Train:
-                        if (skipInvalid && (a.DimensionIndex < 0 || a.DimensionIndex >= DimensionCount(Find(a.PlayerId)))) continue;
+                        if (skipInvalid && !CheckTraining(Find(a.PlayerId), a).IsNone) continue;
                         ps.TrainPoints++;
-                        int idx = ps.Training.FindIndex(t => t.DimensionIndex == a.DimensionIndex);
-                        if (idx < 0) ps.Training.Add(new TrainingResult { DimensionIndex = a.DimensionIndex, Points = 1 });
-                        else { var t = ps.Training[idx]; t.Points++; ps.Training[idx] = t; }
                         break;
                     case SegmentAction.Stream: ps.StreamPoints++; break;
                     case SegmentAction.Rest: ps.RestPoints++; break;
@@ -603,28 +632,41 @@ namespace EsportsManager.Segments
             }
         }
 
-        // Fills Gains / Gain of every pass from the player's CURRENT (segment-start) values and returns the per-dimension
-        // sum over all passes. Changes nothing on the player.
-        private float[] ComputeTraining(Player p, List<TrainingResult> passes, Dictionary<int, float> effectivePoints = null)
+        // Preview: summed gains of the player's valid training points at a fixed noise, no event modifiers. Changes nothing.
+        private float[] PreviewGains(SegmentPlan plan, Player p, float noise)
         {
-            int dims = DimensionCount(p);
-            var total = new float[dims];
-            for (int k = 0; k < passes.Count; k++)
+            var total = new float[DimensionCount(p)];
+            if (_growth == null) return total;
+            foreach (var a in plan.Assignments)
             {
-                var t = passes[k];
-                float pts = effectivePoints != null && effectivePoints.TryGetValue(t.DimensionIndex, out float ep) ? ep : t.Points;
-                float intensity = pts * _cfg.training.intensity;
-                t.Gains = new float[dims];
-                for (int d = 0; d < dims; d++)
-                {
-                    float g = p.TrainingGain(p.MainLane, d, intensity);
-                    t.Gains[d] = d == t.DimensionIndex ? g * _cfg.training.targetBonus : g;
-                    total[d] += t.Gains[d];
-                }
-                t.Gain = t.Gains[t.DimensionIndex];
-                passes[k] = t;
+                if (a.PlayerId != p.Id || a.Action != SegmentAction.Train || !CheckTraining(p, a).IsNone) continue;
+                float b = _growth.BaseAmount(p, a.Target, _cfg.training.intensity, noise);
+                var g = _growth.PointGains(p, a.Target, a.FocusDimension, b);
+                for (int d = 0; d < total.Length; d++) total[d] += g[d];
             }
             return total;
+        }
+
+        // Preview: focus after this segment's training (F3 on a copy of the current values).
+        private float[] PreviewFocus(SegmentPlan plan, Player p)
+        {
+            var f = Focus(p);
+            if (_growth == null) return f;
+            var counts = new int[4];
+            int n = 0;
+            foreach (var a in plan.Assignments)
+                if (a.PlayerId == p.Id && a.Action == SegmentAction.Train && CheckTraining(p, a).IsNone) { counts[(int)a.Target]++; n++; }
+            if (n == 0) return f;
+            float keep = (float)Math.Pow(1.0 - _players.training.specializationRate, n);
+            for (int k = 0; k < f.Length; k++) f[k] = keep * f[k] + (1f - keep) * counts[k] / n;
+            return f;
+        }
+
+        private static float[] Focus(Player p)
+        {
+            var f = new float[Player.FocusPhases];
+            for (int k = 0; k < f.Length; k++) f[k] = p.GetFocus(k);
+            return f;
         }
 
         private StressInputs StressFor(PlayerSegmentSummary ps, int matches, int losses) => new StressInputs

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using EsportsManager.Events;
+using EsportsManager.Growth;
 using EsportsManager.Matches;
 using EsportsManager.Segments;
 using EsportsManager.Session;
@@ -57,9 +58,49 @@ namespace EsportsManager.UI
         {
             Root = root; Session = session;
             _clock = clock ?? (() => Time.unscaledTimeAsDouble);
+            if (session.ChoosingOffer) { Stack.Reset(JobOffersUiScreen()); return; }
             Stack.Reset(MainUiScreen());
             PushStartPopups();
         }
+
+        // ---- Story 013: job offers, opponent info
+        /// <summary>Offer chosen on the job-offer screen (-1 = none yet).</summary>
+        public int SelectedOffer = -1;
+        /// <summary>Name typed on the job-offer screen (null = the club's name).</summary>
+        public string OfferName;
+        /// <summary>Club shown in the opponent panel (-1 = the default opponent).</summary>
+        public int OpponentIndex = -1;
+
+        private UiScreen JobOffersUiScreen() => new UiScreen(ScreenId.JobOffers, false, r => JobOfferScreen.Build(this, r));
+
+        /// <summary>New game: the three job offers (pick + name).</summary>
+        public void ShowJobOffers()
+        {
+            Stack.Reset(JobOffersUiScreen());
+            Refresh();
+        }
+
+        /// <summary>Selects an offer (the name field takes the club's name).</summary>
+        public void SelectOffer(int index)
+        {
+            SelectedOffer = index;
+            OfferName = null;
+            Refresh();
+        }
+
+        /// <summary>Takes the selected offer with the typed name and opens the main screen.</summary>
+        public void ConfirmOffer(string name)
+        {
+            if (!Session.ChoosingOffer || SelectedOffer < 0) { Say(UiStrings.OfferPickFirst, true); return; }
+            var c = Session.TakeOffer(SelectedOffer, name);
+            Stack.Reset(MainUiScreen());
+            PushStartPopups();
+            Message = string.Format(UiStrings.OfferTakenFormat, c.Name); MessageIsError = false;
+            Refresh();
+        }
+
+        /// <summary>Shows another club in the opponent panel.</summary>
+        public void ShowOpponent(int club) { OpponentIndex = club; Refresh(); }
 
         /// <summary>True while flow-advancing actions are ignored (just after a screen change).</summary>
         public bool FlowLocked => _clock() - _lastScreenChange < FlowGuardSeconds;
@@ -89,6 +130,7 @@ namespace EsportsManager.UI
                 popped = false;
                 if (Stack.IsTop(ScreenId.ChoicePopup) && (CardsOnly || Session.PendingChoices.Count == 0)) popped = Stack.Pop();
                 else if (Stack.IsTop(ScreenId.OfferPopup) && (CardsOnly || Session.UnansweredOffers().Count == 0)) popped = Stack.Pop();
+                else if (Stack.IsTop(ScreenId.TrainingPopup) && (TrainingPlayer == null || Session.AwaitingNext)) popped = Stack.Pop();
             }
             Stack.Render(Root);
         }
@@ -170,7 +212,7 @@ namespace EsportsManager.UI
         /// <summary>Closes every pop-up (debug demos that show the bare main screen).</summary>
         public void ClosePopups()
         {
-            while (Stack.IsTop(ScreenId.OfferPopup) || Stack.IsTop(ScreenId.ChoicePopup)) Stack.Pop();
+            while (Stack.IsTop(ScreenId.OfferPopup) || Stack.IsTop(ScreenId.ChoicePopup) || Stack.IsTop(ScreenId.TrainingPopup)) Stack.Pop();
             Refresh();
         }
 
@@ -184,12 +226,63 @@ namespace EsportsManager.UI
         private UiScreen SummaryUiScreen() => new UiScreen(ScreenId.Summary, false, r => SummaryScreen.Build(this, r));
         private UiScreen StandingsUiScreen() => new UiScreen(ScreenId.Standings, false, r => StandingsScreen.Build(this, r));
 
-        // ---- actions forwarded from the screens
-        public void Train(long id, int dim)
+        // ---- training pop-up (Story 012): pick a phase (or command) and an optional focus dimension, see the range, confirm
+        /// <summary>Player whose training pop-up is open, or null.</summary>
+        public long? TrainingPlayer;
+        /// <summary>Target selected in the pop-up.</summary>
+        public TrainingTarget TrainingTarget;
+        /// <summary>Focus dimension selected in the pop-up (-1 = none).</summary>
+        public int TrainingFocus = -1;
+        /// <summary>Training pop-up visible.</summary>
+        public bool TrainingPopupOpen => Stack.Contains(ScreenId.TrainingPopup);
+
+        /// <summary>Opens the training pop-up for a player, preselecting his most specialized phase without a focus dimension.</summary>
+        public void OpenTraining(long id)
         {
-            if (Session.TryAddTrain(id, dim, out var e))
-                Say(string.Format(UiStrings.Added, Session.PlayerName(id), string.Format(UiStrings.TrainDimFormat, Session.DimensionNames(id)[dim])), false);
-            else Say(ErrorText(e), true);
+            var card = FindCard(id);
+            if (card == null) return;
+            int k = 0;
+            for (int i = 1; i < 3; i++) if (card.Focus[i] > card.Focus[k]) k = i;
+            TrainingPlayer = id; TrainingTarget = (TrainingTarget)k; TrainingFocus = -1;
+            if (!TrainingPopupOpen) Stack.Push(new UiScreen(ScreenId.TrainingPopup, true, r => TrainingPopup.Build(this, r)));
+            Refresh();
+        }
+
+        /// <summary>Selects the target in the pop-up (clears the focus dimension).</summary>
+        public void SelectTrainingTarget(TrainingTarget t) { TrainingTarget = t; TrainingFocus = -1; Refresh(); }
+        /// <summary>Selects the focus dimension (-1 = none).</summary>
+        public void SelectTrainingFocus(int dim) { TrainingFocus = dim; Refresh(); }
+        /// <summary>Closes the pop-up without adding.</summary>
+        public void CloseTraining() { TrainingPlayer = null; if (Stack.IsTop(ScreenId.TrainingPopup)) Stack.Pop(); Refresh(); }
+        /// <summary>Adds the selected point; the pop-up closes on success and stays (with the refusal) otherwise.</summary>
+        public void ConfirmTraining()
+        {
+            if (TrainingPlayer == null) return;
+            long id = TrainingPlayer.Value;
+            if (Train(id, TrainingTarget, TrainingFocus)) { TrainingPlayer = null; if (Stack.IsTop(ScreenId.TrainingPopup)) Stack.Pop(); Refresh(); }
+        }
+
+        /// <summary>The card of a rostered player, or null.</summary>
+        public PlayerCardData FindCard(long id)
+        {
+            foreach (var c in Session.GetRosterData()) if (c.Id == id) return c;
+            return null;
+        }
+
+        // ---- actions forwarded from the screens
+        /// <summary>Adds one training point (phase / command + optional focus dimension); true when added.</summary>
+        public bool Train(long id, TrainingTarget target, int focus)
+        {
+            if (Session.TryAddTrain(id, target, focus, out var e))
+            {
+                string what = focus >= 0
+                    ? string.Format(UiStrings.TrainAddedFocusFormat, UiStrings.TargetName(target), Session.DimensionNames(id)[focus])
+                    : string.Format(UiStrings.TrainAddedFormat, UiStrings.TargetName(target));
+                Say(string.Format(UiStrings.Added, Session.PlayerName(id), what), false);
+                return true;
+            }
+            Say(ErrorText(e), true);
+            return false;
         }
         public void Stream(long id)
         {

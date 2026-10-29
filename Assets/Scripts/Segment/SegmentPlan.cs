@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
+using EsportsManager.Growth;
 
 namespace EsportsManager.Segments
 {
     /// <summary>The per-player actions that cost one shared action point (numbers.md 4.16).</summary>
     public enum SegmentAction
     {
-        /// <summary>Train one main-lane dimension.</summary>
+        /// <summary>Train one phase of the main lane, or command (design/gdd/growth.md).</summary>
         Train = 0,
         /// <summary>Livestream.</summary>
         Stream = 1,
@@ -21,13 +22,15 @@ namespace EsportsManager.Segments
         public readonly long PlayerId;
         /// <summary>What he does.</summary>
         public readonly SegmentAction Action;
-        /// <summary>Main-lane dimension index; only used for <see cref="SegmentAction.Train"/>, 0 otherwise.</summary>
-        public readonly int DimensionIndex;
+        /// <summary>Training target (phase or command); only used for <see cref="SegmentAction.Train"/>.</summary>
+        public readonly TrainingTarget Target;
+        /// <summary>Optional focus dimension (main-lane index inside the target phase), -1 = none; only for training.</summary>
+        public readonly int FocusDimension;
 
         /// <summary>Creates an assignment.</summary>
-        public ActionAssignment(long playerId, SegmentAction action, int dimensionIndex = 0)
+        public ActionAssignment(long playerId, SegmentAction action, TrainingTarget target = TrainingTarget.Early, int focusDimension = -1)
         {
-            PlayerId = playerId; Action = action; DimensionIndex = dimensionIndex;
+            PlayerId = playerId; Action = action; Target = target; FocusDimension = focusDimension;
         }
     }
 
@@ -36,7 +39,7 @@ namespace EsportsManager.Segments
     /// Plain data; <see cref="SegmentRunner"/> validates it. Mutable so a UI can edit it while the player decides.
     /// </summary>
     /// <example><code>var plan = new SegmentPlan();
-    /// plan.Train(p.Id, 0).Train(p.Id, 0).Stream(q.Id).Sponsor().AcceptOffer(state.PendingOffers[0].Id);</code></example>
+    /// plan.Train(p.Id, TrainingTarget.Early).Train(p.Id, TrainingTarget.Early, focusDim).Stream(q.Id).Sponsor().AcceptOffer(state.PendingOffers[0].Id);</code></example>
     public sealed class SegmentPlan
     {
         private readonly List<ActionAssignment> _assignments = new List<ActionAssignment>();
@@ -55,8 +58,12 @@ namespace EsportsManager.Segments
         /// <summary>Total points this plan spends.</summary>
         public int PointsUsed => _assignments.Count + _acceptedOffers.Count + SponsorPoints;
 
-        /// <summary>Adds a training point on a main-lane dimension.</summary>
-        public SegmentPlan Train(long playerId, int dimensionIndex) { _assignments.Add(new ActionAssignment(playerId, SegmentAction.Train, dimensionIndex)); return this; }
+        /// <summary>Adds a training point on a phase (or command) with an optional focus dimension (-1 = none).</summary>
+        public SegmentPlan Train(long playerId, TrainingTarget target, int focusDimension = -1)
+        {
+            _assignments.Add(new ActionAssignment(playerId, SegmentAction.Train, target, focusDimension));
+            return this;
+        }
         /// <summary>Adds a stream point.</summary>
         public SegmentPlan Stream(long playerId) { _assignments.Add(new ActionAssignment(playerId, SegmentAction.Stream)); return this; }
         /// <summary>Adds a rest point.</summary>
