@@ -292,9 +292,15 @@ namespace EsportsManager.Session
             return Tournament.LineupOf(PlayerTeam, Tactic);
         }
 
-        private void RollYear()
+        // Year end: the world opens the transfer window; the year number changes when it closes (CompleteYear).
+        private void RollYear() => _world.EndYear();
+
+        /// <summary>True while the year-end transfer window is open (segment 1 of the next year cannot open yet).</summary>
+        public bool InTransferWindow => _world.Window != null;
+
+        /// <summary>Called by the world when the transfer window closes: next year, segment 1 (transfer.md step 8).</summary>
+        internal void CompleteYear()
         {
-            _world.EndYear();
             Year++;
             SegmentsDoneInYear = 0;
             _history.Add(new YearEvents { Year = Year });

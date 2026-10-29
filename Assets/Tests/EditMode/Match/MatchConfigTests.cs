@@ -101,7 +101,7 @@ namespace EsportsManager.Tests.Matches
             CollectionAssert.AreEqual(new[] { 3, 6, 12 }, c.calendar.events.Select(e => e.afterSegment));
             Assert.AreEqual(3, c.format.regularBestOf); Assert.AreEqual(5, c.format.playoffBestOf); Assert.AreEqual(7, c.format.finalsFinalBestOf);
             CollectionAssert.AreEqual(new long[] { 80000, 50000, 30000, 30000, 10000, 10000, 10000, 10000 }, c.format.splitPrizes);
-            CollectionAssert.AreEqual(new long[] { 200000, 120000, 60000, 60000 }, c.format.finalsPrizes);
+            CollectionAssert.AreEqual(new long[] { 300000, 180000, 90000, 90000 }, c.format.finalsPrizes);
             Assert.AreEqual(60f, c.opponent.familiarityMin); Assert.AreEqual(80f, c.opponent.familiarityMax);
         }
 

@@ -1,7 +1,7 @@
 # Story 005: 年度循环、转会期与经济
 
 > **Epic**: 战队经理人 MVP
-> **Status**: Ready
+> **Status**: In Progress
 > **Layer**: Feature
 > **Type**: Integration
 > **Estimate**: [fill before starting]

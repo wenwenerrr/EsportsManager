@@ -158,6 +158,14 @@ namespace EsportsManager.UI
                 case DemoState.Standings: _ui.OpenStandings(); break;
                 case DemoState.News: _ui.OpenStandings(); break;
                 case DemoState.Opponent: RunEventDemo(DemoState.EventPrep); break;
+                case DemoState.XferReneg:
+                case DemoState.XferRenew:
+                case DemoState.XferPoach:
+                case DemoState.XferOffer:
+                case DemoState.XferChoice:
+                case DemoState.XferAuction:
+                case DemoState.XferResign: TransferDemo.Run(_ui, _session, args.Demo); break;
+                case DemoState.Fatigue: TransferDemo.Fatigue(_ui, _session); break;
                 case DemoState.Lineup:
                     foreach (var o in _session.UnansweredOffers()) _session.DeclineOffer(o.Id);
                     _ui.SetTactic(Matches.MatchTactic.Teamfight);

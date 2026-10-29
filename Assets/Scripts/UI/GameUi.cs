@@ -18,7 +18,7 @@ namespace EsportsManager.UI
     /// EventPrep again (playoff adjustment) or straight to Bracket; Bracket's "continue" acknowledges the event and resets to
     /// Main. Standings is pushed from Main and popped by "back". Events are never auto-played here.
     /// </summary>
-    public sealed class GameUi
+    public sealed partial class GameUi
     {
         /// <summary>The session being shown.</summary>
         public GameSession Session { get; }
@@ -59,6 +59,7 @@ namespace EsportsManager.UI
             Root = root; Session = session;
             _clock = clock ?? (() => Time.unscaledTimeAsDouble);
             if (session.ChoosingOffer) { Stack.Reset(JobOffersUiScreen()); return; }
+            if (session.InTransferWindow) { Stack.Reset(TransferUiScreen()); return; }
             Stack.Reset(MainUiScreen());
             PushStartPopups();
         }
@@ -372,6 +373,7 @@ namespace EsportsManager.UI
             int year = Session.Season?.Year ?? 1;
             if (!Session.TryAcknowledgeEvent(out var e)) { Say(ErrorText(e), true); return; }
             ScrollToReports = false;
+            if (Session.InTransferWindow) { ShowTransfer(); return; } // Story 005: the finals open the transfer window
             if (!Session.TryBeginNext(out var be))
             {
                 // Never strand the player on a finished event: go home and show why.

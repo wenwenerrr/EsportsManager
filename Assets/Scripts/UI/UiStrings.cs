@@ -8,7 +8,7 @@ namespace EsportsManager.UI
     /// ALL player-facing text of the UI (Chinese), in one place so it can be extracted to a localization table later.
     /// UI code must reference these members and never contain string literals for the player.
     /// </summary>
-    public static class UiStrings
+    public static partial class UiStrings
     {
         // ---- main screen header
         public const string Strength = "实力";

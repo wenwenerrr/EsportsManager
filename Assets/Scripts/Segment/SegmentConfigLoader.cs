@@ -38,7 +38,7 @@ namespace EsportsManager.Segments
                 },
                 sponsorship = new SponsorshipConfig
                 {
-                    weightClubPopularity = dto.sponsorship.weight_club_popularity, weightWinRate = dto.sponsorship.weight_win_rate,
+                    baseChance = dto.sponsorship.base_chance, weightClubPopularity = dto.sponsorship.weight_club_popularity, weightWinRate = dto.sponsorship.weight_win_rate,
                     maxSuccessRate = dto.sponsorship.max_success_rate, randomSpread = dto.sponsorship.random_spread,
                     minChance = dto.sponsorship.min_chance, maxChance = dto.sponsorship.max_chance,
                     baseAmount = dto.sponsorship.base_amount, amountPerClubPopularity = dto.sponsorship.amount_per_club_popularity,
@@ -73,7 +73,7 @@ namespace EsportsManager.Segments
         }
         [Serializable] private class SponsorshipDto
         {
-            public float weight_club_popularity; public float weight_win_rate; public float max_success_rate; public float random_spread;
+            public float base_chance; public float weight_club_popularity; public float weight_win_rate; public float max_success_rate; public float random_spread;
             public float min_chance; public float max_chance; public int base_amount; public float amount_per_club_popularity;
             public int duration_segments; public int max_attempts_per_segment; public int max_active_contracts;
         }

@@ -42,7 +42,7 @@
         "default_win_rate": 50
     },
     "livestream": {
-        "base_income": 1500,
+        "base_income": 7500,
         "income_per_popularity": 60,
         "second_stream_factor": 0.5
     }

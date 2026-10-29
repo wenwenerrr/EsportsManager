@@ -56,6 +56,8 @@ namespace EsportsManager.Segments
     /// <summary>Sponsorship knobs (numbers.md 4.12).</summary>
     public sealed class SponsorshipConfig
     {
+        /// <summary>z0: base chance added before the WS term (economy.md F8; 0 = numbers.md 4.12 v3), in [0, 1].</summary>
+        public float baseChance;
         /// <summary>WS weight of club popularity (>= 0).</summary>
         public float weightClubPopularity;
         /// <summary>WS weight of the recent win rate (>= 0).</summary>
@@ -175,6 +177,7 @@ namespace EsportsManager.Segments
             NonNegative("sponsorship.weightClubPopularity", s.weightClubPopularity);
             NonNegative("sponsorship.weightWinRate", s.weightWinRate);
             if (!(s.weightClubPopularity + s.weightWinRate > 0f)) throw Fail("sponsorship weights must have a positive total.");
+            Range("sponsorship.baseChance", s.baseChance, 0f, 1f);
             Range("sponsorship.maxSuccessRate", s.maxSuccessRate, 0f, 1f);
             if (s.maxSuccessRate <= 0f) throw Fail("sponsorship.maxSuccessRate must be > 0.");
             Range("sponsorship.randomSpread", s.randomSpread, 0f, 1f);

@@ -13,9 +13,9 @@ namespace EsportsManager.UI
     public static class DemoSeeds
     {
         /// <summary>First segment has a choice event with a leave option (--demo choice).</summary>
-        public const int ChoiceDemoSeed = 20260123;
+        public const int ChoiceDemoSeed = 20260104;
         /// <summary>The scripted first segment yields >= 3 events incl. a bad money event and a choice result (--demo events).</summary>
-        public const int EventsDemoSeed = 20260103;
+        public const int EventsDemoSeed = 20260105;
         /// <summary>Start of the search for --demo specialty (the first seed from here whose growth demo plan unlocks a specialty).</summary>
         public const int SpecialtyDemoSeed = 20260101;
         /// <summary>Seeds tried before giving up (the start seed is then used as is).</summary>

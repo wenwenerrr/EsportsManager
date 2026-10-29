@@ -191,7 +191,7 @@ namespace EsportsManager.Tests.Teams
             Assert.AreEqual(0.15f, cfg.popularity.randomRange);
             Assert.AreEqual(0.2f, cfg.clubPopularity.beta);
             Assert.AreEqual(0.1f, cfg.clubPopularity.randomRange);
-            Assert.AreEqual(1500, cfg.livestream.baseIncome);       // numbers.md 4.10 l_base (v3)
+            Assert.AreEqual(7500, cfg.livestream.baseIncome);       // economy.md rev 3 F8 l_base
             Assert.AreEqual(60f, cfg.livestream.incomePerPopularity); // numbers.md 4.10 l_pop (v3)
             Assert.AreEqual(0.5f, cfg.livestream.secondStreamFactor); // numbers.md 4.10 (v3.1)
         }

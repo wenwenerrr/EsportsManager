@@ -27,6 +27,14 @@ namespace EsportsManager.Leagues
         Specialty = 4,
         /// <summary>Event champion.</summary>
         Champion = 5,
+        /// <summary>A poach transfer (club = buyer, other = seller, amount = fee).</summary>
+        Poach = 6,
+        /// <summary>An auction purchase (club = buyer, other = seller or -1 for a league lot, amount = price).</summary>
+        AuctionBuy = 7,
+        /// <summary>A forced listing (refused renegotiation or debt over the line).</summary>
+        ForcedListing = 8,
+        /// <summary>A player kept with a retain raise (club = seller, other = bidder).</summary>
+        Retain = 9,
     }
 
     /// <summary>One news line (data only; the UI formats it).</summary>
@@ -50,6 +58,10 @@ namespace EsportsManager.Leagues
         public string Key = "";
         /// <summary>Money involved (loan, sale), yuan.</summary>
         public long Amount;
+        /// <summary>The other club of a transfer (seller / bidder), -1 = the league.</summary>
+        public int OtherClubId = -1;
+        /// <summary>Name of the other club (snapshot), empty for the league.</summary>
+        public string OtherClubName = "";
     }
 
     /// <summary>Offer tier (league.md 三份聘书).</summary>
@@ -125,6 +137,12 @@ namespace EsportsManager.Leagues
         public List<NewsItem> News { get; } = new List<NewsItem>();
         /// <summary>The three offers (after the warm-up), else empty.</summary>
         public List<JobOffer> Offers { get; } = new List<JobOffer>();
+        /// <summary>The open transfer window (null outside it).</summary>
+        public TransferWindow Window { get; private set; }
+        /// <summary>The last finished transfer window (year review, UI), or null.</summary>
+        public TransferWindow LastWindow { get; private set; }
+        /// <summary>Wage index of the previous years (index = year of the window that set it), for the year review.</summary>
+        public List<double> WageIndexHistory { get; } = new List<double>();
         /// <summary>Funds injected at the takeover (not league income).</summary>
         public long Injected { get; private set; }
 
@@ -138,6 +156,20 @@ namespace EsportsManager.Leagues
         public Club PlayerClub => PlayerClubId >= 0 ? Clubs[PlayerClubId] : null;
 
         private readonly Dictionary<int, float[]> _strengthCache = new Dictionary<int, float[]>();
+        private readonly Dictionary<long, PlayerMarketState> _market = new Dictionary<long, PlayerMarketState>();
+
+        /// <summary>The market state of a player (created on first use).</summary>
+        public PlayerMarketState Market(Player p)
+        {
+            if (!_market.TryGetValue(p.Id, out var m)) { m = new PlayerMarketState(); _market[p.Id] = m; }
+            return m;
+        }
+
+        /// <summary>Global segment index year x segments per year + index (champion fatigue windows).</summary>
+        public int GlobalSegment(int year, int index) => year * SegmentsPerYear + index;
+
+        /// <summary>Current wage index WI (economy F3).</summary>
+        public double WageIndex => Economy.WageIndex;
         private bool _cacheValid;
 
         /// <summary>Generates the league (year 0, segment 1 not yet open). Deterministic for the seed.</summary>
@@ -157,6 +189,7 @@ namespace EsportsManager.Leagues
             Growth = new GrowthSystem(players, new GrowthPhaseMap(sim.Layout));
             Talent = new TalentSystem(players, league.talent, Growth);
             Economy = new EconomyRules(players, league.economy);
+            Economy.HonorOf = p => _market.TryGetValue(p.Id, out var m) ? m.Honor : 0f;
             Ai = new LeagueAi(this);
 
             var gen = Keys.Stream("gen", 0);
@@ -191,7 +224,7 @@ namespace EsportsManager.Leagues
                 var noise = Keys.Rekeyable("noise", i);
                 var t = new Team(TeamConfig, Players, teamRng, 0, names[i]);
                 var ev = EventConfig != null ? new EventEngine(EventConfig, Players, evRng) : null;
-                var runner = new SegmentRunner(SegmentConfig, Players, t, segRng, ev, Growth, noise);
+                var runner = new SegmentRunner(SegmentConfig, Players, t, segRng, ev, Growth, noise) { SalarySatisfactionSource = Economy.Satisfaction };
                 var c = new Club(i, t, runner, ev, segRng, teamRng, evRng, noise) { Style = deck[i] };
                 if (c.Style == ClubStyle.Star) c.StarLane = Players.lanes[gen.NextInt(0, Players.lanes.Length)].id;
                 var pe = c.Personality;
@@ -384,10 +417,16 @@ namespace EsportsManager.Leagues
         /// <summary>Opens the next segment for every club (re-keys their streams, rolls offers and choices).</summary>
         public void BeginSegment()
         {
+            if (Window != null) throw new InvalidOperationException("Finish the transfer window first.");
             int seg = Season.SegmentIndexInYear;
+            var e = Config.economy;
             foreach (var c in Clubs)
             {
                 c.SegmentRng.Rekey(Year, seg); c.TeamRng.Rekey(Year, seg); c.EventRng.Rekey(Year, seg); c.NoiseRng.Rekey(Year, seg);
+                float f = c.FatigueAt(GlobalSegment(Year, seg));
+                c.Runner.FatigueStarterStress = e.fatigueStress * f;
+                c.Runner.FatigueBusinessFactor = 1f + e.fatigueBusiness * f;
+                c.MediaObligationPoints = c.Runner.MediaObligationPoints = (int)Math.Round(e.fatigueMediaPoints * f, MidpointRounding.AwayFromZero);
                 c.Runner.BeginSegment();
             }
             Invalidate();
@@ -414,8 +453,12 @@ namespace EsportsManager.Leagues
             foreach (var c in Clubs)
             {
                 SegmentSummary sum;
+                long wages = c.Team.SalaryShare(ctx.SegmentsPerYear, seg);
                 if (c == player) sum = mine = c.Runner.Resolve(playerPlan, ctx);
                 else sum = c.Runner.Resolve(Ai.Plan(c, seg), ctx);
+                c.Ledger.Wages += wages;
+                c.Ledger.Income += (long)sum.LivestreamIncome + sum.BusinessIncome + sum.SponsorshipIncome + sum.EventIncome;
+                c.Ledger.EventExpenses += sum.EventExpenses;
                 foreach (var ps in sum.Players)
                 {
                     if (ps.SpecialtiesGained.Count == 0) continue;
@@ -499,8 +542,18 @@ namespace EsportsManager.Leagues
                 if (c.Id == PlayerClubId) mine = l;
                 c.YearPlacings.Add(ev.Placing[c.Id]);
                 if (c.Id != PlayerClubId) PayIn(c, ev.Prize[c.Id]);
+                c.Ledger.Income += ev.Prize[c.Id]; c.Ledger.Prizes += ev.Prize[c.Id];
+                float honor = Economy.HonorForPlace(ev.Placing[c.Id], ev.Type == EventType.Finals);
+                foreach (var p in c.Team.Roster) { var m = Market(p); m.HonorThisYear = Math.Max(m.HonorThisYear, honor); }
             }
             int champ = ev.FinalOrder[0];
+            var ec = Config.economy;
+            float fs = ev.Type == EventType.Finals ? ec.fatigueFinals : ec.fatigueSplit;
+            if (fs > 0f && ec.fatigueSegments > 0)
+            {
+                int from = GlobalSegment(Year, Season.SegmentsDoneInYear);
+                Clubs[champ].Fatigue.Add(new FatigueSpan { From = from, To = from + ec.fatigueSegments - 1, Strength = fs });
+            }
             AddNews(new NewsItem { Kind = NewsKind.Champion, ClubId = champ, Key = ev.Def.nameKey, Segment = Season.SegmentsDoneInYear });
             Invalidate();
             return mine;
@@ -509,8 +562,8 @@ namespace EsportsManager.Leagues
         /// <summary>Self-rescue check after the event's prizes (called by SeasonFlow when the event is done).</summary>
         internal void AfterEvent() => FundsCheckAll(Season.SegmentsDoneInYear);
 
-        // AI income while in debt: repay share goes to the league (economy F7).
-        private void PayIn(Club c, long amount)
+        /// <summary>Income a club receives (prize, sale, fee); an AI club in debt repays repay share of it first (economy F7).</summary>
+        internal void PayIn(Club c, long amount)
         {
             if (amount <= 0) return;
             if (c.Debt > 0 && !c.IsPlayer)
@@ -556,10 +609,13 @@ namespace EsportsManager.Leagues
             AddNews(new NewsItem { Kind = NewsKind.Loan, ClubId = c.Id, Amount = loan, Segment = segment });
         }
 
-        private void Release(Club c, Player p)
+        /// <summary>Moves a rostered player to the free pool (contract 0, honor 0 and no transfer wish: economy F2).</summary>
+        internal void Release(Club c, Player p)
         {
             c.Team.RemovePlayer(p);
             p.ContractYearsLeft = 0;
+            var m = Market(p);
+            m.Honor = 0f; m.HonorThisYear = 0f; m.WantsTransfer = false; m.Retained = false;
             FreeAgents.Add(p);
             Invalidate();
         }
@@ -567,12 +623,33 @@ namespace EsportsManager.Leagues
         // ------------------------------------------------------------ signings
 
         /// <summary>Signs a free agent (removed from the pool) for <paramref name="years"/> at the signing salary (key "sal", year, player).</summary>
-        public void Sign(Club c, Player p, int years)
+        public void Sign(Club c, Player p, int years) => Sign(c, p, years, SalaryKind.Sign);
+
+        /// <summary>Salary draw kinds (part of the "sal" key: each signing kind has its own R).</summary>
+        public enum SalaryKind
+        {
+            /// <summary>Re-sign / emergency / takeover.</summary>
+            Sign = 0,
+            /// <summary>Renewal.</summary>
+            Renew = 1,
+            /// <summary>Poach.</summary>
+            Poach = 2,
+            /// <summary>Auction purchase of a league lot.</summary>
+            Auction = 3,
+        }
+
+        /// <summary>The keyed R stream of a salary ("sal", year, player, kind).</summary>
+        public KeyedStream SalaryStream(Player p, SalaryKind kind) => Keys.Stream("sal", Year, p.Id, (long)kind);
+
+        /// <summary>Signs a free agent with the salary draw of <paramref name="kind"/>.</summary>
+        public void Sign(Club c, Player p, int years, SalaryKind kind)
         {
             FreeAgents.Remove(p);
             p.ContractYearsLeft = years;
-            p.Salary = Economy.SigningSalary(p, years, Keys.Stream("sal", Year, p.Id));
+            p.Salary = Economy.SigningSalary(p, years, kind == SalaryKind.Sign ? Keys.Stream("sal", Year, p.Id) : SalaryStream(p, kind));
             p.ResetObservation();
+            var m = Market(p);
+            m.Retained = false; m.WantsTransfer = false; m.JoinedYear = Year;
             c.Team.AddPlayer(p);
             AddNews(new NewsItem { Kind = NewsKind.Signing, ClubId = c.Id, PlayerName = p.Name, Amount = p.Salary, Segment = Season.SegmentsDoneInYear });
             Invalidate();
@@ -592,7 +669,16 @@ namespace EsportsManager.Leagues
                 int age = Config.talent.emergencyAge;
                 FreeAgents.Add(Talent.Generate(rng, lane, age, age, Talent.SupplyMean(LeaguePopularity()), 0f));
             }
-            var best = BestFree(missing) ?? BestFree(null);
+            int y = Year;
+            Func<Player, bool> open = p => Market(p).LockedYear != y;
+            var best = BestFree(missing, open) ?? BestFree(null, open) ?? BestFree(null);
+            if (best == null)
+            {
+                string lane = missing.Count > 0 ? missing[0] : Players.lanes[0].id;
+                var rng = Keys.Stream("emg", Year, Season.SegmentsDoneInYear, c.Id, Talent.NextId);
+                best = Talent.Generate(rng, lane, Config.talent.emergencyAge, Config.talent.emergencyAge, Talent.SupplyMean(LeaguePopularity()), 0f);
+                FreeAgents.Add(best);
+            }
             Sign(c, best, Config.economy.signYears);
         }
 
@@ -609,6 +695,7 @@ namespace EsportsManager.Leagues
             var rng = Keys.Stream("scout", Year, c.Id);
             var p = Talent.Generate(rng, lane, t.scoutAgeMin, t.scoutAgeMax, Talent.SupplyMean(LeaguePopularity()), chance);
             c.Team.Funds -= (long)Math.Round(t.scoutCost);
+            Market(p).JoinedYear = Year;
             p.ContractYearsLeft = t.scoutContract;
             p.Salary = Economy.SigningSalary(p, t.scoutContract, Keys.Stream("sal", Year, p.Id));
             c.Team.AddPlayer(p);
@@ -627,7 +714,8 @@ namespace EsportsManager.Leagues
             return Talent.ScoutTalentChance(n, Best(c), LeagueAi.Median(vals));
         }
 
-        private List<string> MissingLanes(Club c)
+        /// <summary>Lanes without a main-lane player on the roster (config order).</summary>
+        public List<string> MissingLanes(Club c)
         {
             var have = new HashSet<string>();
             foreach (var p in c.Team.Roster) have.Add(p.MainLane);
@@ -636,7 +724,8 @@ namespace EsportsManager.Leagues
             return list;
         }
 
-        private Player BestFree(ICollection<string> lanes, Func<Player, bool> filter = null)
+        /// <summary>The best-rated free agent (optionally of <paramref name="lanes"/> and passing <paramref name="filter"/>), ties lower id.</summary>
+        public Player BestFree(ICollection<string> lanes, Func<Player, bool> filter = null)
         {
             Player best = null;
             foreach (var p in FreeAgents)
@@ -651,15 +740,37 @@ namespace EsportsManager.Leagues
 
         // ------------------------------------------------------------ year end
 
-        /// <summary>Year end (called by SeasonFlow before the year number changes): style evaluation, talent rollover, AI fill.</summary>
+        /// <summary>
+        /// Year end (called by SeasonFlow after the last event, before the year number changes): last finals place, honor (this
+        /// year's best place score becomes the player's honor; free agents 0), style evaluation, then the transfer window opens
+        /// (transfer.md). Without a player club (warm-up) or with <see cref="AutopilotPlayer"/> it runs to the end at once; the
+        /// year rolls over when the window closes (<see cref="CloseWindow"/>).
+        /// </summary>
         internal void EndYear()
         {
             int year = Year;
             var finals = FinalsOf(year);
             foreach (var c in Clubs) c.LastYearFinalsPlace = finals != null ? finals.Placing[c.Id] : 0;
+            foreach (var c in Clubs)
+                foreach (var p in c.Team.Roster) { var m = Market(p); m.Honor = m.HonorThisYear; m.HonorThisYear = 0f; }
+            foreach (var p in FreeAgents) { var m = Market(p); m.Honor = 0f; m.HonorThisYear = 0f; }
             StyleEvaluation(year);
-            Rollover(year);
             foreach (var c in Clubs) c.YearPlacings.Clear();
+            Window = new TransferWindow(this, year, PlayerClub == null || AutopilotPlayer ? -1 : PlayerClubId);
+            Window.Continue();
+        }
+
+        /// <summary>True = the player club's window decisions follow the AI rules (scripted auto-play, tests).</summary>
+        public bool AutopilotPlayer { get; set; }
+
+        /// <summary>Called by the window when it is done: keeps it as <see cref="LastWindow"/>, resets the ledgers, rolls the year.</summary>
+        internal void CloseWindow()
+        {
+            LastWindow = Window;
+            Window = null;
+            foreach (var c in Clubs) { c.LastLedger = c.Ledger; c.Ledger = new ClubLedger(); }
+            Invalidate();
+            Season.CompleteYear();
         }
 
         private EventResult FinalsOf(int year)
@@ -739,65 +850,10 @@ namespace EsportsManager.Leagues
         }
 
         /// <summary>
-        /// talent.md yearly rollover (stand-in for the transfer window until Story 005): age + 1 / decline / contract - 1 for every
-        /// player, retirements (keys "ret", year, player), youth + free-agent supply (key "supply", year), pool cap (this year's
-        /// youth exempt), the AI fill (missing lanes, then to fill_roster) in club id order, pool cap again (nobody exempt).
+        /// The lane whose starter has the lowest main-lane rating; a lane without a main-lane starter counts as weakest (-1).
+        /// Ties: lane config order.
         /// </summary>
-        public void Rollover(int year)
-        {
-            var t = Config.talent;
-            var all = new List<Player>();
-            foreach (var c in Clubs) all.AddRange(c.Team.Roster);
-            all.AddRange(FreeAgents);
-            foreach (var p in all) Growth.AdvanceYear(p);
-            foreach (var c in Clubs)
-                foreach (var p in new List<Player>(c.Team.Roster))
-                {
-                    var pid = p.Id;
-                    if (Talent.RetiresSigned(p, () => Keys.U01("ret", year, pid))) c.Team.RemovePlayer(p);
-                }
-            foreach (var p in new List<Player>(FreeAgents))
-            {
-                var pid = p.Id;
-                if (Talent.RetiresFree(p, () => Keys.U01("ret", year, pid))) FreeAgents.Remove(p);
-            }
-            float mu = Talent.SupplyMean(LeaguePopularity());
-            var rng = Keys.Stream("supply", year);
-            var youth = new HashSet<long>();
-            for (int i = 0; i < t.youthCount; i++)
-            {
-                var p = Talent.Generate(rng, Players.lanes[rng.NextInt(0, Players.lanes.Length)].id, t.youthAgeMin, t.youthAgeMax, mu);
-                youth.Add(p.Id); FreeAgents.Add(p);
-            }
-            for (int i = 0; i < t.freeCount; i++)
-                FreeAgents.Add(Talent.Generate(rng, Players.lanes[rng.NextInt(0, Players.lanes.Length)].id, t.freeAgeMin, t.freeAgeMax, mu));
-            Talent.ApplyPoolCap(FreeAgents, p => youth.Contains(p.Id));
-            foreach (var c in Clubs)
-            {
-                if (c.IsPlayer) { while (c.Team.Roster.Count < Config.ai.minRoster) EmergencySign(c); continue; }
-                foreach (var lane in MissingLanes(c))
-                {
-                    if (c.Team.Roster.Count >= Config.ai.maxRoster) break;
-                    var p = BestFree(new[] { lane });
-                    if (p != null) Sign(c, p, YearsFor(p, youth));
-                }
-                while (c.Team.Roster.Count < Config.ai.fillRoster)
-                {
-                    var weakest = WeakestLane(c);
-                    var p = BestFree(new[] { weakest }) ?? BestFree(null);
-                    if (p == null) break;
-                    Sign(c, p, YearsFor(p, youth));
-                }
-                while (c.Team.Roster.Count < Config.ai.minRoster) EmergencySign(c);
-            }
-            Talent.ApplyPoolCap(FreeAgents, null);
-            foreach (var c in Clubs) if (!c.IsPlayer) Ai.PickLineup(c);
-            Invalidate();
-        }
-
-        private int YearsFor(Player p, HashSet<long> youth) => youth.Contains(p.Id) ? Config.talent.youthContract : Config.talent.freeContract;
-
-        private string WeakestLane(Club c)
+        public string WeakestLane(Club c)
         {
             string worst = null; float w = float.PositiveInfinity;
             foreach (var l in Players.lanes)
@@ -921,8 +977,10 @@ namespace EsportsManager.Leagues
                 sb.Append('P').Append(p.Id);
                 foreach (var v in p.GetRadar(p.MainLane)) sb.Append(',').Append(R6(v));
                 for (int k = 0; k < 3; k++) sb.Append(',').Append(R6(p.GetFocus(k)));
-                sb.Append(',').Append(R6(p.Mood)).Append(',').Append(R6(p.Stress)).Append(',').Append(p.ContractYearsLeft).Append(';');
+                sb.Append(',').Append(R6(p.Mood)).Append(',').Append(R6(p.Stress)).Append(',').Append(p.ContractYearsLeft)
+                    .Append(',').Append(p.Salary).Append(',').Append(R6(Economy.Honor(p))).Append(';');
             }
+            sb.Append("WI").Append(Math.Round(WageIndex, 9).ToString("R", CultureInfo.InvariantCulture));
             ulong h = KeyedRandom.HashString(sb.ToString());
             return h.ToString("x16");
         }

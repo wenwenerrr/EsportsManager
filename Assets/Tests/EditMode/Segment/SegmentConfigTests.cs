@@ -16,7 +16,7 @@ namespace EsportsManager.Tests.Segments
             + "'training':{'intensity':1},"
             + "'stream':{'cap':2},"
             + "'business':{'weight_popularity':1.5,'weight_lane_score':0.5,'weight_looks':1,'max_probability':0.4,'base_amount':5000,'amount_per_popularity':100,'amount_per_looks':80,'random_range':0.2,'club_share':0.7,'heat_cap':1},"
-            + "'sponsorship':{'weight_club_popularity':1,'weight_win_rate':1,'max_success_rate':0.8,'random_spread':0.1,'min_chance':0.05,'max_chance':0.9,'base_amount':6000,'amount_per_club_popularity':100,'duration_segments':4,'max_attempts_per_segment':3,'max_active_contracts':3},"
+            + "'sponsorship':{'base_chance':0,'weight_club_popularity':1,'weight_win_rate':1,'max_success_rate':0.8,'random_spread':0.1,'min_chance':0.05,'max_chance':0.9,'base_amount':6000,'amount_per_club_popularity':100,'duration_segments':4,'max_attempts_per_segment':3,'max_active_contracts':3},"
             + "'mood':{'result':8,'play':4,'salary':10,'chemistry':5,'stress':6,'regression':0.05,'neutral':50,'high_stress_threshold':70,'random_range':0.15},"
             + "'stress':{'training':6,'match':2,'loss':3,'business':4,'rest':15,'stream':3,'recovery':4,'random_range':0.1}}").Replace('\'', '"');
 
@@ -142,7 +142,11 @@ namespace EsportsManager.Tests.Segments
             Assert.AreEqual(8, c.actionPoints.perSegment);
             Assert.AreEqual(2, c.actionPoints.maxPerPlayer);
             Assert.AreEqual(1f, c.training.intensity);
-            Assert.AreEqual(9500, c.sponsorship.baseAmount);  // v3
+            Assert.AreEqual(11000, c.sponsorship.baseAmount);  // economy.md rev 3 F8 c0
+            Assert.AreEqual(5, c.sponsorship.durationSegments); // F8: 5 segments
+            Assert.AreEqual(0.25f, c.sponsorship.baseChance);   // F8 z0
+            Assert.AreEqual(0f, c.sponsorship.weightWinRate);   // D4: no results term
+            Assert.AreEqual(10000, c.business.baseAmount);      // F8: business x2
             Assert.AreEqual(3, c.sponsorship.maxAttemptsPerSegment); // v3.2
             Assert.AreEqual(3, c.sponsorship.maxActiveContracts);    // v3.2
             Assert.AreEqual(4f, c.stress.recovery);           // v3
@@ -160,7 +164,7 @@ namespace EsportsManager.Tests.Segments
             Assert.AreEqual(0f, c.stress.stream); // v3.1: streaming no longer relieves stress
             Assert.AreEqual(0.4f, c.business.maxProbability);
             Assert.AreEqual(0.7f, c.business.clubShare);
-            Assert.AreEqual(0.8f, c.sponsorship.maxSuccessRate);
+            Assert.AreEqual(0.5f, c.sponsorship.maxSuccessRate); // F8 z1
         }
     }
 }

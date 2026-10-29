@@ -93,6 +93,13 @@ namespace EsportsManager.UI
                 case NewsKind.FireSale: body = string.Format(UiStrings.NewsFireSaleFormat, n.ClubName, n.PlayerName, UiKit.N0(n.Amount)); break;
                 case NewsKind.Loan: body = string.Format(UiStrings.NewsLoanFormat, n.ClubName, UiKit.N0(n.Amount)); break;
                 case NewsKind.Specialty: body = string.Format(UiStrings.NewsSpecialtyFormat, n.ClubName, n.PlayerName, s.SpecialtyName(n.Key)); break;
+                case NewsKind.Poach: body = string.Format(UiStrings.NewsPoachFormat, n.ClubName, n.OtherClubName, n.PlayerName, UiKit.N0(n.Amount)); break;
+                case NewsKind.AuctionBuy:
+                    body = n.OtherClubId >= 0 ? string.Format(UiStrings.NewsAuctionListedFormat, n.ClubName, n.OtherClubName, n.PlayerName, UiKit.N0(n.Amount))
+                        : string.Format(UiStrings.NewsAuctionLeagueFormat, n.ClubName, n.PlayerName, UiKit.N0(n.Amount));
+                    break;
+                case NewsKind.ForcedListing: body = string.Format(UiStrings.NewsForcedListingFormat, n.ClubName, n.PlayerName); break;
+                case NewsKind.Retain: body = string.Format(UiStrings.NewsRetainFormat, n.ClubName, n.PlayerName, n.OtherClubName); break;
                 default: body = string.Format(UiStrings.NewsChampionFormat, n.ClubName, UiStrings.EventName(n.Key)); break;
             }
             return when + UiStrings.PartSeparator + body;

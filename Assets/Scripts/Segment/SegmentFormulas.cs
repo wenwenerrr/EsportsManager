@@ -31,6 +31,8 @@ namespace EsportsManager.Segments
         public float Rest;
         /// <summary>Stream points.</summary>
         public int Streams;
+        /// <summary>Extra raw stress inside the bracket (economy.md champion fatigue: +6 x f for starters), scaled like the other terms.</summary>
+        public float Extra;
     }
 
     /// <summary>
@@ -83,14 +85,15 @@ namespace EsportsManager.Segments
         public static int ClubShare(SegmentConfig cfg, int amount) => RoundMoney(amount * (double)cfg.business.clubShare);
 
         /// <summary>
-        /// Sponsorship success chance (numbers.md 4.12): clamp(WS(club popularity, recent win rate)/100 x z_max + noise, min, max).
+        /// Sponsorship success chance (numbers.md 4.12; economy.md F8): clamp(z0 + WS(club popularity, recent win rate)/100 x z_max + noise,
+        /// min, max). The shipped config sets the win-rate weight to 0 (economy.md D4: no direct results term).
         /// <paramref name="noise"/> is U(-spread, +spread) already rolled.
         /// </summary>
         public static float SponsorChance(SegmentConfig cfg, float clubPopularity, float recentWinRate, float noise)
         {
             var s = cfg.sponsorship;
             float ws = (s.weightClubPopularity * clubPopularity + s.weightWinRate * recentWinRate) / (s.weightClubPopularity + s.weightWinRate);
-            float chance = ws / 100f * s.maxSuccessRate + noise;
+            float chance = s.baseChance + ws / 100f * s.maxSuccessRate + noise;
             return chance < s.minChance ? s.minChance : (chance > s.maxChance ? s.maxChance : chance);
         }
 
@@ -109,7 +112,7 @@ namespace EsportsManager.Segments
         {
             var s = cfg.stress;
             float raw = s.training * t.TrainingIntensity + MatchStressRaw(cfg, t.Matches, t.Losses) + s.business * t.Business
-                - s.rest * t.Rest - s.stream * t.Streams;
+                - s.rest * t.Rest - s.stream * t.Streams + t.Extra;
             return raw * p.GetTraitMultiplier(PlayerEffectKeys.StressGain) * randomFactor - s.recovery;
         }
 

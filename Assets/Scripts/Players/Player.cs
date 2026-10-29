@@ -188,6 +188,17 @@ namespace EsportsManager.Players
         public float CompatibilityWith(Player other)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
+            // Traits never change, so the pair value is memoised per partner (hot path: mood every segment for every club).
+            if (_compat != null && _compat.TryGetValue(other, out float cached)) return cached;
+            float v = ComputeCompatibility(other);
+            (_compat ?? (_compat = new Dictionary<Player, float>())).Add(other, v);
+            return v;
+        }
+
+        private Dictionary<Player, float> _compat;
+
+        private float ComputeCompatibility(Player other)
+        {
             float negativeFactor = PairEffect(other, PlayerEffectKeys.NegativeCompatImpact);
             float sum = 0f;
             for (int i = 0; i < 2; i++)

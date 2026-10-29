@@ -328,12 +328,25 @@ namespace EsportsManager.Players
         /// <example><code>float m = config.GetEffectMultiplier("diligent", "training_gain"); // 1.2</code></example>
         public float GetEffectMultiplier(string traitId, string effectKey)
         {
-            if (traitEffects == null) return 1f;
-            for (int i = 0; i < traitEffects.Length; i++)
-                if (traitEffects[i].traitId == traitId && traitEffects[i].effectKey == effectKey)
-                    return traitEffects[i].multiplier;
-            return 1f;
+            if (traitEffects == null || traitId == null || effectKey == null) return 1f;
+            // Lookup table built on first use (hot path: mood / stress / compatibility every segment for every club). Rebuilt when
+            // the array is replaced; the entries themselves are only edited by tests before their first lookup.
+            if (_effectCache == null || !ReferenceEquals(_effectCacheSource, traitEffects))
+            {
+                _effectCache = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, TraitEffectDef>>();
+                foreach (var e in traitEffects)
+                {
+                    if (e?.traitId == null || e.effectKey == null) continue;
+                    if (!_effectCache.TryGetValue(e.traitId, out var byKey)) _effectCache[e.traitId] = byKey = new System.Collections.Generic.Dictionary<string, TraitEffectDef>();
+                    if (!byKey.ContainsKey(e.effectKey)) byKey[e.effectKey] = e; // first match wins, as the linear scan did
+                }
+                _effectCacheSource = traitEffects;
+            }
+            return _effectCache.TryGetValue(traitId, out var m) && m.TryGetValue(effectKey, out var def) ? def.multiplier : 1f;
         }
+
+        [NonSerialized] private System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, TraitEffectDef>> _effectCache;
+        [NonSerialized] private TraitEffectDef[] _effectCacheSource;
 
         /// <summary>Compatibility h of an unordered trait pair; 0 when the table has no entry.</summary>
         /// <example><code>float h = config.GetPairCompatibility("assertive", "gentle"); // 0.5</code></example>

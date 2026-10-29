@@ -31,8 +31,10 @@ namespace EsportsManager.Leagues
         public LeagueNewsConfig news;
         /// <summary>Talent system (talent.md).</summary>
         public TalentConfig talent;
-        /// <summary>Economy pieces this story needs (economy.md F1, F4, F5, F7); the full economy is Story 005.</summary>
+        /// <summary>Economy (economy.md rev 3: F1-F7, honor, wage index, satisfaction, champion fatigue).</summary>
         public LeagueEconomyConfig economy;
+        /// <summary>Transfer window (transfer.md rev 3).</summary>
+        public TransferConfig transfer;
         /// <summary>Two-choice event id to F5 rule kind (leave / money / spend / conflict).</summary>
         public ChoiceRuleDef[] choiceRules;
 
@@ -65,6 +67,18 @@ namespace EsportsManager.Leagues
             if (t.poolCap < 0 || t.youthCount < 0 || t.freeCount < 0) Fail("talent counts must be >= 0.");
             if (economy.youngYearFactors == null || economy.youngYearFactors.Length != 3 || economy.oldYearFactors == null || economy.oldYearFactors.Length != 3)
                 Fail("economy year factors need 3 values (1, 2, 3 years).");
+            var e = economy;
+            if (e.honorSplit == null || e.honorSplit.Length != clubCount || e.honorFinals == null || e.honorFinals.Length < 4)
+                Fail("economy honor tables: honor_split needs club_count values, honor_finals at least 4.");
+            if (e.wiMin <= 0f || e.wiMax < e.wiMin || e.wiRef <= 0f || e.wiKappa < 0f) Fail("economy wage index: 0 < wi_min <= wi_max, wi_ref > 0, wi_kappa >= 0.");
+            if (e.satisfactionMin > 0f || e.satisfactionMax < 0f || e.satisfactionDeadZone < 0f) Fail("economy satisfaction bounds must bracket 0.");
+            if (e.fatigueSegments < 0 || e.renegRatio <= 0f) Fail("economy fatigue_segments >= 0 and reneg_ratio > 0.");
+            var x = transfer;
+            if (x == null) Fail("transfer is missing.");
+            if (x.poachOffersPerClub < 0 || x.lotsYouth < 0 || x.lotsFree < 0 || x.maxListed < 1) Fail("transfer counts must be >= 0 (max_listed >= 1).");
+            if (x.stepMin <= 0f || x.stepPct < 0f || x.priceRound <= 0f) Fail("transfer bid step must be positive.");
+            if (x.feeMax < x.feeMin || x.listedStartMax < x.listedStartMin) Fail("transfer ranges must be min <= max.");
+            if (x.resignTarget < ai.minRoster || x.resignTarget > ai.maxRoster) Fail("transfer.resign_target must be within the roster limits.");
             if (choiceRules == null) Fail("choice_rules is missing.");
             foreach (var r in choiceRules)
                 if (r.kind != "leave" && r.kind != "money" && r.kind != "spend" && r.kind != "conflict") Fail("choice_rules kind '" + r.kind + "' is unknown.");
@@ -161,6 +175,50 @@ namespace EsportsManager.Leagues
         public float[] youngYearFactors, oldYearFactors;
         public float salaryRandom;
         public int signYears;
+        /// <summary>F2 honor by place: splits (one per place) and finals (one per finals place).</summary>
+        public float[] honorSplit, honorFinals;
+        /// <summary>F3 wage index: kappa, R_ref, clamp.</summary>
+        public float wiKappa, wiRef, wiMin, wiMax;
+        /// <summary>Salary satisfaction clamp and dead zone (mood m_salary term).</summary>
+        public float satisfactionMin, satisfactionMax, satisfactionDeadZone;
+        /// <summary>F6 renegotiation trigger ratio and the mood drop on a refusal.</summary>
+        public float renegRatio, renegMoodDrop;
+        /// <summary>F7 debt line (share of yearly wages) for the forced listing.</summary>
+        public float debtLine;
+        /// <summary>Champion fatigue: strength of a finals / split title, duration, starter stress per f, business factor per f, media points per f.</summary>
+        public float fatigueFinals, fatigueSplit;
+        public int fatigueSegments;
+        public float fatigueStress, fatigueBusiness, fatigueMediaPoints;
+    }
+
+    /// <summary>transfer.md rev 3 tuning (see league_config.json "transfer").</summary>
+    [Serializable]
+    public sealed class TransferConfig
+    {
+        /// <summary>Bench renewal threshold value / (salary / WI).</summary>
+        public float benchRenew;
+        /// <summary>AI renewal years: age &lt;= young -> 3, &lt;= mid -> 2, else 1; starters older than age_test also face the bench test.</summary>
+        public int renewYoungMaxAge, renewMidMaxAge, renewAgeTestAbove;
+        /// <summary>Poach offers per AI club per year (rounds), fee range, score bonuses, contract years.</summary>
+        public int poachOffersPerClub;
+        public float feeMin, feeMax, poachWeakLaneBonus, poachWantsBonus;
+        public int poachContractYears;
+        /// <summary>Retain raise multiplier, AI accept-fee line (x value), AI retain test (new salary &lt;= value / ratio).</summary>
+        public float retainMult, aiAcceptFee, retainValueRatio;
+        /// <summary>League lots: best-estimate youth and best-rated free agents.</summary>
+        public int lotsYouth, lotsFree;
+        /// <summary>F2 start prices.</summary>
+        public float leagueStartFactor, listedStartMin, listedStartMax, listedContractBase, listedContractPerYear;
+        /// <summary>F3 bid step and price rounding.</summary>
+        public float stepMin, stepPct, priceRound;
+        /// <summary>F4 AI max bid.</summary>
+        public float bidBase, bidNeed, bidAggression, bidNoise;
+        /// <summary>AI spending reserve in segments of wages (auction bids, three-choice rule 3 / 4).</summary>
+        public float reserveSegments;
+        /// <summary>Most players one club lists.</summary>
+        public int maxListed;
+        /// <summary>Contracts of auction buys (youth / free), re-signs and the re-sign target roster.</summary>
+        public int auctionYouthContract, auctionFreeContract, resignContract, resignTarget;
     }
 
     /// <summary>One F5 rule mapping.</summary>
@@ -227,7 +285,7 @@ namespace EsportsManager.Leagues
         {
             public string[] club_names; public int club_count; public GenDto generation; public AiDto ai; public TacDto tactics;
             public StyleDto style; public OfferDto offers; public NewsDto news; public TalentDto talent; public EconDto economy;
-            public RuleDto[] choice_rules;
+            public XferDto transfer; public RuleDto[] choice_rules;
         }
         [Serializable] private sealed class GenDto
         {
@@ -283,6 +341,29 @@ namespace EsportsManager.Leagues
             public float[] young_year_factors, old_year_factors;
             public float salary_random;
             public int sign_years;
+            public float[] honor_split, honor_finals;
+            public float wi_kappa, wi_ref, wi_min, wi_max;
+            public float satisfaction_min, satisfaction_max, satisfaction_dead_zone;
+            public float reneg_ratio, reneg_mood_drop, debt_line;
+            public float fatigue_finals, fatigue_split;
+            public int fatigue_segments;
+            public float fatigue_stress, fatigue_business, fatigue_media_points;
+        }
+        [Serializable] private sealed class XferDto
+        {
+            public float bench_renew;
+            public int renew_young_max_age, renew_mid_max_age, renew_age_test_above;
+            public int poach_offers_per_club;
+            public float fee_min, fee_max, poach_weak_lane_bonus, poach_wants_bonus;
+            public int poach_contract_years;
+            public float retain_mult, ai_accept_fee, retain_value_ratio;
+            public int lots_youth, lots_free;
+            public float league_start_factor, listed_start_min, listed_start_max, listed_contract_base, listed_contract_per_year;
+            public float step_min, step_pct, price_round;
+            public float bid_base, bid_need, bid_aggression, bid_noise;
+            public float reserve_segments;
+            public int max_listed;
+            public int auction_youth_contract, auction_free_contract, resign_contract, resign_target;
         }
         [Serializable] private sealed class RuleDto { public string event_id, kind; }
 #pragma warning restore 0649

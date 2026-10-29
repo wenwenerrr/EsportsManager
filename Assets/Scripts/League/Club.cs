@@ -52,6 +52,28 @@ namespace EsportsManager.Leagues
         public ClubStyle From, To;
     }
 
+    /// <summary>Yearly totals of one club for the wage index (economy.md F3: income excludes transfers, fire sales, loans, capital).</summary>
+    public sealed class ClubLedger
+    {
+        /// <summary>Livestream + business + sponsorship + event income + prizes, yuan.</summary>
+        public long Income;
+        /// <summary>Wages paid, yuan.</summary>
+        public long Wages;
+        /// <summary>Event expenses, yuan.</summary>
+        public long EventExpenses;
+        /// <summary>Prizes (part of <see cref="Income"/>), yuan.</summary>
+        public long Prizes;
+    }
+
+    /// <summary>A champion-fatigue window (economy.md 冠军疲劳): strength f on global segments [From, To] (year x 12 + index).</summary>
+    public sealed class FatigueSpan
+    {
+        /// <summary>First / last global segment index (inclusive).</summary>
+        public int From, To;
+        /// <summary>Strength f (finals 1, split 0.5).</summary>
+        public float Strength;
+    }
+
     /// <summary>
     /// One club of the league (design/gdd/league.md "同一套模型"): the SAME data and formulas for the player club and the AI clubs
     /// -- a <see cref="Team"/> (roster, lineup, familiarity, popularity, funds), its own <see cref="SegmentRunner"/> (sponsor
@@ -103,6 +125,29 @@ namespace EsportsManager.Leagues
         /// Champion-fatigue media obligation: action points to stream this segment (economy.md; Story 005 sets it). 0 until then.
         /// </summary>
         public int MediaObligationPoints { get; set; }
+        /// <summary>This year's totals for the wage index.</summary>
+        public ClubLedger Ledger { get; internal set; } = new ClubLedger();
+        /// <summary>Last year's totals (year review).</summary>
+        public ClubLedger LastLedger { get; internal set; }
+        /// <summary>Champion-fatigue windows (economy.md).</summary>
+        public List<FatigueSpan> Fatigue { get; } = new List<FatigueSpan>();
+
+        /// <summary>Fatigue strength f on a global segment (overlaps take the largest), 0 when none.</summary>
+        public float FatigueAt(int globalSegment)
+        {
+            float f = 0f;
+            foreach (var s in Fatigue) if (s.From <= globalSegment && globalSegment <= s.To && s.Strength > f) f = s.Strength;
+            return f;
+        }
+
+        /// <summary>Segments left (from <paramref name="globalSegment"/> on, inclusive) of the strongest running fatigue window, 0 when none.</summary>
+        public int FatigueSegmentsLeft(int globalSegment)
+        {
+            int left = 0;
+            foreach (var s in Fatigue) if (s.From <= globalSegment && globalSegment <= s.To) left = System.Math.Max(left, s.To - globalSegment + 1);
+            return left;
+        }
+
         /// <summary>Placings of this year's events (calendar order).</summary>
         public List<int> YearPlacings { get; } = new List<int>();
         /// <summary>Finals place of the previous year (0 = none yet).</summary>

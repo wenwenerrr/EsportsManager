@@ -67,6 +67,21 @@ namespace EsportsManager.Segments
         private readonly GrowthSystem _growth;
         private readonly IRandomSource _noise;
 
+        /// <summary>
+        /// Salary satisfaction source for the mood m_salary term (economy.md rev 3: market salary with a dead zone, set by the
+        /// league). Null = numbers.md 4.6 (expected = Player.CalculateSalaryWithoutRandom, bounded to [-1, 1]).
+        /// </summary>
+        public Func<Player, float> SalarySatisfactionSource { get; set; }
+
+        /// <summary>Champion fatigue of the next segment: extra raw stress for each starter (economy.md: 6 x f). Set before BeginSegment.</summary>
+        public float FatigueStarterStress { get; set; }
+
+        /// <summary>Champion fatigue: multiplier of a starter's business-offer probability (1 + f), result capped at 1. Set before BeginSegment.</summary>
+        public float FatigueBusinessFactor { get; set; } = 1f;
+
+        /// <summary>Champion fatigue: stream points the club must spend this segment on its most popular starters (2 x f; shown as reserved).</summary>
+        public int MediaObligationPoints { get; set; }
+
         /// <summary>Creates a runner. Validates the config; all dependencies are injected.</summary>
         /// <param name="rng">Random source for offers, sponsorship and the R factors (the team keeps its own).</param>
         /// <param name="events">Optional random-event engine (Story 006); null = no events (Story 003 behaviour).</param>
@@ -146,7 +161,9 @@ namespace EsportsManager.Segments
             foreach (var p in _team.Roster)
             {
                 float trigger = _rng.NextFloat(0f, 1f);
-                if (!(trigger < SegmentFormulas.BusinessProbability(_cfg, p))) continue;
+                float prob = SegmentFormulas.BusinessProbability(_cfg, p);
+                if (FatigueBusinessFactor != 1f && _team.LaneOf(p) != null) prob = Math.Min(1f, prob * FatigueBusinessFactor);
+                if (!(trigger < prob)) continue;
                 float r = _rng.NextFloat(1f - b.randomRange, 1f + b.randomRange);
                 int amount = SegmentFormulas.BusinessAmount(_cfg, p, r);
                 _offers.Add(new BusinessOffer(_nextOfferId++, p.Id, amount, SegmentFormulas.ClubShare(_cfg, amount)));
@@ -351,7 +368,7 @@ namespace EsportsManager.Segments
                     TrainingGainsLow = PreviewGains(plan, p, _growth != null ? _growth.NoiseLow : 1f),
                     TrainingGainsHigh = PreviewGains(plan, p, _growth != null ? _growth.NoiseHigh : 1f),
                     FocusAfter = PreviewFocus(plan, p),
-                    StressDelta = SegmentFormulas.StressDelta(_cfg, p, StressFor(ps, starter ? matches : 0, starter ? losses : 0), 1f),
+                    StressDelta = SegmentFormulas.StressDelta(_cfg, p, StressFor(ps, starter ? matches : 0, starter ? losses : 0, starter), 1f),
                     MoodDelta = SegmentFormulas.MoodDelta(_cfg, p, MoodFor(p, starter, result, starters), 1f),
                     LivestreamIncome = _team.LivestreamIncome(p, ps.StreamPoints),
                 };
@@ -498,7 +515,7 @@ namespace EsportsManager.Segments
                     rest += mods[k].RestMult;
                     foreach (var fx in mods[k].Fx) if (fx.Type == EffectType.RestMultiplier) fx.Applied = (fx.Value - 1f) * _cfg.stress.rest;
                 }
-                var si = StressFor(ps, pm, pl); si.Rest = rest;
+                var si = StressFor(ps, pm, pl, starter); si.Rest = rest;
                 float stressDelta = SegmentFormulas.StressDelta(_cfg, p, si, stressR);
                 float moodDelta = SegmentFormulas.MoodDelta(_cfg, p, MoodFor(p, starter, pr, starters), moodR);
                 p.Stress += stressDelta;
@@ -669,17 +686,18 @@ namespace EsportsManager.Segments
             return f;
         }
 
-        private StressInputs StressFor(PlayerSegmentSummary ps, int matches, int losses) => new StressInputs
+        private StressInputs StressFor(PlayerSegmentSummary ps, int matches, int losses, bool starter) => new StressInputs
         {
+            Extra = starter ? FatigueStarterStress : 0f,
             TrainingIntensity = ps.TrainPoints * _cfg.training.intensity,
             Matches = matches, Losses = losses,
             Business = ps.BusinessPoints, Rest = ps.RestPoints, Streams = ps.StreamPoints,
         };
 
-        private static MoodInputs MoodFor(Player p, bool starter, int result, List<Player> starters) => new MoodInputs
+        private MoodInputs MoodFor(Player p, bool starter, int result, List<Player> starters) => new MoodInputs
         {
             Result = result, IsStarter = starter,
-            SalarySatisfaction = SalarySatisfaction(p), Compatibility = MeanCompatibility(p, starters),
+            SalarySatisfaction = SalarySatisfactionSource != null ? SalarySatisfactionSource(p) : SalarySatisfaction(p), Compatibility = MeanCompatibility(p, starters),
         };
 
         private static void MatchCounts(in SegmentContext ctx, out int matches, out int losses, out int result)

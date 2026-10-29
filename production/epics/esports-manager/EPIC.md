@@ -15,7 +15,7 @@
 | 002 | 战队三角和默契 | Logic | Complete | N/A (minimal) |
 | 003 | 赛段行动逻辑 | Logic | Complete | N/A (minimal) |
 | 004 | 比赛模拟、战报和积分榜 | Logic | Complete | N/A (minimal) |
-| 005 | 年度循环、转会期与经济（v4 重写） | Integration | Ready | N/A (minimal) |
+| 005 | 年度循环、转会期与经济（v4 重写） | Integration | Implemented (close at playtest) | N/A (minimal) |
 | 006 | 意外事件 | Logic | Complete | N/A (minimal) |
 | 007 | 破产判定和年终总结 | UI | Ready | N/A (minimal) |
 | 008 | 选手模型升级（按 numbers.md） | Logic | Complete | N/A (minimal) |

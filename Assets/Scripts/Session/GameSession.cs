@@ -338,6 +338,7 @@ namespace EsportsManager.Session
             Events = c.Events;
             if (!string.IsNullOrWhiteSpace(name)) SetClubName(name);
             World.BeginSegment();
+            ReserveMediaPoints();
             return c;
         }
 
@@ -410,15 +411,17 @@ namespace EsportsManager.Session
         {
             if (!AwaitingNext) throw new InvalidOperationException("Resolve the open segment first.");
             if (Season != null && Season.Phase != EventPhase.None) throw new InvalidOperationException("Finish and acknowledge the event first.");
+            if (InTransferWindow) throw new InvalidOperationException("Finish the transfer window first.");
             AwaitingNext = false;
             if (World != null) World.BeginSegment(); else Runner.BeginSegment();
+            ReserveMediaPoints();
         }
 
         /// <summary>BeginNext without throwing: false + EventPending / SegmentNotOpen.</summary>
         public bool TryBeginNext(out PlanError error)
         {
             error = default;
-            if (Season != null && Season.Phase != EventPhase.None) { error = new PlanError { Code = PlanErrorCode.EventPending }; return false; }
+            if (Season != null && Season.Phase != EventPhase.None || InTransferWindow) { error = new PlanError { Code = PlanErrorCode.EventPending }; return false; }
             if (!AwaitingNext) { error = new PlanError { Code = PlanErrorCode.SegmentNotOpen }; return false; }
             BeginNext();
             return true;
@@ -429,6 +432,7 @@ namespace EsportsManager.Session
         {
             var r = Resolve();
             if (Season != null && Season.Phase != EventPhase.None) Season.AutoPlay();
+            AutoCompleteTransferWindow();
             BeginNext();
             return r;
         }
@@ -527,7 +531,7 @@ namespace EsportsManager.Session
         /// <summary>Removes the player's last assignment, else his last accepted offer. False when he has neither.</summary>
         public bool UndoLast(long playerId)
         {
-            for (int i = Plan.Assignments.Count - 1; i >= 0; i--)
+            for (int i = Plan.Assignments.Count - 1; i >= MediaReservedPoints; i--)
                 if (Plan.Assignments[i].PlayerId == playerId) { Plan = Copy(Plan, i, -1); return true; }
             var pending = Runner.GetState().PendingOffers;
             for (int i = Plan.AcceptedOfferIds.Count - 1; i >= 0; i--)
@@ -550,7 +554,53 @@ namespace EsportsManager.Session
             var c = new SegmentPlan();
             foreach (var a in Plan.ChoiceAnswers) c.AnswerChoice(a.ChoiceId, a.Option);
             Plan = c;
+            ReserveMediaPoints();
         }
+
+        // ------------------------------------------------------------ champion fatigue, transfer window (Story 005)
+
+        /// <summary>
+        /// Stream points of this segment's champion-fatigue media obligation (economy.md 冠军疲劳). They are put into the plan first
+        /// (the most popular starters, at most max_per_player each) and cannot be removed: the UI shows them as reserved points.
+        /// </summary>
+        public int MediaReservedPoints { get; private set; }
+
+        /// <summary>Fatigue strength f of the open segment (0 = none) and the segments it still lasts.</summary>
+        public float FatigueStrength => PlayerClub == null || Season == null ? 0f : PlayerClub.FatigueAt(World.GlobalSegment(Season.Year, Season.SegmentIndexInYear));
+
+        /// <summary>Segments of champion fatigue left, counting the open one.</summary>
+        public int FatigueSegmentsLeft => PlayerClub == null || Season == null ? 0 : PlayerClub.FatigueSegmentsLeft(World.GlobalSegment(Season.Year, Season.SegmentIndexInYear));
+
+        private void ReserveMediaPoints()
+        {
+            MediaReservedPoints = 0;
+            if (PlayerClub == null || Runner == null) return;
+            int need = Runner.MediaObligationPoints;
+            if (need <= 0) return;
+            var st = new List<Player>(Team.Starters());
+            st.Sort((a, b) => { int k = b.Popularity.CompareTo(a.Popularity); return k != 0 ? k : a.Id.CompareTo(b.Id); });
+            var c = new SegmentPlan();
+            int max = Runner.GetState().MaxPerPlayer;
+            foreach (var p in st)
+                for (int i = 0; i < max && need > 0; i++) { c.Stream(p.Id); need--; MediaReservedPoints++; }
+            foreach (var a in Plan.ChoiceAnswers) c.AnswerChoice(a.ChoiceId, a.Option);
+            Plan = c;
+        }
+
+        /// <summary>The open transfer window (after the finals until the player finishes re-signing), or null.</summary>
+        public TransferWindow Window => World?.Window;
+
+        /// <summary>True while the transfer window is open.</summary>
+        public bool InTransferWindow => World?.Window != null;
+
+        /// <summary>
+        /// Lets the AI rules decide the player club's remaining window decisions and closes the window (scripted auto-play,
+        /// tests). No-op outside the window.
+        /// </summary>
+        public void AutoCompleteTransferWindow() => World?.Window?.HandOverToAi();
+
+        /// <summary>The player club's funds runway in segments of wages ("还能撑几个赛段").</summary>
+        public int FundsRunway => PlayerClub == null ? int.MaxValue : TransferWindow.Runway(PlayerClub, SegmentsPerYear);
 
         // ------------------------------------------------------------ lineup, tactic, league (Story 004)
 

@@ -183,11 +183,11 @@ namespace EsportsManager.Tests.Talent
             var w = World(events: false);
             var ages = w.Clubs.SelectMany(c => c.Team.Roster).ToDictionary(p => p.Id, p => p.Age);
             int next = (int)w.Talent.NextId;
-            w.Rollover(0);
+            new TransferWindow(w, 0, -1).Continue(); // all-AI window: step 1 rollover ... step 7 re-sign
             foreach (var c in w.Clubs)
                 foreach (var p in c.Team.Roster)
                     if (ages.TryGetValue(p.Id, out int a)) Assert.AreEqual(a + 1, p.Age);
-            Assert.AreEqual(next + 11, (int)w.Talent.NextId, "8 youth + 3 free agents");
+            Assert.GreaterOrEqual((int)w.Talent.NextId, next + 11, "8 youth + 3 free agents (+ scouted players)");
             Assert.LessOrEqual(w.FreeAgents.Count, 35);
             Assert.IsTrue(w.Clubs.All(c => c.Team.Roster.Count >= 6));
         }

@@ -436,9 +436,9 @@ namespace EsportsManager.Tests.Leagues
         [Test]
         public void Performance_WarmUpPlusOneYear_MedianUnder20msPerLeagueYear()
         {
-            World(1).RunWarmUp(); // JIT warm-up
+            var jit = World(1); jit.RunWarmUp(); jit.RunAiYear(); // JIT warm-up (incl. the transfer window code)
             var times = new List<double>();
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 7; i++)
             {
                 var w = World(100 + i);
                 var sw = Stopwatch.StartNew();
@@ -449,7 +449,7 @@ namespace EsportsManager.Tests.Leagues
             }
             times.Sort();
             TestContext.WriteLine("ms per league-year: " + string.Join(", ", times.Select(t => t.ToString("F1"))));
-            Assert.LessOrEqual(times[2], 20.0);
+            Assert.LessOrEqual(times[3], 20.0, "median of 7");
         }
     }
 }
