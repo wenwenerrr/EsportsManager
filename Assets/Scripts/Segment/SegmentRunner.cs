@@ -73,14 +73,12 @@ namespace EsportsManager.Segments
         /// </summary>
         public Func<Player, float> SalarySatisfactionSource { get; set; }
 
-        /// <summary>Champion fatigue of the next segment: extra raw stress for each starter (economy.md: 6 x f). Set before BeginSegment.</summary>
-        public float FatigueStarterStress { get; set; }
-
-        /// <summary>Champion fatigue: multiplier of a starter's business-offer probability (1 + f), result capped at 1. Set before BeginSegment.</summary>
-        public float FatigueBusinessFactor { get; set; } = 1f;
-
-        /// <summary>Champion fatigue: stream points the club must spend this segment on its most popular starters (2 x f; shown as reserved).</summary>
-        public int MediaObligationPoints { get; set; }
+        /// <summary>
+        /// Media invitations of the open segment (economy.md 媒体邀约). Cleared by <see cref="BeginSegment"/>, then filled by the
+        /// league; a plan may accept each once (one club action point each). Their effects are applied by the league after
+        /// <see cref="Resolve"/> (the list stays readable until the next BeginSegment).
+        /// </summary>
+        public List<MediaInvitation> MediaInvitations { get; } = new List<MediaInvitation>();
 
         /// <summary>Creates a runner. Validates the config; all dependencies are injected.</summary>
         /// <param name="rng">Random source for offers, sponsorship and the R factors (the team keeps its own).</param>
@@ -157,12 +155,12 @@ namespace EsportsManager.Segments
         {
             if (_open) throw new InvalidOperationException("A segment is already open; call Resolve first.");
             _offers.Clear();
+            MediaInvitations.Clear();
             var b = _cfg.business;
             foreach (var p in _team.Roster)
             {
                 float trigger = _rng.NextFloat(0f, 1f);
                 float prob = SegmentFormulas.BusinessProbability(_cfg, p);
-                if (FatigueBusinessFactor != 1f && _team.LaneOf(p) != null) prob = Math.Min(1f, prob * FatigueBusinessFactor);
                 if (!(trigger < prob)) continue;
                 float r = _rng.NextFloat(1f - b.randomRange, 1f + b.randomRange);
                 int amount = SegmentFormulas.BusinessAmount(_cfg, p, r);
@@ -280,6 +278,13 @@ namespace EsportsManager.Segments
                 if (Find(offer.Value.PlayerId) == null)
                     return new PlanError { Code = PlanErrorCode.OfferPlayerLeft, OfferId = id, PlayerId = offer.Value.PlayerId };
                 Count(perPlayer, order, offer.Value.PlayerId);
+            }
+
+            var seenMedia = new HashSet<int>();
+            foreach (int id in plan.AcceptedMediaIds)
+            {
+                if (!MediaInvitations.Exists(m => m.Id == id)) return new PlanError { Code = PlanErrorCode.UnknownOffer, OfferId = id };
+                if (!seenMedia.Add(id)) return new PlanError { Code = PlanErrorCode.DuplicateOffer, OfferId = id };
             }
 
             foreach (var ans in plan.ChoiceAnswers)
@@ -492,6 +497,8 @@ namespace EsportsManager.Segments
                 long extra = (long)Math.Round(offer.ClubAmount * (double)(bm.BizMult - 1f), MidpointRounding.AwayFromZero);
                 foreach (var fx in bm.Fx) if (fx.Type == EffectType.BusinessMultiplier) fx.Applied = extra;
                 businessIncome += Math.Max(0L, offer.ClubAmount + extra);
+                var earner = Find(offer.PlayerId);
+                if (earner != null) earner.PersonalBusinessEarnings += Math.Max(0, offer.Amount - offer.ClubAmount);
             }
 
             // ---- 5. mood and stress (both deltas from segment-start values, then applied)
@@ -688,7 +695,6 @@ namespace EsportsManager.Segments
 
         private StressInputs StressFor(PlayerSegmentSummary ps, int matches, int losses, bool starter) => new StressInputs
         {
-            Extra = starter ? FatigueStarterStress : 0f,
             TrainingIntensity = ps.TrainPoints * _cfg.training.intensity,
             Matches = matches, Losses = losses,
             Business = ps.BusinessPoints, Rest = ps.RestPoints, Streams = ps.StreamPoints,

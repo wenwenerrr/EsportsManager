@@ -411,7 +411,7 @@ namespace EsportsManager.Tests.Leagues
         }
 
         [Test]
-        public void SelfRescue_AiSellsBenchThenBorrows_PlayerFlagsBankrupt()
+        public void SelfRescue_AiSellsBenchThenBorrows_PlayerEntersCrisis()
         {
             var w = World(events: false);
             var ai = w.Clubs[0];
@@ -427,7 +427,8 @@ namespace EsportsManager.Tests.Leagues
             w.TakeOver(new JobOffer { ClubId = 1, Tier = OfferTier.Mid }, pl.Name);
             pl.Team.Funds = -100000000L;
             w.FundsCheck(pl, 1);
-            Assert.IsTrue(pl.Bankrupt);
+            Assert.IsTrue(pl.InCrisis, "economy.md 财务危机: the player club gets a grace period");
+            Assert.IsFalse(pl.Bankrupt);
             Assert.AreEqual(0, pl.Debt, "no loan for the player");
         }
 

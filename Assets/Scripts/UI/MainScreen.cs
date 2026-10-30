@@ -36,7 +36,7 @@ namespace EsportsManager.UI
                 root.Add(banner);
             }
             if (!ui.CardsOnly) root.Add(BuildHeader(ui, team, pv));
-            if (!ui.CardsOnly && s.FatigueStrength > 0f) root.Add(BuildFatigue(ui));
+            if (!ui.CardsOnly) { var crisis = ui.CrisisBanner(); if (crisis != null) root.Add(crisis); }
 
             // Cards live in a ScrollView: when the window is shorter than the cards the area scrolls instead of
             // squeezing header / bottom bar (fixed regions never shrink).
@@ -170,20 +170,6 @@ namespace EsportsManager.UI
                 row.Add(cell);
             }
             b.Add(row);
-            return b;
-        }
-
-        /// <summary>Champion fatigue strip (economy.md 冠军疲劳): segments left, extra starter stress, reserved media points.</summary>
-        private static VisualElement BuildFatigue(GameUi ui)
-        {
-            var s = ui.Session;
-            var e = s.World.Config.economy;
-            var b = UiKit.Block(new Color(0.45f, 0.3f, 0.1f, 1f), 4);
-            b.name = "fatigue-indicator";
-            b.style.flexDirection = FlexDirection.Row; b.style.alignItems = Align.Center;
-            b.style.height = 28; b.style.flexShrink = 0; b.style.marginBottom = 6; b.style.paddingLeft = 10;
-            var t = UiKit.Lbl(UiStrings.FatigueTitle, 14, UiKit.Warn, true); t.style.marginRight = 10; t.style.flexShrink = 0; b.Add(t);
-            b.Add(UiKit.Ellipsis(UiKit.Lbl(string.Format(UiStrings.FatigueFormat, s.FatigueSegmentsLeft, UiKit.F1(e.fatigueStress * s.FatigueStrength), s.MediaReservedPoints), 13, UiKit.Text)));
             return b;
         }
 
@@ -480,6 +466,14 @@ namespace EsportsManager.UI
             msg.style.whiteSpace = WhiteSpace.NoWrap; msg.style.textOverflow = TextOverflow.Ellipsis;
             bar.Add(msg);
 
+            // Media invitations (economy.md 媒体邀约): reopen the pop-up to accept / decline
+            int media = ui.Session.MediaInvitations.Count;
+            if (media > 0 && !ui.MediaPopupOpen)
+            {
+                var mb = UiKit.Btn(string.Format(UiStrings.MediaBadgeFormat, media), ui.OpenMedia, ui.Session.UnansweredMedia().Count > 0 ? UiKit.Warn : UiKit.PanelLight);
+                mb.name = "media-badge";
+                bar.Add(mb);
+            }
             int unanswered = ui.Session.UnansweredOffers().Count;
             if (unanswered > 0 && !ui.OfferPopupOpen)
                 bar.Add(UiKit.Btn(string.Format(UiStrings.OffersBadgeFormat, unanswered), ui.OpenOffers, UiKit.Warn));

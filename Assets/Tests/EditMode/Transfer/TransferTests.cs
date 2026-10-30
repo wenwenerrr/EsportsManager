@@ -285,6 +285,81 @@ namespace EsportsManager.Tests.Transfer
             Assert.AreEqual(total - ylot.Price, w.Clubs.Sum(c => c.Team.Funds), "league lot money leaves the clubs");
         }
 
+        // ------------------------------------------------------------ playtest 2026-10-30: unsold listed players go to the league
+
+        private static Club Seller(LeagueWorld w)
+        {
+            var seller = w.Clubs[3];
+            foreach (var p in seller.Team.Roster.Where(p => seller.Team.LaneOf(p) == null).ToList()) { seller.Team.RemovePlayer(p); w.FreeAgents.Add(p); }
+            return seller;
+        }
+
+        private static AuctionLot RunUnsold(TransferWindow win, Club a, Club b, AuctionLot lot)
+        {
+            win.OpenLot(lot);
+            lot.Limits[a.Id] = 0; lot.Limits[b.Id] = 0;
+            Assert.IsTrue(win.RunLot(lot));
+            Assert.IsFalse(lot.Sold);
+            return lot;
+        }
+
+        [Test]
+        public void Auction_ListedUnsold_SoldToLeagueAtFireSalePrice_IntoFreePool_WithNews()
+        {
+            var (w, win, a, b) = Auction(-1);
+            var seller = Seller(w);
+            var q = AddPlayer(w, seller, "mid", 23, 55f);
+            long funds = seller.Team.Funds, price = w.Economy.FireSalePrice(q);
+            RunUnsold(win, a, b, win.ListedLot(seller, q, false));
+            Assert.IsNull(seller.Find(q.Id));
+            Assert.Contains(q, w.FreeAgents);
+            Assert.AreEqual(funds + price, seller.Team.Funds, "value x 0.6");
+            Assert.AreEqual(0, q.ContractYearsLeft);
+            Assert.IsTrue(win.UnsoldSales.Any(u => u.Player == q && u.Price == price));
+            var n = w.News.Last();
+            Assert.AreEqual(NewsKind.UnsoldSale, n.Kind); Assert.AreEqual(q.Name, n.PlayerName); Assert.AreEqual(price, n.Amount);
+        }
+
+        [Test]
+        public void Auction_ListedUnsold_SoldToLeague_NotSignableThisWindow()
+        {
+            // Arrange
+            var (w, win, a, b) = Auction(-1);
+            var seller = Seller(w);
+            var q = AddPlayer(w, seller, "mid", 23, 55f);
+            // Act
+            RunUnsold(win, a, b, win.ListedLot(seller, q, false));
+            // Assert: listing then re-signing him free would pocket value x 0.6 for nothing
+            Assert.Contains(q, w.FreeAgents);
+            Assert.IsFalse(win.SignablePool().Contains(q));
+        }
+
+        [Test]
+        public void Auction_ListedUnsold_RosterWouldDropBelow5_Stays()
+        {
+            var (w, win, a, b) = Auction(-1);
+            var seller = Seller(w);
+            seller.Team.RemovePlayer(seller.Team.Starters().First(p => p.MainLane != "mid"));
+            var q = AddPlayer(w, seller, "mid", 23, 55f);
+            Assert.AreEqual(5, seller.Team.Roster.Count);
+            RunUnsold(win, a, b, win.ListedLot(seller, q, false));
+            Assert.IsNotNull(seller.Find(q.Id), "roster >= 5 guard");
+            Assert.IsTrue(win.UnsoldKept.Any(u => u.Player == q));
+            Assert.IsFalse(w.News.Any(x => x.Kind == NewsKind.UnsoldSale));
+        }
+
+        [Test]
+        public void Auction_ListedUnsold_LastMainLanePlayer_Stays()
+        {
+            var (w, win, a, b) = Auction(-1);
+            var seller = Seller(w);
+            AddPlayer(w, seller, "top", 23, 55f);
+            var mid = seller.Team.Roster.Single(p => p.MainLane == "mid");
+            RunUnsold(win, a, b, win.ListedLot(seller, mid, false));
+            Assert.IsNotNull(seller.Find(mid.Id), "last-in-lane guard");
+            Assert.IsTrue(win.UnsoldKept.Any(u => u.Player == mid));
+        }
+
         // ------------------------------------------------------------ AC10 / AC11 / AC12 / AC16 player window
 
         private static (LeagueWorld w, TransferWindow win, Club me) PlayerWindow(long seed = Seed)
@@ -503,6 +578,7 @@ namespace EsportsManager.Tests.Transfer
                     case TransferWait.PoachResponse: win.RespondPoach(true); break;
                     case TransferWait.ThreeChoice: win.ChooseAuction(); break;
                     case TransferWait.AuctionBid: win.BidAuto(win.CurrentLot.StartPrice * 2); break;
+                    case TransferWait.AuctionReview: win.ConfirmAuction(); continue;
                     case TransferWait.Resign:
                         while (win.CanFinish() != TransferError.None)
                         {

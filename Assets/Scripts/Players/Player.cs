@@ -55,6 +55,12 @@ namespace EsportsManager.Players
         /// <summary>Salary (integer yuan per year).</summary>
         public int Salary { get; set; }
 
+        /// <summary>
+        /// The player's own share of the business deals he accepted (amount - club share, i.e. 30%), cumulative, yuan. He may
+        /// put it into the club in a financial crisis (economy.md 财务危机与解雇); reduced by what he chips in.
+        /// </summary>
+        public long PersonalBusinessEarnings { get; set; }
+
         /// <summary>Remaining contract years, always >= 0. Setting a negative value throws.</summary>
         public int ContractYearsLeft
         {

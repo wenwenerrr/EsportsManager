@@ -56,6 +56,7 @@ namespace EsportsManager.Tests.Transfer
                         break;
                     case TransferWait.ThreeChoice: win.ChooseSkip(); break;
                     case TransferWait.AuctionBid: win.BidExit(); break;
+                    case TransferWait.AuctionReview: win.ConfirmAuction(); break;
                     case TransferWait.Resign:
                         while (win.CanFinish() != TransferError.None)
                         {

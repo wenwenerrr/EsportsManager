@@ -93,7 +93,21 @@ namespace EsportsManager.UI
         public void ConfirmOffer(string name)
         {
             if (!Session.ChoosingOffer || SelectedOffer < 0) { Say(UiStrings.OfferPickFirst, true); return; }
+            bool rehire = Session.Dismissed;
             var c = Session.TakeOffer(SelectedOffer, name);
+            SelectedOffer = -1; OfferName = null;
+            if (rehire)
+            {
+                // economy.md 财务危机与解雇: the season goes on with the new club from its next segment
+                if (!Session.TryBeginNext(out var be)) { Stack.Reset(MainUiScreen()); Say(ErrorText(be), true); return; }
+                MarkScreenChange();
+                Stack.Reset(MainUiScreen());
+                PushStartPopups();
+                Banner = string.Format(UiStrings.FiredTakenFormat, c.Name);
+                Message = UiStrings.Hint; MessageIsError = false;
+                Refresh();
+                return;
+            }
             Stack.Reset(MainUiScreen());
             PushStartPopups();
             Message = string.Format(UiStrings.OfferTakenFormat, c.Name); MessageIsError = false;
@@ -132,6 +146,8 @@ namespace EsportsManager.UI
                 if (Stack.IsTop(ScreenId.ChoicePopup) && (CardsOnly || Session.PendingChoices.Count == 0)) popped = Stack.Pop();
                 else if (Stack.IsTop(ScreenId.OfferPopup) && (CardsOnly || Session.UnansweredOffers().Count == 0)) popped = Stack.Pop();
                 else if (Stack.IsTop(ScreenId.TrainingPopup) && (TrainingPlayer == null || Session.AwaitingNext)) popped = Stack.Pop();
+                else if (Stack.IsTop(ScreenId.NoticePopup) && Session.Notices.Count == 0) popped = Stack.Pop();
+                else if (Stack.IsTop(ScreenId.MediaPopup) && (CardsOnly || Session.MediaInvitations.Count == 0)) popped = Stack.Pop();
             }
             Stack.Render(Root);
         }
@@ -153,8 +169,10 @@ namespace EsportsManager.UI
         private void PushStartPopups()
         {
             ChoiceError = null;
+            if (Session.UnansweredMedia().Count > 0) Stack.Push(MediaUiScreen());
             if (Session.UnansweredOffers().Count > 0) Stack.Push(OfferUiScreen());
             if (UnansweredChoices().Count > 0) Stack.Push(ChoiceUiScreen());
+            PushNotices();
         }
 
         // ---- choice events (Story 006)
@@ -213,7 +231,8 @@ namespace EsportsManager.UI
         /// <summary>Closes every pop-up (debug demos that show the bare main screen).</summary>
         public void ClosePopups()
         {
-            while (Stack.IsTop(ScreenId.OfferPopup) || Stack.IsTop(ScreenId.ChoicePopup) || Stack.IsTop(ScreenId.TrainingPopup)) Stack.Pop();
+            while (Stack.IsTop(ScreenId.OfferPopup) || Stack.IsTop(ScreenId.ChoicePopup) || Stack.IsTop(ScreenId.TrainingPopup)
+                || Stack.IsTop(ScreenId.MediaPopup) || Stack.IsTop(ScreenId.NoticePopup)) Stack.Pop();
             Refresh();
         }
 
@@ -316,6 +335,7 @@ namespace EsportsManager.UI
             MarkScreenChange();
             // Segments never play matches (numbers.md 4.18); an event after this segment starts from the summary's "next step".
             Stack.Push(SummaryUiScreen());
+            PushNotices();
             Refresh();
         }
 
@@ -331,6 +351,7 @@ namespace EsportsManager.UI
 
         private void OpenNext()
         {
+            if (Session.Dismissed) { ShowFired(); return; }
             var phase = Session.EventPhase;
             if (phase == EventPhase.Prepare || phase == EventPhase.PlayoffPrep) { ShowEventScreen(PrepUiScreen(), UiStrings.PrepHint); return; }
             if (phase == EventPhase.Done) { ShowEventScreen(BracketUiScreen(), ""); return; }
@@ -373,6 +394,7 @@ namespace EsportsManager.UI
             int year = Session.Season?.Year ?? 1;
             if (!Session.TryAcknowledgeEvent(out var e)) { Say(ErrorText(e), true); return; }
             ScrollToReports = false;
+            if (Session.Dismissed) { Session.AutoCompleteTransferWindow(); ShowFired(); return; }
             if (Session.InTransferWindow) { ShowTransfer(); return; } // Story 005: the finals open the transfer window
             if (!Session.TryBeginNext(out var be))
             {
@@ -448,7 +470,7 @@ namespace EsportsManager.UI
 
         private void BuildOfferPopup(VisualElement root)
         {
-            if (ChoicePopupOpen) return; // a choice pop-up above it is shown first
+            if (ChoicePopupOpen || NoticeOpen) return; // a choice / notice pop-up above it is shown first
             var offers = Session.UnansweredOffers();
             var o = offers[0];
             var overlay = new VisualElement();

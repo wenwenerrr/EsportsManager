@@ -91,6 +91,7 @@ namespace EsportsManager.UI
                 case NewsKind.StyleSwitch: body = string.Format(UiStrings.NewsStyleFormat, n.ClubName, UiStrings.StyleName(n.From), UiStrings.StyleName(n.To)); break;
                 case NewsKind.Signing: body = string.Format(UiStrings.NewsSigningFormat, n.ClubName, n.PlayerName); break;
                 case NewsKind.FireSale: body = string.Format(UiStrings.NewsFireSaleFormat, n.ClubName, n.PlayerName, UiKit.N0(n.Amount)); break;
+                case NewsKind.UnsoldSale: body = string.Format(UiStrings.NewsUnsoldSaleFormat, n.ClubName, n.PlayerName, UiKit.N0(n.Amount)); break;
                 case NewsKind.Loan: body = string.Format(UiStrings.NewsLoanFormat, n.ClubName, UiKit.N0(n.Amount)); break;
                 case NewsKind.Specialty: body = string.Format(UiStrings.NewsSpecialtyFormat, n.ClubName, n.PlayerName, s.SpecialtyName(n.Key)); break;
                 case NewsKind.Poach: body = string.Format(UiStrings.NewsPoachFormat, n.ClubName, n.OtherClubName, n.PlayerName, UiKit.N0(n.Amount)); break;
@@ -200,9 +201,23 @@ namespace EsportsManager.UI
             UiKit.Pad(root, 8);
             var title = UiKit.Row(40);
             title.style.flexShrink = 0;
-            title.Add(UiKit.Lbl(UiStrings.OffersTitle, 22, UiKit.Text, true));
-            var sub = UiKit.Ellipsis(UiKit.Lbl(UiStrings.OffersSubtitle, 14, UiKit.TextDim)); sub.style.marginLeft = 14; title.Add(sub);
-            root.Add(title);
+            if (s.Dismissed)
+            {
+                // economy.md 财务危机与解雇: the 被解雇 header above the new offers
+                var w = s.World;
+                var fired = UiKit.Block(new Color(0.45f, 0.12f, 0.12f, 1f), 6);
+                fired.name = "fired-banner"; fired.style.flexShrink = 0; fired.style.marginBottom = 6; UiKit.Pad(fired, 10);
+                fired.Add(UiKit.Lbl(UiStrings.FiredTitle, 24, UiKit.Text, true));
+                var why = UiKit.Lbl(string.Format(UiStrings.FiredFormat, w.Clubs[w.FiredFromClubId].Name, UiKit.N0(w.FiredDeficit)), 14, UiKit.Text);
+                why.style.whiteSpace = WhiteSpace.Normal; why.style.marginTop = 4; fired.Add(why);
+                root.Add(fired);
+            }
+            else
+            {
+                title.Add(UiKit.Lbl(UiStrings.OffersTitle, 22, UiKit.Text, true));
+                var sub = UiKit.Ellipsis(UiKit.Lbl(UiStrings.OffersSubtitle, 14, UiKit.TextDim)); sub.style.marginLeft = 14; title.Add(sub);
+                root.Add(title);
+            }
 
             var scroll = new ScrollView(ScrollViewMode.Vertical);
             scroll.name = "offers-scroll";

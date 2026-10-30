@@ -324,7 +324,9 @@ namespace EsportsManager.Session
 
         /// <summary>
         /// Takes offer <paramref name="index"/> (0 strong, 1 mid, 2 weak) and names the club (normalised like <see cref="SetClubName"/>;
-        /// empty = keep the club's name), then opens segment 1 of year 1. Throws when no offer is pending.
+        /// empty = keep the club's name), then opens segment 1 of year 1. After a dismissal (economy.md 财务危机与解雇) the season
+        /// goes on: the settlement is still up (<see cref="AwaitingNext"/>), so the next segment opens with <see cref="BeginNext"/>.
+        /// Throws when no offer is pending.
         /// </summary>
         public Club TakeOffer(int index, string name)
         {
@@ -337,8 +339,9 @@ namespace EsportsManager.Session
             Runner = c.Runner;
             Events = c.Events;
             if (!string.IsNullOrWhiteSpace(name)) SetClubName(name);
-            World.BeginSegment();
-            ReserveMediaPoints();
+            Plan = new SegmentPlan();
+            _declined.Clear(); _mediaDeclined.Clear();
+            if (!AwaitingNext) World.BeginSegment();
             return c;
         }
 
@@ -400,7 +403,7 @@ namespace EsportsManager.Session
             r.ChemistryAfter = Team.Chemistry(); r.PhaseStrengthAfter = PhaseStrengths();
             _segmentsPlayed++;
             Plan = new SegmentPlan();
-            _declined.Clear();
+            _declined.Clear(); _mediaDeclined.Clear();
             AwaitingNext = true;
             LastResult = r;
             return r;
@@ -414,7 +417,6 @@ namespace EsportsManager.Session
             if (InTransferWindow) throw new InvalidOperationException("Finish the transfer window first.");
             AwaitingNext = false;
             if (World != null) World.BeginSegment(); else Runner.BeginSegment();
-            ReserveMediaPoints();
         }
 
         /// <summary>BeginNext without throwing: false + EventPending / SegmentNotOpen.</summary>
@@ -531,7 +533,7 @@ namespace EsportsManager.Session
         /// <summary>Removes the player's last assignment, else his last accepted offer. False when he has neither.</summary>
         public bool UndoLast(long playerId)
         {
-            for (int i = Plan.Assignments.Count - 1; i >= MediaReservedPoints; i--)
+            for (int i = Plan.Assignments.Count - 1; i >= 0; i--)
                 if (Plan.Assignments[i].PlayerId == playerId) { Plan = Copy(Plan, i, -1); return true; }
             var pending = Runner.GetState().PendingOffers;
             for (int i = Plan.AcceptedOfferIds.Count - 1; i >= 0; i--)
@@ -554,38 +556,56 @@ namespace EsportsManager.Session
             var c = new SegmentPlan();
             foreach (var a in Plan.ChoiceAnswers) c.AnswerChoice(a.ChoiceId, a.Option);
             Plan = c;
-            ReserveMediaPoints();
         }
 
-        // ------------------------------------------------------------ champion fatigue, transfer window (Story 005)
+        // ------------------------------------------------------------ media invitations, crisis, dismissal (2026-10-30)
 
-        /// <summary>
-        /// Stream points of this segment's champion-fatigue media obligation (economy.md 冠军疲劳). They are put into the plan first
-        /// (the most popular starters, at most max_per_player each) and cannot be removed: the UI shows them as reserved points.
-        /// </summary>
-        public int MediaReservedPoints { get; private set; }
+        private readonly HashSet<int> _mediaDeclined = new HashSet<int>();
 
-        /// <summary>Fatigue strength f of the open segment (0 = none) and the segments it still lasts.</summary>
-        public float FatigueStrength => PlayerClub == null || Season == null ? 0f : PlayerClub.FatigueAt(World.GlobalSegment(Season.Year, Season.SegmentIndexInYear));
+        /// <summary>Media invitations of the open segment (economy.md 媒体邀约); empty while the settlement is up or without a league.</summary>
+        public IReadOnlyList<MediaInvitation> MediaInvitations
+            => World == null || AwaitingNext || Runner == null ? (IReadOnlyList<MediaInvitation>)new MediaInvitation[0] : Runner.MediaInvitations;
 
-        /// <summary>Segments of champion fatigue left, counting the open one.</summary>
-        public int FatigueSegmentsLeft => PlayerClub == null || Season == null ? 0 : PlayerClub.FatigueSegmentsLeft(World.GlobalSegment(Season.Year, Season.SegmentIndexInYear));
+        /// <summary>True when the draft plan accepts the invitation.</summary>
+        public bool IsMediaAccepted(int id) { foreach (int x in Plan.AcceptedMediaIds) if (x == id) return true; return false; }
 
-        private void ReserveMediaPoints()
+        /// <summary>Accepts an invitation (one club action point; refused when no point is left).</summary>
+        public bool TryAcceptMedia(int id, out PlanError error)
         {
-            MediaReservedPoints = 0;
-            if (PlayerClub == null || Runner == null) return;
-            int need = Runner.MediaObligationPoints;
-            if (need <= 0) return;
-            var st = new List<Player>(Team.Starters());
-            st.Sort((a, b) => { int k = b.Popularity.CompareTo(a.Popularity); return k != 0 ? k : a.Id.CompareTo(b.Id); });
-            var c = new SegmentPlan();
-            int max = Runner.GetState().MaxPerPlayer;
-            foreach (var p in st)
-                for (int i = 0; i < max && need > 0; i++) { c.Stream(p.Id); need--; MediaReservedPoints++; }
-            foreach (var a in Plan.ChoiceAnswers) c.AnswerChoice(a.ChoiceId, a.Option);
-            Plan = c;
+            if (IsMediaAccepted(id)) { error = new PlanError { Code = PlanErrorCode.DuplicateOffer, OfferId = id }; return false; }
+            if (!TryChange(p => p.AcceptMedia(id), out error)) return false;
+            _mediaDeclined.Remove(id);
+            return true;
         }
+
+        /// <summary>Declines an invitation (also withdraws an acceptance). Not accepted at resolve = declined (popularity cost).</summary>
+        public void DeclineMedia(int id) { Plan.UnacceptMedia(id); _mediaDeclined.Add(id); }
+
+        /// <summary>Invitations neither accepted nor declined yet (these open the pop-up).</summary>
+        public List<MediaInvitation> UnansweredMedia()
+        {
+            var list = new List<MediaInvitation>();
+            foreach (var m in MediaInvitations) if (!_mediaDeclined.Contains(m.Id) && !IsMediaAccepted(m.Id)) list.Add(m);
+            return list;
+        }
+
+        /// <summary>Unacknowledged notices of the player club (fire sales, crisis start / end, chip-ins).</summary>
+        public IReadOnlyList<ClubNotice> Notices => World != null ? (IReadOnlyList<ClubNotice>)World.Notices : new ClubNotice[0];
+
+        /// <summary>Marks every notice as seen.</summary>
+        public void AcknowledgeNotices() => World?.Notices.Clear();
+
+        /// <summary>True while the player club is in a financial crisis.</summary>
+        public bool InCrisis => PlayerClub != null && PlayerClub.InCrisis;
+
+        /// <summary>Crisis checks left before the manager is fired (0 = no crisis).</summary>
+        public int CrisisSegmentsLeft => PlayerClub?.CrisisSegmentsLeft ?? 0;
+
+        /// <summary>True between a dismissal and taking a new offer (the 被解雇 screen).</summary>
+        public bool Dismissed => World != null && World.DismissalPending;
+
+        /// <summary>Times the manager was fired (year review).</summary>
+        public int Dismissals => World?.Dismissals ?? 0;
 
         /// <summary>The open transfer window (after the finals until the player finishes re-signing), or null.</summary>
         public TransferWindow Window => World?.Window;
@@ -801,6 +821,7 @@ namespace EsportsManager.Session
             for (int i = 0; i < src.AcceptedOfferIds.Count; i++) if (i != skipOffer) c.AcceptOffer(src.AcceptedOfferIds[i]);
             c.SponsorPoints = src.SponsorPoints;
             foreach (var a in src.ChoiceAnswers) c.AnswerChoice(a.ChoiceId, a.Option);
+            foreach (int id in src.AcceptedMediaIds) c.AcceptMedia(id);
             return c;
         }
 

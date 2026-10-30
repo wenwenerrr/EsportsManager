@@ -5,7 +5,7 @@ using UnityEngine.UIElements;
 namespace EsportsManager.UI
 {
     /// <summary>Identity of a screen on the stack.</summary>
-    public enum ScreenId { Main, Summary, Standings, OfferPopup, ChoicePopup, NewClub, EventPrep, RegularResult, Bracket, TrainingPopup, JobOffers, Transfer }
+    public enum ScreenId { Main, Summary, Standings, OfferPopup, ChoicePopup, NewClub, EventPrep, RegularResult, Bracket, TrainingPopup, JobOffers, Transfer, MediaPopup, NoticePopup }
 
     /// <summary>
     /// One entry of the <see cref="ScreenStack"/>: an id, whether it is an overlay (drawn on top of the screen below it)

@@ -65,6 +65,17 @@ namespace EsportsManager.Leagues
             return th;
         }
 
+        /// <summary>AI media rule (economy.md 媒体邀约): accept every invitation when funds &lt; floor or the starters' mean stress &lt; ai_stress_below.</summary>
+        public bool AcceptsMedia(Club c)
+        {
+            if (c.Team.Funds < Floor(c)) return true;
+            var st = c.Team.Starters();
+            if (st.Count == 0) return false;
+            float sum = 0f;
+            foreach (var p in st) sum += p.Stress;
+            return sum / st.Count < _w.Config.media.aiStressBelow;
+        }
+
         /// <summary>F2 cash floor = (3 + 3 x frugality + offset) x W.</summary>
         public double Floor(Club c) => (A.floorBase + A.floorFrugal * c.Personality.Frugality + c.Personality.OffCash) * c.WagesPerSegment(_w.SegmentsPerYear);
 
@@ -171,10 +182,10 @@ namespace EsportsManager.Leagues
             PickLineup(c);
             var team = c.Team;
             var starters = team.Starters();
-            // 0. media obligation (economy.md champion fatigue; Story 005 sets the points)
-            int media = c.MediaObligationPoints;
-            foreach (var p in Sorted(starters, (x, y) => y.Popularity.CompareTo(x.Popularity)))
-                while (media > 0 && b.Can(p)) { plan.Stream(p.Id); b.Take(p); media--; }
+            // 0. media invitations (economy.md 媒体邀约): one club point each, accepted when short of money or the starters are calm
+            if (AcceptsMedia(c))
+                foreach (var inv in c.Runner.MediaInvitations)
+                    if (b.Left > 0) { plan.AcceptMedia(inv.Id); b.Left--; }
             // 2. rest
             float th = RestThreshold(c, pre);
             var resting = new HashSet<long>();

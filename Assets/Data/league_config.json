@@ -56,9 +56,17 @@
     "honor_split": [70, 50, 30, 30, 0, 0, 0, 0], "honor_finals": [100, 80, 60, 60, 0, 0, 0, 0],
     "wi_kappa": 0.25, "wi_ref": 0.942, "wi_min": 0.8, "wi_max": 1.3,
     "satisfaction_min": -0.5, "satisfaction_max": 0.2, "satisfaction_dead_zone": 0.1,
-    "reneg_ratio": 1.2, "reneg_mood_drop": 15, "debt_line": 0.25,
-    "fatigue_finals": 1.0, "fatigue_split": 0.5, "fatigue_segments": 12,
-    "fatigue_stress": 6, "fatigue_business": 1.0, "fatigue_media_points": 2
+    "reneg_ratio": 1.2, "reneg_mood_drop": 15, "debt_line": 0.25
+  },
+  "media": {
+    "max_per_segment": 2, "chance_base": 0.1, "chance_per_popularity": 0.5, "chance_max": 0.6,
+    "income_livestream_mult": 1.5, "income_per_popularity": 100,
+    "accept_popularity": 2, "accept_starter_stress": 2, "decline_popularity": 1.5,
+    "ai_stress_below": 55
+  },
+  "crisis": {
+    "grace_segments": 2, "chipin_chemistry": 60, "chipin_mood": 70, "chipin_chance": 0.3,
+    "dismissal_ranks": [5, 8], "dismissal_offers": 3
   },
   "transfer": {
     "bench_renew": 1.5, "renew_young_max_age": 23, "renew_mid_max_age": 27, "renew_age_test_above": 28,

@@ -44,6 +44,7 @@ namespace EsportsManager.Segments
     {
         private readonly List<ActionAssignment> _assignments = new List<ActionAssignment>();
         private readonly List<int> _acceptedOffers = new List<int>();
+        private readonly List<int> _acceptedMedia = new List<int>();
         private readonly List<ChoiceAnswer> _choiceAnswers = new List<ChoiceAnswer>();
 
         /// <summary>The per-player action points, in the order added.</summary>
@@ -56,7 +57,16 @@ namespace EsportsManager.Segments
         public int SponsorPoints { get; set; }
 
         /// <summary>Total points this plan spends.</summary>
-        public int PointsUsed => _assignments.Count + _acceptedOffers.Count + SponsorPoints;
+        public int PointsUsed => _assignments.Count + _acceptedOffers.Count + SponsorPoints + _acceptedMedia.Count;
+
+        /// <summary>Media invitations accepted (economy.md 媒体邀约): each costs one CLUB action point (no player's per-player limit).</summary>
+        public IReadOnlyList<int> AcceptedMediaIds => _acceptedMedia;
+
+        /// <summary>Accepts a media invitation of the open segment (one club action point).</summary>
+        public SegmentPlan AcceptMedia(int invitationId) { _acceptedMedia.Add(invitationId); return this; }
+
+        /// <summary>Removes an accepted media invitation; false when it was not accepted.</summary>
+        public bool UnacceptMedia(int invitationId) => _acceptedMedia.Remove(invitationId);
 
         /// <summary>Adds a training point on a phase (or command) with an optional focus dimension (-1 = none).</summary>
         public SegmentPlan Train(long playerId, TrainingTarget target, int focusDimension = -1)
@@ -82,7 +92,7 @@ namespace EsportsManager.Segments
         /// <summary>Removes the answer to a choice (it falls back to its default option).</summary>
         public SegmentPlan ClearChoiceAnswer(int choiceId) { _choiceAnswers.RemoveAll(a => a.ChoiceId == choiceId); return this; }
         /// <summary>Removes everything.</summary>
-        public void Clear() { _assignments.Clear(); _acceptedOffers.Clear(); _choiceAnswers.Clear(); SponsorPoints = 0; }
+        public void Clear() { _assignments.Clear(); _acceptedOffers.Clear(); _acceptedMedia.Clear(); _choiceAnswers.Clear(); SponsorPoints = 0; }
     }
 
     /// <summary>The option picked for one pending choice event (Story 006).</summary>
@@ -109,6 +119,18 @@ namespace EsportsManager.Segments
         public float SeasonRankScore;
         /// <summary>Prize money, >= 0.</summary>
         public int PrizeMoney;
+    }
+
+    /// <summary>
+    /// A media invitation of the open segment (economy.md 媒体邀约, replaces champion fatigue). Rolled by the league per club and
+    /// segment; accepting it costs one club action point and pays <see cref="Income"/> (fixed when rolled).
+    /// </summary>
+    public sealed class MediaInvitation
+    {
+        /// <summary>Id, unique within the segment.</summary>
+        public int Id;
+        /// <summary>Income when accepted, yuan.</summary>
+        public long Income;
     }
 
     /// <summary>A business pop-up rolled at the start of a segment (numbers.md 4.11).</summary>

@@ -65,6 +65,7 @@ namespace EsportsManager.Tests.UI
                     case TransferWait.PoachResponse: Assert.IsNotNull(root.Q("poach-popup")); ui.RespondPoach(true); break;
                     case TransferWait.ThreeChoice: Assert.IsNotNull(root.Q("three-choice")); ui.ChooseAuction(); break;
                     case TransferWait.AuctionBid: Assert.IsNotNull(root.Q("bid-panel")); ui.BidExit(); break;
+                    case TransferWait.AuctionReview: Assert.IsNotNull(root.Q("auction-review")); ui.TransferNext(); break;
                     case TransferWait.Resign:
                         Assert.IsNotNull(root.Q("resign-list")); Assert.IsNotNull(root.Q("finish-window"));
                         while (win.CanFinish() != TransferError.None)

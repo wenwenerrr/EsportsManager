@@ -35,6 +35,34 @@ namespace EsportsManager.Leagues
         ForcedListing = 8,
         /// <summary>A player kept with a retain raise (club = seller, other = bidder).</summary>
         Retain = 9,
+        /// <summary>A listed player nobody bought, sold to the league at the fire-sale price (club = seller, amount = price).</summary>
+        UnsoldSale = 10,
+    }
+
+    /// <summary>Kinds of notices for the player club (shown as a pop-up on the next settlement / main screen).</summary>
+    public enum NoticeKind
+    {
+        /// <summary>Self-rescue sold a player to the league (economy F7).</summary>
+        FireSale = 0,
+        /// <summary>A financial crisis started (amount = deficit, segments = grace).</summary>
+        CrisisStart = 1,
+        /// <summary>A player put his own business earnings into the club.</summary>
+        ChipIn = 2,
+        /// <summary>The crisis is over (funds back at 0 or above).</summary>
+        CrisisOver = 3,
+    }
+
+    /// <summary>One notice for the player club (data only; the UI formats it).</summary>
+    public sealed class ClubNotice
+    {
+        /// <summary>Kind.</summary>
+        public NoticeKind Kind;
+        /// <summary>Player name (fire sale, chip-in), else empty.</summary>
+        public string PlayerName = "";
+        /// <summary>Money (sale price, chip-in, deficit), yuan.</summary>
+        public long Amount;
+        /// <summary>Crisis segments left (crisis start).</summary>
+        public int SegmentsLeft;
     }
 
     /// <summary>One news line (data only; the UI formats it).</summary>
@@ -145,6 +173,16 @@ namespace EsportsManager.Leagues
         public List<double> WageIndexHistory { get; } = new List<double>();
         /// <summary>Funds injected at the takeover (not league income).</summary>
         public long Injected { get; private set; }
+        /// <summary>Notices for the player club not yet acknowledged (fire sales, crisis, chip-ins), oldest first.</summary>
+        public List<ClubNotice> Notices { get; } = new List<ClubNotice>();
+        /// <summary>Times the player manager was fired (year review).</summary>
+        public int Dismissals { get; private set; }
+        /// <summary>True between a dismissal and taking one of the new offers.</summary>
+        public bool DismissalPending { get; private set; }
+        /// <summary>The club the manager was last fired from (-1 = never) and its deficit at that moment.</summary>
+        public int FiredFromClubId { get; private set; } = -1;
+        /// <summary>Deficit (positive yuan) of the club at the last dismissal.</summary>
+        public long FiredDeficit { get; private set; }
 
         /// <summary>Current year (0 = warm-up).</summary>
         public int Year => Season.Year;
@@ -165,7 +203,7 @@ namespace EsportsManager.Leagues
             return m;
         }
 
-        /// <summary>Global segment index year x segments per year + index (champion fatigue windows).</summary>
+        /// <summary>Global segment index year x segments per year + index.</summary>
         public int GlobalSegment(int year, int index) => year * SegmentsPerYear + index;
 
         /// <summary>Current wage index WI (economy F3).</summary>
@@ -419,15 +457,11 @@ namespace EsportsManager.Leagues
         {
             if (Window != null) throw new InvalidOperationException("Finish the transfer window first.");
             int seg = Season.SegmentIndexInYear;
-            var e = Config.economy;
             foreach (var c in Clubs)
             {
                 c.SegmentRng.Rekey(Year, seg); c.TeamRng.Rekey(Year, seg); c.EventRng.Rekey(Year, seg); c.NoiseRng.Rekey(Year, seg);
-                float f = c.FatigueAt(GlobalSegment(Year, seg));
-                c.Runner.FatigueStarterStress = e.fatigueStress * f;
-                c.Runner.FatigueBusinessFactor = 1f + e.fatigueBusiness * f;
-                c.MediaObligationPoints = c.Runner.MediaObligationPoints = (int)Math.Round(e.fatigueMediaPoints * f, MidpointRounding.AwayFromZero);
                 c.Runner.BeginSegment();
+                RollMedia(c, seg);
             }
             Invalidate();
         }
@@ -454,8 +488,11 @@ namespace EsportsManager.Leagues
             {
                 SegmentSummary sum;
                 long wages = c.Team.SalaryShare(ctx.SegmentsPerYear, seg);
-                if (c == player) sum = mine = c.Runner.Resolve(playerPlan, ctx);
-                else sum = c.Runner.Resolve(Ai.Plan(c, seg), ctx);
+                var plan = c == player ? playerPlan : Ai.Plan(c, seg);
+                sum = c.Runner.Resolve(plan, ctx);
+                if (c == player) mine = sum;
+                ApplyMedia(c, plan, sum);
+                c.Ledger.Income += sum.MediaIncome;
                 c.Ledger.Wages += wages;
                 c.Ledger.Income += (long)sum.LivestreamIncome + sum.BusinessIncome + sum.SponsorshipIncome + sum.EventIncome;
                 c.Ledger.EventExpenses += sum.EventExpenses;
@@ -547,13 +584,6 @@ namespace EsportsManager.Leagues
                 foreach (var p in c.Team.Roster) { var m = Market(p); m.HonorThisYear = Math.Max(m.HonorThisYear, honor); }
             }
             int champ = ev.FinalOrder[0];
-            var ec = Config.economy;
-            float fs = ev.Type == EventType.Finals ? ec.fatigueFinals : ec.fatigueSplit;
-            if (fs > 0f && ec.fatigueSegments > 0)
-            {
-                int from = GlobalSegment(Year, Season.SegmentsDoneInYear);
-                Clubs[champ].Fatigue.Add(new FatigueSpan { From = from, To = from + ec.fatigueSegments - 1, Strength = fs });
-            }
             AddNews(new NewsItem { Kind = NewsKind.Champion, ClubId = champ, Key = ev.Def.nameKey, Segment = Season.SegmentsDoneInYear });
             Invalidate();
             return mine;
@@ -584,29 +614,191 @@ namespace EsportsManager.Leagues
 
         /// <summary>
         /// economy.md F7 self-rescue (every club): while funds &lt; 0 and the roster has more than 5 players, sell the lowest-rated
-        /// non-starter to the league at value x 0.6 (into the free pool). Still &lt; 0: the player club is bankrupt (game over: Story
-        /// 007), an AI club borrows up to 0.
+        /// non-starter to the league at value x 0.6 (into the free pool; the player club gets a <see cref="NoticeKind.FireSale"/>
+        /// notice). Still &lt; 0: an AI club borrows up to 0; the player club goes through the financial crisis
+        /// (<see cref="CrisisCheck"/>). Called once per segment end (after the event's prizes when there is one).
         /// </summary>
         public void FundsCheck(Club c, int segment)
         {
+            if (c.Team.Funds < 0)
+                while (c.Team.Funds < 0 && c.Team.Roster.Count > Config.ai.minRoster)
+                {
+                    Player worst = null;
+                    foreach (var p in c.Team.Roster)
+                        if (c.Team.LaneOf(p) == null && (worst == null || p.GetLaneScore(p.MainLane) < worst.GetLaneScore(worst.MainLane))) worst = p;
+                    if (worst == null) break;
+                    long price = Economy.FireSalePrice(worst);
+                    PayIn(c, price);
+                    Release(c, worst);
+                    AddNews(new NewsItem { Kind = NewsKind.FireSale, ClubId = c.Id, PlayerName = worst.Name, Amount = price, Segment = segment });
+                    if (c.IsPlayer) Notices.Add(new ClubNotice { Kind = NoticeKind.FireSale, PlayerName = worst.Name, Amount = price });
+                }
+            if (c.IsPlayer) { CrisisCheck(c, segment); return; }
             if (c.Team.Funds >= 0) return;
-            while (c.Team.Funds < 0 && c.Team.Roster.Count > Config.ai.minRoster)
-            {
-                Player worst = null;
-                foreach (var p in c.Team.Roster)
-                    if (c.Team.LaneOf(p) == null && (worst == null || p.GetLaneScore(p.MainLane) < worst.GetLaneScore(worst.MainLane))) worst = p;
-                if (worst == null) break;
-                long price = Economy.FireSalePrice(worst);
-                PayIn(c, price);
-                Release(c, worst);
-                AddNews(new NewsItem { Kind = NewsKind.FireSale, ClubId = c.Id, PlayerName = worst.Name, Amount = price, Segment = segment });
-            }
-            if (c.Team.Funds >= 0) return;
-            if (c.IsPlayer) { c.Bankrupt = true; return; }
             long loan = -c.Team.Funds;
             c.Debt += loan; c.LoanTaken += loan;
             c.Team.Funds = 0;
             AddNews(new NewsItem { Kind = NewsKind.Loan, ClubId = c.Id, Amount = loan, Segment = segment });
+        }
+
+        /// <summary>
+        /// economy.md 财务危机与解雇 (player club, after the self-rescue): funds &gt;= 0 ends a running crisis. Funds &lt; 0 without a
+        /// crisis starts one with crisis.grace_segments checks left. In a crisis each check first rolls the chip-ins
+        /// (<see cref="ChipIns"/>); still &lt; 0 uses up one check, and the last one fires the manager (<see cref="Fire"/>).
+        /// </summary>
+        internal void CrisisCheck(Club c, int segment)
+        {
+            if (c.Team.Funds >= 0)
+            {
+                if (c.InCrisis) { c.CrisisSegmentsLeft = 0; Notices.Add(new ClubNotice { Kind = NoticeKind.CrisisOver }); }
+                return;
+            }
+            if (!c.InCrisis)
+            {
+                c.CrisisSegmentsLeft = Config.crisis.graceSegments;
+                Notices.Add(new ClubNotice { Kind = NoticeKind.CrisisStart, Amount = -c.Team.Funds, SegmentsLeft = c.CrisisSegmentsLeft });
+                return;
+            }
+            ChipIns(c, segment);
+            if (c.Team.Funds >= 0) { c.CrisisSegmentsLeft = 0; Notices.Add(new ClubNotice { Kind = NoticeKind.CrisisOver }); return; }
+            c.CrisisSegmentsLeft--;
+            if (c.CrisisSegmentsLeft <= 0) Fire(c, segment);
+        }
+
+        /// <summary>
+        /// Chip-ins of one crisis segment: when team chemistry &gt;= chipin_chemistry, every rostered player with mood &gt;=
+        /// chipin_mood puts in min(remaining deficit, his personal business earnings) with chance chipin_chance (key "chipin", year,
+        /// segment, club, player), in roster order until the deficit is gone. Not league income. Returns the total.
+        /// </summary>
+        public long ChipIns(Club c, int segment)
+        {
+            var k = Config.crisis;
+            long total = 0;
+            if (c.Team.Chemistry() < k.chipinChemistry) return 0;
+            foreach (var p in new List<Player>(c.Team.Roster))
+            {
+                if (c.Team.Funds >= 0) break;
+                if (p.Mood < k.chipinMood || p.PersonalBusinessEarnings <= 0) continue;
+                if (Keys.U01("chipin", Year, segment, c.Id, p.Id) >= k.chipinChance) continue;
+                long give = Math.Min(-c.Team.Funds, p.PersonalBusinessEarnings);
+                p.PersonalBusinessEarnings -= give;
+                c.Team.Funds += give;
+                total += give;
+                if (c.IsPlayer) Notices.Add(new ClubNotice { Kind = NoticeKind.ChipIn, PlayerName = p.Name, Amount = give });
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// The player manager is fired (economy.md 财务危机与解雇): the club becomes AI-run and its deficit an AI loan (F7), the
+        /// dismissal is counted and three job offers from clubs ranked crisis.dismissal_ranks by strength (old club excluded) wait
+        /// for <see cref="TakeOver"/> (weak-offer capital top-up). The season goes on.
+        /// </summary>
+        internal void Fire(Club c, int segment)
+        {
+            long deficit = Math.Max(0, -c.Team.Funds);
+            c.CrisisSegmentsLeft = 0;
+            c.IsPlayer = false;
+            c.Bankrupt = true;
+            Schedule.PlayerClub = -1;
+            if (deficit > 0)
+            {
+                c.Debt += deficit; c.LoanTaken += deficit;
+                c.Team.Funds = 0;
+                AddNews(new NewsItem { Kind = NewsKind.Loan, ClubId = c.Id, Amount = deficit, Segment = segment });
+            }
+            Dismissals++;
+            DismissalPending = true;
+            FiredFromClubId = c.Id;
+            FiredDeficit = deficit;
+            Notices.Clear();
+            Ai.PickLineup(c);
+            Invalidate();
+            MakeDismissalOffers(c.Id);
+        }
+
+        /// <summary>The job offers after a dismissal: the first dismissal_offers clubs of strength ranks [lo, hi] other than the old club.</summary>
+        public void MakeDismissalOffers(int excludeClubId)
+        {
+            Offers.Clear();
+            var rank = StrengthRanking();
+            var k = Config.crisis;
+            for (int r = k.dismissalRanks[0]; r <= rank.Count && Offers.Count < k.dismissalOffers; r++)
+            {
+                var c = rank[r - 1];
+                if (c.Id == excludeClubId) continue; // past hi only when the old club sat inside a range of exactly dismissal_offers
+                Offers.Add(new JobOffer { Tier = OfferTier.Weak, ClubId = c.Id, StrengthRank = r, LastYearRank = YearRank(Year - 1, c.Id) });
+            }
+        }
+
+        /// <summary>
+        /// End of the auction (transfer.md 6): a listed player nobody bought is sold to the league at the fire-sale price into the
+        /// free pool -- unless the club would drop below ai.min_roster or he is the last main-lane player of his lane (then he
+        /// stays). True when sold.
+        /// </summary>
+        public bool SellUnsoldToLeague(Club c, Player p)
+        {
+            if (c.Find(p.Id) == null || c.Team.Roster.Count - 1 < Config.ai.minRoster) return false;
+            int lane = 0;
+            foreach (var q in c.Team.Roster) if (q.MainLane == p.MainLane) lane++;
+            if (lane <= 1) return false;
+            long price = Economy.FireSalePrice(p);
+            PayIn(c, price);
+            Release(c, p);
+            AddNews(new NewsItem { Kind = NewsKind.UnsoldSale, ClubId = c.Id, PlayerName = p.Name, Amount = price });
+            return true;
+        }
+
+        // ------------------------------------------------------------ media invitations (economy.md 媒体邀约)
+
+        /// <summary>Chance of one invitation: clamp(chance_base + chance_per_popularity x popularity / 100, 0, chance_max).</summary>
+        public float MediaChance(float clubPopularity)
+        {
+            var m = Config.media;
+            return Math.Max(0f, Math.Min(m.chanceMax, m.chanceBase + m.chancePerPopularity * clubPopularity / 100f));
+        }
+
+        /// <summary>Income of an accepted invitation: income_livestream_mult x livestream base + income_per_popularity x popularity.</summary>
+        public long MediaIncome(float clubPopularity)
+        {
+            var m = Config.media;
+            return (long)Math.Round(m.incomeLivestreamMult * (double)TeamConfig.livestream.baseIncome + m.incomePerPopularity * (double)clubPopularity);
+        }
+
+        /// <summary>Rolls the club's invitations of the open segment (max_per_segment draws, key "media", year, segment, club).</summary>
+        internal void RollMedia(Club c, int seg)
+        {
+            var m = Config.media;
+            var rng = Keys.Stream("media", Year, seg, c.Id);
+            float chance = MediaChance(c.Team.ClubPopularity);
+            for (int i = 0; i < m.maxPerSegment; i++)
+                if (rng.NextDouble() < chance) c.Runner.MediaInvitations.Add(new MediaInvitation { Id = i + 1, Income = MediaIncome(c.Team.ClubPopularity) });
+        }
+
+        /// <summary>
+        /// After the club's segment resolved: each accepted invitation pays its income (funds), club popularity + accept_popularity
+        /// and every starter's stress + accept_starter_stress; each one not accepted costs decline_popularity club popularity.
+        /// </summary>
+        internal void ApplyMedia(Club c, SegmentPlan plan, SegmentSummary sum)
+        {
+            var list = c.Runner.MediaInvitations;
+            if (list.Count == 0) return;
+            var m = Config.media;
+            var acc = new HashSet<int>(plan.AcceptedMediaIds);
+            long income = 0;
+            foreach (var inv in list)
+            {
+                if (acc.Contains(inv.Id))
+                {
+                    income += inv.Income;
+                    c.Team.ClubPopularity += m.acceptPopularity;
+                    foreach (var p in c.Team.Starters()) p.Stress += m.acceptStarterStress;
+                    sum.MediaAccepted++;
+                }
+                else { c.Team.ClubPopularity -= m.declinePopularity; sum.MediaDeclined++; }
+            }
+            c.Team.Funds += income;
+            sum.MediaIncome = (int)income;
         }
 
         /// <summary>Moves a rostered player to the free pool (contract 0, honor 0 and no transfer wish: economy F2).</summary>
@@ -917,7 +1109,8 @@ namespace EsportsManager.Leagues
             var c = Clubs[offer.ClubId];
             c.IsPlayer = true;
             Schedule.PlayerClub = c.Id;
-            c.Debt = 0; c.Bankrupt = false;
+            c.Debt = 0; c.Bankrupt = false; c.CrisisSegmentsLeft = 0;
+            DismissalPending = false;
             foreach (var lane in MissingLanes(c))
             {
                 if (c.Team.Roster.Count >= Config.ai.maxRoster) break;

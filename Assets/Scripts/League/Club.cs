@@ -65,15 +65,6 @@ namespace EsportsManager.Leagues
         public long Prizes;
     }
 
-    /// <summary>A champion-fatigue window (economy.md 冠军疲劳): strength f on global segments [From, To] (year x 12 + index).</summary>
-    public sealed class FatigueSpan
-    {
-        /// <summary>First / last global segment index (inclusive).</summary>
-        public int From, To;
-        /// <summary>Strength f (finals 1, split 0.5).</summary>
-        public float Strength;
-    }
-
     /// <summary>
     /// One club of the league (design/gdd/league.md "同一套模型"): the SAME data and formulas for the player club and the AI clubs
     /// -- a <see cref="Team"/> (roster, lineup, familiarity, popularity, funds), its own <see cref="SegmentRunner"/> (sponsor
@@ -119,34 +110,22 @@ namespace EsportsManager.Leagues
         public long Debt { get; internal set; }
         /// <summary>Total borrowed so far.</summary>
         public long LoanTaken { get; internal set; }
-        /// <summary>True after a self-rescue left the player club below 0 with 5 players (bankruptcy; game over is Story 007).</summary>
+        /// <summary>
+        /// True once the player manager was FIRED from this club after an unresolved financial crisis (economy.md 财务危机与解雇);
+        /// the club is AI-run from then on. Cleared when a manager takes the club over again.
+        /// </summary>
         public bool Bankrupt { get; internal set; }
         /// <summary>
-        /// Champion-fatigue media obligation: action points to stream this segment (economy.md; Story 005 sets it). 0 until then.
+        /// Financial crisis of the player club (economy.md 财务危机与解雇): segment-end checks left before the manager is fired;
+        /// 0 = no crisis. Set to crisis.grace_segments when a self-rescue leaves funds below 0.
         /// </summary>
-        public int MediaObligationPoints { get; set; }
+        public int CrisisSegmentsLeft { get; internal set; }
+        /// <summary>True while the club is in a financial crisis.</summary>
+        public bool InCrisis => CrisisSegmentsLeft > 0;
         /// <summary>This year's totals for the wage index.</summary>
         public ClubLedger Ledger { get; internal set; } = new ClubLedger();
         /// <summary>Last year's totals (year review).</summary>
         public ClubLedger LastLedger { get; internal set; }
-        /// <summary>Champion-fatigue windows (economy.md).</summary>
-        public List<FatigueSpan> Fatigue { get; } = new List<FatigueSpan>();
-
-        /// <summary>Fatigue strength f on a global segment (overlaps take the largest), 0 when none.</summary>
-        public float FatigueAt(int globalSegment)
-        {
-            float f = 0f;
-            foreach (var s in Fatigue) if (s.From <= globalSegment && globalSegment <= s.To && s.Strength > f) f = s.Strength;
-            return f;
-        }
-
-        /// <summary>Segments left (from <paramref name="globalSegment"/> on, inclusive) of the strongest running fatigue window, 0 when none.</summary>
-        public int FatigueSegmentsLeft(int globalSegment)
-        {
-            int left = 0;
-            foreach (var s in Fatigue) if (s.From <= globalSegment && globalSegment <= s.To) left = System.Math.Max(left, s.To - globalSegment + 1);
-            return left;
-        }
 
         /// <summary>Placings of this year's events (calendar order).</summary>
         public List<int> YearPlacings { get; } = new List<int>();

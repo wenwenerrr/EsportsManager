@@ -296,6 +296,7 @@ namespace EsportsManager.UI
         public const string NewsStyleFormat = "{0} 改打法：{1} → {2}";
         public const string NewsSigningFormat = "{0} 签下 {1}";
         public const string NewsFireSaleFormat = "{0} 为补资金把 {1} 卖给联盟（¥{2}）";
+        public const string NewsUnsoldSaleFormat = "{0} 的 {1} 流拍，以 ¥{2} 卖给联盟";
         public const string NewsLoanFormat = "{0} 资金耗尽，向联盟借款 ¥{1}";
         public const string NewsSpecialtyFormat = "{0} 的 {1} 练成绝活「{2}」";
         public const string NewsChampionFormat = "{0} 获得{1}冠军";

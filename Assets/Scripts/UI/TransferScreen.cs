@@ -42,10 +42,23 @@ namespace EsportsManager.UI
                 case TransferWait.ThreeChoice: ThreeChoice(ui, win, body); break;
                 case TransferWait.AuctionBid: Auction(ui, win, body); break;
                 case TransferWait.Resign: Resign(ui, win, body); break;
+                case TransferWait.AuctionReview: AuctionReview(ui, win, body); canNext = true; break;
                 default: body.Add(UiKit.Lbl(UiStrings.XferWatching, 14, UiKit.TextDim)); break;
             }
             root.Add(BottomBar(ui, win, canNext));
             if (win.Waiting == TransferWait.PoachResponse && win.PendingIncoming != null) root.Add(PoachPopup(ui, win.PendingIncoming));
+        }
+
+        // ------------------------------------------------------------ auction results (playtest 2026-10-30)
+
+        /// <summary>The auction is over: its result for the player club (confirm with "下一步").</summary>
+        private static void AuctionReview(GameUi ui, TransferWindow win, VisualElement body)
+        {
+            var box = Section(body, UiStrings.StepAuctionDone, UiStrings.StepAuctionNext);
+            box.name = "auction-review";
+            var lines = TransferSummary.Lines(ui.Session, win);
+            if (lines.Count == 0) lines.Add(UiStrings.StepNoDecision);
+            foreach (var t in lines) { var r = Line(28); r.Add(Dim(t, 14)); box.Add(r); }
         }
 
         // ------------------------------------------------------------ frame

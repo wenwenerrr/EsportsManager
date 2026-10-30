@@ -15,6 +15,7 @@ namespace EsportsManager.UI
         /// <summary>Builds the pop-up for <see cref="GameUi.ShownChoice"/> (nothing when there is no choice).</summary>
         public static void Build(GameUi ui, VisualElement root)
         {
+            if (ui.NoticeOpen) return; // the notice pop-up above it is shown first
             var c = ui.ShownChoice();
             if (c == null) return;
             var s = ui.Session;

@@ -129,9 +129,47 @@ namespace EsportsManager.UI
         public const string XferStepFormat = "{0} {1}";
         public const string PotentialShortFormat = "潜力 {0}";
 
-        // ---- champion fatigue (main screen)
-        public const string FatigueTitle = "冠军疲劳";
-        public const string FatigueFormat = "剩 {0} 段 · 首发压力 +{1}/段 · 媒体直播 {2} 点（已预留）";
+        // ---- media invitations (economy.md 媒体邀约, 2026-10-30)
+        public const string MediaTitle = "媒体邀约";
+        public const string MediaCountFormat = "本赛段 {0} 份";
+        public const string MediaLineFormat = "邀约 {0}：收入 ¥{1} · 俱乐部人气 +{2} · 每名首发压力 +{3}";
+        public const string MediaCostFormat = "接受消耗 1 个俱乐部行动点（不占队员次数，剩余 {0} 点）· 拒绝或不回应：俱乐部人气 -{1}";
+        public const string MediaAccepted = "已接受";
+        public const string MediaDeclined = "已拒绝";
+        public const string MediaBadgeFormat = "媒体邀约 {0}";
+        public const string MediaAcceptedMsg = "已接受媒体邀约";
+        public const string MediaDeclinedMsg = "已拒绝媒体邀约";
+        public const string Close = "关闭";
+
+        // ---- notices: fire sale, crisis, chip-ins (economy.md 财务危机与解雇)
+        public const string NoticeTitle = "财务通知";
+        public const string NoticeFireSaleFormat = "资金为负，俱乐部自救：{0} 被卖给联盟，收入 ¥{1}";
+        public const string NoticeCrisisStartFormat = "自救后资金仍为负（赤字 ¥{0}）：俱乐部进入财务危机，{1} 个赛段内资金回正，否则你将被解雇";
+        public const string NoticeChipInFormat = "{0} 拿出自己的 ¥{1} 帮俱乐部渡过难关";
+        public const string NoticeCrisisOver = "资金回正，财务危机解除";
+        public const string NoticeOk = "知道了";
+        public const string CrisisTitle = "财务危机";
+        public const string CrisisFormat = "还剩 {0} 个赛段 · 赤字 ¥{1} · 默契高、心情好的队员可能自掏腰包；到期仍为负将被解雇";
+
+        // ---- dismissal (被解雇)
+        public const string FiredTitle = "被解雇";
+        public const string FiredFormat = "{0} 财务危机未能化解（赤字 ¥{1}），董事会解雇了你。俱乐部转由 AI 托管，赤字转为联盟贷款。三家俱乐部向你抛出橄榄枝：";
+        public const string FiredTakenFormat = "你接手了 {0}，本赛季继续";
+
+        // ---- auction results page
+        public const string StepNoDecision = "（本步没有做任何决定）";
+        public const string StepAgreeFormat = "{0}：同意重谈，新年薪 ¥{1}";
+        public const string StepRefuseFormat = "{0}：拒绝重谈（会挂牌并且心情下降）";
+        public const string StepRenewFormat = "{0}：续约 {1} 年，年薪 ¥{2}";
+        public const string StepReleaseFormat = "{0}：放走（进入自由球员池）";
+        public const string StepPoachFormat = "挖 {0}（{1}）：转会费 ¥{2}";
+        public const string StepBoughtFormat = "买入 {0}：¥{1}";
+        public const string StepSoldFormat = "卖出 {0} 给 {1}：¥{2}";
+        public const string StepUnsoldSaleFormat = "{0} 流拍，以 ¥{1} 卖给联盟";
+        public const string StepUnsoldKeptFormat = "{0} 流拍，因阵容人数或位置保护留队";
+        public const string StepSignedFormat = "签下 {0}：年薪 ¥{1}";
+        public const string StepAuctionDone = "拍卖已结束";
+        public const string StepAuctionNext = "查看拍卖结果并继续";
 
         // ---- news
         public const string NewsPoachFormat = "{0} 从 {1} 挖走 {2}（转会费 ¥{3}）";

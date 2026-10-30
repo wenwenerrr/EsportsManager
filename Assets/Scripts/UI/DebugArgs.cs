@@ -3,7 +3,7 @@ using System;
 namespace EsportsManager.UI
 {
     /// <summary>The state the player build should present at launch (debug / screenshot use).</summary>
-    public enum DemoState { Main, Card, Assign, Offer, Summary, Lineup, Report, Standings, Name, EventPrep, Regular, Bracket, FinalsQual, Choice, Events, Training, Specialty, JobOffers, News, Opponent, XferReneg, XferRenew, XferPoach, XferOffer, XferChoice, XferAuction, XferResign, Fatigue }
+    public enum DemoState { Main, Card, Assign, Offer, Summary, Lineup, Report, Standings, Name, EventPrep, Regular, Bracket, FinalsQual, Choice, Events, Training, Specialty, JobOffers, News, Opponent, XferReneg, XferRenew, XferPoach, XferOffer, XferChoice, XferAuction, XferResign, Media, FireSale, Crisis, Fired }
 
     /// <summary>
     /// Debug launch arguments of the built player, all parsed here:
@@ -26,7 +26,7 @@ namespace EsportsManager.UI
     /// search from <c>--seed</c>, default <see cref="DemoSeeds.SpecialtyDemoSeed"/>, see <see cref="DemoSeeds.HasSpecialtyGain"/>).
     /// STORY 005: <c>xfer-reneg|xfer-renew|xfer-poach|xfer-offer|xfer-choice|xfer-auction|xfer-resign</c> = year 1 auto-played,
     /// the finals walked through the UI, then the transfer window advanced with default answers to that step (debug set-up so the
-    /// step has content: see <see cref="TransferDemo"/>); <c>fatigue</c> = main screen with champion fatigue and reserved media points.
+    /// step has content: see <see cref="TransferDemo"/>); <c>media</c> = media-invitation pop-up; <c>fire-sale</c> = settlement with the fire-sale notice; <c>crisis</c> = crisis banner + chip-in notice; <c>fired</c> = 被解雇 + new offers (playtest 2026-10-30).
     /// Without <c>--demo</c> the game starts at the naming screen; every other demo skips it and keeps the default club name.</item>
     /// <item><c>--segments N</c> auto-play N scripted segments before presenting (events of earlier segments are auto-played
     /// with the scripted lineup - debug only, never in normal play).</item>

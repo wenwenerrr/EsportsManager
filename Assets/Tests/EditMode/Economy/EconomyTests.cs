@@ -186,7 +186,7 @@ namespace EsportsManager.Tests.Economy
             while (pl.Team.Roster.Count > 5) pl.Team.RemovePlayer(pl.Team.Roster.Last(p => pl.Team.LaneOf(p) == null));
             pl.Team.Funds = -1;
             w.FundsCheck(pl, 1);
-            Assert.IsTrue(pl.Bankrupt); Assert.AreEqual(0, pl.Debt);
+            Assert.IsTrue(pl.InCrisis); Assert.IsFalse(pl.Bankrupt); Assert.AreEqual(0, pl.Debt);
         }
 
         // ------------------------------------------------------------ AC10 same rules
@@ -232,62 +232,16 @@ namespace EsportsManager.Tests.Economy
             Assert.IsTrue(outside.Team.Funds >= 0, "non-finalists were rescued");
         }
 
-        // ------------------------------------------------------------ AC13 champion fatigue
+        // ------------------------------------------------------------ extra stress term (kept after champion fatigue was removed)
 
         [Test]
-        public void ChampionFatigue_FinalsChampion_TwelveSegments_Stress6_Business2x_Media2_SplitHalf_OverlapMax()
-        {
-            var w = W();
-            w.RunWarmUp();
-            var champ = w.Clubs.Single(c => c.LastYearFinalsPlace == 1);
-            Assert.AreEqual(1f, champ.FatigueAt(w.GlobalSegment(1, 0)));
-            Assert.AreEqual(1f, champ.FatigueAt(w.GlobalSegment(1, 11)));
-            Assert.AreEqual(0f, champ.FatigueAt(w.GlobalSegment(2, 0)), "12 segments");
-            w.BeginSegment();
-            Assert.AreEqual(6f, champ.Runner.FatigueStarterStress, 1e-6f);
-            Assert.AreEqual(2f, champ.Runner.FatigueBusinessFactor, 1e-6f);
-            Assert.AreEqual(2, champ.MediaObligationPoints);
-            var plan = w.Ai.Plan(champ, 0);
-            var top = champ.Team.Starters().OrderByDescending(p => p.Popularity).ThenBy(p => p.Id).First();
-            Assert.AreEqual(SegmentAction.Stream, plan.Assignments[0].Action);
-            Assert.AreEqual(top.Id, plan.Assignments[0].PlayerId, "the most popular starter streams first");
-            // split champion: half; overlap takes the max
-            var c = new Club(99, champ.Team, champ.Runner, null, null, null, null, null);
-            c.Fatigue.Add(new FatigueSpan { From = 0, To = 11, Strength = 0.5f });
-            c.Fatigue.Add(new FatigueSpan { From = 5, To = 16, Strength = 1f });
-            Assert.AreEqual(0.5f, c.FatigueAt(4)); Assert.AreEqual(1f, c.FatigueAt(8)); Assert.AreEqual(1f, c.FatigueAt(16));
-            var e = w.Config.economy;
-            Assert.AreEqual(3f, e.fatigueStress * 0.5f); Assert.AreEqual(1.5f, 1f + e.fatigueBusiness * 0.5f);
-            Assert.AreEqual(1, (int)Math.Round(e.fatigueMediaPoints * 0.5f, MidpointRounding.AwayFromZero));
-        }
-
-        [Test]
-        public void FatigueStress_IsInsideTheBracket_ScaledByPersonalityAndRandom()
+        public void ExtraStress_IsInsideTheBracket_ScaledByPersonalityAndRandom()
         {
             var w = W();
             var p = MakePlayer(w, "mid", 22, 60f);
             var none = SegmentFormulas.StressDelta(w.SegmentConfig, p, new StressInputs(), 1.1f);
             var fat = SegmentFormulas.StressDelta(w.SegmentConfig, p, new StressInputs { Extra = 6f }, 1.1f);
             Assert.AreEqual(6f * p.GetTraitMultiplier(PlayerEffectKeys.StressGain) * 1.1f, fat - none, 1e-4f);
-        }
-
-        [Test]
-        public void Session_PlayerChampion_MediaPointsReservedAndNotRemovable()
-        {
-            var s = MakeSession();
-            var champ = s.PlayerClub;
-            champ.Fatigue.Add(new FatigueSpan { From = s.World.GlobalSegment(1, 1), To = s.World.GlobalSegment(1, 12), Strength = 1f });
-            s.ApplyScriptedPlan();
-            s.Resolve();
-            s.BeginNext();
-            Assert.AreEqual(2, s.MediaReservedPoints);
-            Assert.AreEqual(1f, s.FatigueStrength);
-            Assert.AreEqual(12, s.FatigueSegmentsLeft);
-            var a = s.Plan.Assignments[0];
-            Assert.AreEqual(SegmentAction.Stream, a.Action);
-            Assert.IsFalse(s.UndoLast(a.PlayerId) && s.Plan.Assignments.Count(x => x.Action == SegmentAction.Stream) < 2);
-            s.ClearPlan();
-            Assert.AreEqual(2, s.Plan.Assignments.Count(x => x.Action == SegmentAction.Stream));
         }
     }
 }

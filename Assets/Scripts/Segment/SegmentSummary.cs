@@ -106,6 +106,8 @@ namespace EsportsManager.Segments
         public List<EsportsManager.Events.EventOccurrence> Events = new List<EsportsManager.Events.EventOccurrence>();
         /// <summary>Story 006: event income booked this segment (numbers.md 4.10), yuan >= 0.</summary>
         public int EventIncome;
+        /// <summary>Media invitations (economy.md 媒体邀约): income of the accepted ones (booked by the league after settling), counts.</summary>
+        public int MediaIncome, MediaAccepted, MediaDeclined;
         /// <summary>Story 006: event expenses booked this segment (numbers.md 4.10), yuan >= 0.</summary>
         public int EventExpenses;
         /// <summary>The team's settlement report (income, expenses, salary share, net, funds, win rate, club popularity).</summary>

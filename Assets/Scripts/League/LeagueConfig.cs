@@ -31,8 +31,12 @@ namespace EsportsManager.Leagues
         public LeagueNewsConfig news;
         /// <summary>Talent system (talent.md).</summary>
         public TalentConfig talent;
-        /// <summary>Economy (economy.md rev 3: F1-F7, honor, wage index, satisfaction, champion fatigue).</summary>
+        /// <summary>Economy (economy.md rev 3: F1-F7, honor, wage index, satisfaction).</summary>
         public LeagueEconomyConfig economy;
+        /// <summary>Media invitations (economy.md 媒体邀约; replaced champion fatigue 2026-10-30).</summary>
+        public MediaConfig media;
+        /// <summary>Financial crisis, chip-ins and dismissal of the player manager (economy.md 财务危机与解雇).</summary>
+        public CrisisConfig crisis;
         /// <summary>Transfer window (transfer.md rev 3).</summary>
         public TransferConfig transfer;
         /// <summary>Two-choice event id to F5 rule kind (leave / money / spend / conflict).</summary>
@@ -72,7 +76,16 @@ namespace EsportsManager.Leagues
                 Fail("economy honor tables: honor_split needs club_count values, honor_finals at least 4.");
             if (e.wiMin <= 0f || e.wiMax < e.wiMin || e.wiRef <= 0f || e.wiKappa < 0f) Fail("economy wage index: 0 < wi_min <= wi_max, wi_ref > 0, wi_kappa >= 0.");
             if (e.satisfactionMin > 0f || e.satisfactionMax < 0f || e.satisfactionDeadZone < 0f) Fail("economy satisfaction bounds must bracket 0.");
-            if (e.fatigueSegments < 0 || e.renegRatio <= 0f) Fail("economy fatigue_segments >= 0 and reneg_ratio > 0.");
+            if (e.renegRatio <= 0f) Fail("economy reneg_ratio must be > 0.");
+            var md = media;
+            if (md == null) Fail("media is missing.");
+            if (md.maxPerSegment < 0 || md.chanceMax < 0f || md.chanceMax > 1f || md.incomeLivestreamMult < 0f) Fail("media: max_per_segment >= 0, chance_max in [0, 1], income_livestream_mult >= 0.");
+            var cr = crisis;
+            if (cr == null) Fail("crisis is missing.");
+            if (cr.graceSegments < 1 || cr.chipinChance < 0f || cr.chipinChance > 1f) Fail("crisis: grace_segments >= 1, chipin_chance in [0, 1].");
+            if (cr.dismissalRanks == null || cr.dismissalRanks.Length != 2 || cr.dismissalRanks[0] < 1 || cr.dismissalRanks[1] > clubCount
+                || cr.dismissalRanks[1] - cr.dismissalRanks[0] + 1 < cr.dismissalOffers || cr.dismissalOffers < 1)
+                Fail("crisis.dismissal_ranks must be [lo, hi] within 1..club_count holding at least dismissal_offers (>= 1) clubs.");
             var x = transfer;
             if (x == null) Fail("transfer is missing.");
             if (x.poachOffersPerClub < 0 || x.lotsYouth < 0 || x.lotsFree < 0 || x.maxListed < 1) Fail("transfer counts must be >= 0 (max_listed >= 1).");
@@ -185,10 +198,36 @@ namespace EsportsManager.Leagues
         public float renegRatio, renegMoodDrop;
         /// <summary>F7 debt line (share of yearly wages) for the forced listing.</summary>
         public float debtLine;
-        /// <summary>Champion fatigue: strength of a finals / split title, duration, starter stress per f, business factor per f, media points per f.</summary>
-        public float fatigueFinals, fatigueSplit;
-        public int fatigueSegments;
-        public float fatigueStress, fatigueBusiness, fatigueMediaPoints;
+    }
+
+    /// <summary>Media invitations (economy.md 媒体邀约; see league_config.json "media").</summary>
+    [Serializable]
+    public sealed class MediaConfig
+    {
+        /// <summary>Invitations rolled per segment (each one independently).</summary>
+        public int maxPerSegment;
+        /// <summary>Chance of one invitation = clamp(chance_base + chance_per_popularity x club popularity / 100, 0, chance_max).</summary>
+        public float chanceBase, chancePerPopularity, chanceMax;
+        /// <summary>Income of an accepted invitation = income_livestream_mult x livestream base_income + income_per_popularity x club popularity.</summary>
+        public float incomeLivestreamMult, incomePerPopularity;
+        /// <summary>Accept: club popularity + accept_popularity, every starter's stress + accept_starter_stress. Decline: club popularity - decline_popularity.</summary>
+        public float acceptPopularity, acceptStarterStress, declinePopularity;
+        /// <summary>AI accepts when funds &lt; its floor or the starters' average stress &lt; ai_stress_below.</summary>
+        public float aiStressBelow;
+    }
+
+    /// <summary>Financial crisis of the player club (economy.md 财务危机与解雇; see league_config.json "crisis").</summary>
+    [Serializable]
+    public sealed class CrisisConfig
+    {
+        /// <summary>Segment-end checks the player club may stay below 0 after the crisis starts before the manager is fired.</summary>
+        public int graceSegments;
+        /// <summary>Chip-in: team chemistry &gt;= chipin_chemistry, player mood &gt;= chipin_mood, chance chipin_chance per player and segment.</summary>
+        public float chipinChemistry, chipinMood, chipinChance;
+        /// <summary>Strength ranks [lo, hi] of the clubs offering a job after a dismissal.</summary>
+        public int[] dismissalRanks;
+        /// <summary>Number of job offers after a dismissal.</summary>
+        public int dismissalOffers;
     }
 
     /// <summary>transfer.md rev 3 tuning (see league_config.json "transfer").</summary>
@@ -285,7 +324,7 @@ namespace EsportsManager.Leagues
         {
             public string[] club_names; public int club_count; public GenDto generation; public AiDto ai; public TacDto tactics;
             public StyleDto style; public OfferDto offers; public NewsDto news; public TalentDto talent; public EconDto economy;
-            public XferDto transfer; public RuleDto[] choice_rules;
+            public MediaDto media; public CrisisDto crisis; public XferDto transfer; public RuleDto[] choice_rules;
         }
         [Serializable] private sealed class GenDto
         {
@@ -345,9 +384,16 @@ namespace EsportsManager.Leagues
             public float wi_kappa, wi_ref, wi_min, wi_max;
             public float satisfaction_min, satisfaction_max, satisfaction_dead_zone;
             public float reneg_ratio, reneg_mood_drop, debt_line;
-            public float fatigue_finals, fatigue_split;
-            public int fatigue_segments;
-            public float fatigue_stress, fatigue_business, fatigue_media_points;
+        }
+        [Serializable] private sealed class MediaDto
+        {
+            public int max_per_segment;
+            public float chance_base, chance_per_popularity, chance_max, income_livestream_mult, income_per_popularity;
+            public float accept_popularity, accept_starter_stress, decline_popularity, ai_stress_below;
+        }
+        [Serializable] private sealed class CrisisDto
+        {
+            public int grace_segments; public float chipin_chemistry, chipin_mood, chipin_chance; public int[] dismissal_ranks; public int dismissal_offers;
         }
         [Serializable] private sealed class XferDto
         {

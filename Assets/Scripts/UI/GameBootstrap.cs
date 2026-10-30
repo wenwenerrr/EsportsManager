@@ -165,7 +165,10 @@ namespace EsportsManager.UI
                 case DemoState.XferChoice:
                 case DemoState.XferAuction:
                 case DemoState.XferResign: TransferDemo.Run(_ui, _session, args.Demo); break;
-                case DemoState.Fatigue: TransferDemo.Fatigue(_ui, _session); break;
+                case DemoState.Media: TransferDemo.Media(_ui, _session); break;
+                case DemoState.FireSale: TransferDemo.FireSale(_ui, _session); break;
+                case DemoState.Crisis: TransferDemo.Crisis(_ui, _session); break;
+                case DemoState.Fired: TransferDemo.Fired(_ui, _session); break;
                 case DemoState.Lineup:
                     foreach (var o in _session.UnansweredOffers()) _session.DeclineOffer(o.Id);
                     _ui.SetTactic(Matches.MatchTactic.Teamfight);

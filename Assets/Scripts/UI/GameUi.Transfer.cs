@@ -55,9 +55,10 @@ namespace EsportsManager.UI
         public void TransferNext()
         {
             if (Win == null) return;
-            var before = Win.Waiting;
+            var w = Win.Waiting;
+            if ((w == TransferWait.Renegotiation || w == TransferWait.Renewal) && TransferSummary.HasOpen(Win, w)) { Say(UiStrings.XferUnanswered, true); return; }
+            if (w == TransferWait.AuctionReview) { After(Win.ConfirmAuction(), false); return; }
             Win.Continue();
-            if (Win != null && Win.Waiting == before && (before == TransferWait.Renegotiation || before == TransferWait.Renewal)) { Say(UiStrings.XferUnanswered, true); return; }
             After(TransferError.None, false);
         }
 
@@ -101,6 +102,12 @@ namespace EsportsManager.UI
         /// <summary>Signs a free agent.</summary>
         public void SignFree(long id) => After(Win?.SignFree(id) ?? TransferError.WrongStep, false);
         /// <summary>"结束转会期".</summary>
-        public void FinishWindow() => After(Win?.FinishResign() ?? TransferError.WrongStep, false);
+        public void FinishWindow()
+        {
+            if (Win == null) return;
+            var e = Win.Waiting != TransferWait.Resign ? TransferError.WrongStep : Win.CanFinish();
+            if (e != TransferError.None) { Say(UiStrings.XferError(e), true); return; }
+            After(Win?.FinishResign() ?? TransferError.WrongStep, false);
+        }
     }
 }

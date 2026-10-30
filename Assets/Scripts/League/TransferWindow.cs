@@ -44,6 +44,8 @@ namespace EsportsManager.Leagues
         AuctionBid,
         /// <summary>Sign free agents, then finish the window.</summary>
         Resign,
+        /// <summary>The auction is over: the player confirms its summary (<see cref="TransferWindow.ConfirmAuction"/>) before re-signing.</summary>
+        AuctionReview,
     }
 
     /// <summary>The three-choice options (transfer.md step 5).</summary>
@@ -189,7 +191,12 @@ namespace EsportsManager.Leagues
         private int _lotIndex;
         private int _resignIndex;
         private PoachOffer _incoming;
-        private bool _poachStarted, _choicesDone;
+        private bool _poachStarted, _choicesDone, _auctionConfirmed;
+
+        /// <summary>Listed players nobody bought that were sold to the league at the end of the auction (club id, player, price).</summary>
+        public List<(int ClubId, Player Player, long Price)> UnsoldSales { get; } = new List<(int, Player, long)>();
+        /// <summary>Listed players nobody bought that stayed because of the roster / last-in-lane guard (club id, player).</summary>
+        public List<(int ClubId, Player Player)> UnsoldKept { get; } = new List<(int, Player)>();
 
         /// <summary>The window's year (the year that just ended; keys use it).</summary>
         public int Year { get; }
@@ -304,6 +311,8 @@ namespace EsportsManager.Leagues
                         break;
                     case TransferStep.Auction:
                         if (!RunAuction()) return Wait(TransferWait.AuctionBid);
+                        if (Active && !_auctionConfirmed && PlayerInAuction) return Wait(TransferWait.AuctionReview);
+                        Waiting = TransferWait.None;
                         Step = TransferStep.Resign;
                         break;
                     case TransferStep.Resign:
@@ -320,6 +329,27 @@ namespace EsportsManager.Leagues
         }
 
         private TransferError Wait(TransferWait w) { Waiting = w; return TransferError.None; }
+
+        /// <summary>True when the player club took part in the auction (chose it, or listed players).</summary>
+        public bool PlayerInAuction
+        {
+            get
+            {
+                if (_player < 0) return false;
+                if (Choices.TryGetValue(_player, out var ch) && (ch == WindowChoice.Auction || ch == WindowChoice.Sell)) return true;
+                foreach (var l in Lots) if (l.SellerId == _player) return true;
+                return false;
+            }
+        }
+
+        /// <summary>The player confirms the auction summary; the window runs on to re-signing.</summary>
+        public TransferError ConfirmAuction()
+        {
+            if (Waiting != TransferWait.AuctionReview) return TransferError.WrongStep;
+            _auctionConfirmed = true;
+            Waiting = TransferWait.None;
+            return Continue();
+        }
 
         private bool Open<T>(List<T> list, Func<T, bool> open) where T : class
         {
@@ -1089,7 +1119,12 @@ namespace EsportsManager.Leagues
             var p = lot.Player;
             if (lot.TopBidder < 0)
             {
-                if (lot.SellerId < 0) _w.Market(p).LockedYear = Year;
+                if (lot.SellerId < 0) { _w.Market(p).LockedYear = Year; return; }
+                // transfer.md 6 (2026-10-30): an unsold listed player goes to the league at the fire-sale price (guards: roster, lane)
+                var seller = _w.Clubs[lot.SellerId];
+                long price = _w.Economy.FireSalePrice(p);
+                if (_w.SellUnsoldToLeague(seller, p)) { _w.Market(p).LockedYear = Year; UnsoldSales.Add((seller.Id, p, price)); Lineup(seller); }
+                else if (seller.Find(p.Id) != null) UnsoldKept.Add((seller.Id, p));
                 return;
             }
             var w = _w.Clubs[lot.TopBidder];

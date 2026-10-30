@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using EsportsManager.Leagues;
@@ -65,6 +66,7 @@ namespace EsportsManager.UI
                     case TransferWait.PoachResponse: win.RespondPoach(!win.PendingIncoming.CanRetain); break;
                     case TransferWait.ThreeChoice: if (demo == DemoState.XferAuction) win.ChooseAuction(); else win.ChooseSkip(); break;
                     case TransferWait.AuctionBid: win.BidExit(); break;
+                    case TransferWait.AuctionReview: win.ConfirmAuction(); break;
                 }
                 win.Continue();
             }
@@ -78,16 +80,72 @@ namespace EsportsManager.UI
             ui.ShowTransfer();
         }
 
-        /// <summary>Fatigue demo: the player club is treated as the reigning champion for the open segment (media points reserved).</summary>
-        public static void Fatigue(GameUi ui, GameSession s)
+        /// <summary>Media demo (economy.md 媒体邀约): the open segment gets two invitations and the media pop-up opens.</summary>
+        public static void Media(GameUi ui, GameSession s)
         {
             var c = s.PlayerClub;
-            int g = s.World.GlobalSegment(s.Season.Year, s.Season.SegmentIndexInYear);
-            c.Fatigue.Add(new FatigueSpan { From = g, To = g + s.World.Config.economy.fatigueSegments - 1, Strength = 1f });
-            s.ApplyScriptedPlan();
-            s.ResolveAndAdvance();
-            s.ApplyScriptedPlan();
-            ui.Refresh();
+            c.Runner.MediaInvitations.Clear();
+            for (int i = 1; i <= 2; i++) c.Runner.MediaInvitations.Add(new Segments.MediaInvitation { Id = i, Income = s.World.MediaIncome(c.Team.ClubPopularity) });
+            ui.ClosePopups();
+            ui.OpenMedia();
         }
+
+        /// <summary>
+        /// Fire-sale demo (DEBUG set-up): the player club's funds are pushed below 0 before the segment resolves through the UI, so
+        /// the self-rescue sells the weakest bench player; the settlement shows the notice pop-up.
+        /// </summary>
+        public static void FireSale(GameUi ui, GameSession s)
+        {
+            var c = s.PlayerClub;
+            var w = s.World;
+            while (c.Team.Roster.Count < 7) { var p = w.BestFree(null); if (p == null) break; w.Sign(c, p, 2); }
+            c.Team.Funds = -60_000;
+            s.ApplyScriptedPlan();
+            foreach (var o in s.UnansweredOffers()) s.DeclineOffer(o.Id);
+            ui.Resolve();
+        }
+
+        /// <summary>
+        /// Crisis demo (DEBUG set-up): five players, a deficit, good mood, saved business earnings: the first check starts the crisis,
+        /// the second rolls chip-ins (seed search over a few segments); the main screen shows the banner and the notice pop-up.
+        /// </summary>
+        public static void Crisis(GameUi ui, GameSession s)
+        {
+            var c = s.PlayerClub;
+            var w = s.World;
+            foreach (var p in new List<Player>(c.Team.Roster)) if (c.Team.LaneOf(p) == null) { c.Team.RemovePlayer(p); w.FreeAgents.Add(p); }
+            for (int seg = 0; seg < 6; seg++)
+            {
+                foreach (var p in c.Team.Roster) { p.Mood = 90f; p.PersonalBusinessEarnings = 40_000; }
+                c.Team.Funds = Math.Min(c.Team.Funds, -150_000);
+                var st = c.Team.Starters();
+                for (int i = 0; i < st.Count; i++) for (int j = i + 1; j < st.Count; j++) c.Team.SetFamiliarity(st[i].Id, st[j].Id, 100f);
+                w.Notices.Clear();
+                s.ApplyScriptedPlan();
+                s.ResolveAndAdvance();
+                if (w.Notices.Exists(n => n.Kind == NoticeKind.ChipIn) && c.InCrisis) break;
+            }
+            ui.ShowMainForDemo();
+        }
+
+        /// <summary>Fired demo (DEBUG set-up): a deficit through the whole grace period; the 被解雇 screen with the new offers.</summary>
+        public static void Fired(GameUi ui, GameSession s)
+        {
+            var c = s.PlayerClub;
+            var w = s.World;
+            foreach (var p in new List<Player>(c.Team.Roster)) if (c.Team.LaneOf(p) == null) { c.Team.RemovePlayer(p); w.FreeAgents.Add(p); }
+            for (int seg = 0; seg < 4 && !s.Dismissed; seg++)
+            {
+                foreach (var p in c.Team.Roster) p.PersonalBusinessEarnings = 0;
+                c.Team.Funds = Math.Min(c.Team.Funds, -300_000);
+                s.ApplyScriptedPlan();
+                foreach (var o in s.UnansweredOffers()) s.DeclineOffer(o.Id);
+                if (seg < 3 && !s.Dismissed) { s.Resolve(); if (s.EventPhase != EventPhase.None) s.Season.AutoPlay(); if (!s.Dismissed) s.BeginNext(); }
+            }
+            if (!s.Dismissed) Debug.LogWarning("TransferDemo: the manager was not fired.");
+            ui.ShowFired();
+            ui.SelectOffer(0);
+        }
+
     }
 }
